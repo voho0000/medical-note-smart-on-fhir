@@ -297,4 +297,22 @@ describe('the pocket-handbook layout', () => {
       expect(document.querySelector('[data-book-absent="oac"][data-state="not-included"]')).toHaveTextContent('尚未納入')
     })
   })
+
+  it('AF chapters 4–6 ask the pack\'s questions in place, not the old folds (P9)', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+    const dp13 = entry('DP-13')
+    expect(within(dp13).getByText('其他可修正因子')).toBeInTheDocument()
+    expect(within(dp13).getByText('併用 NSAID、抗血小板')).toBeInTheDocument()
+    expect(dp13).not.toHaveTextContent('HAS-BLED 因子')
+    fireEvent.click(within(dp13).getByRole('button', { name: '全部皆無' }))
+    expect(useAfAnswersStore.getState().answers.bleedingDrugs).toBe(false)
+    // DP-17: the agents by LVEF, and whether the rate was at rest; no strategy radios.
+    const dp17 = entry('DP-17')
+    expect(within(dp17).getByRole('columnheader', { name: 'LVEF >40% ← 本病人' })).toBeInTheDocument()
+    expect(within(dp17).getByRole('rowheader', { name: '可用' })).toBeInTheDocument()
+    fireEvent.click(within(dp17).getByRole('button', { name: '靜息量測' }))
+    expect(useAfAnswersStore.getState().answers.restingRate).toBe(true)
+    expect(screen.queryByTestId('cdss-visit-af-strategy')).toBeNull()
+    expect(within(entry('DP-21')).getByText('門診確認')).toBeInTheDocument()
+  })
 })

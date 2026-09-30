@@ -566,14 +566,16 @@
 .classAlternatives { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* A point drawn as a block (AF 抗凝): its part of the question, what it decides on, today's box. */
-.blocks { display: flex; flex-direction: column; gap: 22px; }
+/* Measured on its own column, so the pair stacks where the page is narrow — a
+   phone, or 決策地圖 v2 inside the CDSS panel — whatever the window. */
+.blocks { display: flex; flex-direction: column; gap: 22px; container-type: inline-size; }
 .blockPair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .block { display: flex; flex-direction: column; gap: 6px; min-width: 0; scroll-margin-top: 80px; outline: none; }
 .block:focus-visible { box-shadow: 0 0 0 2px var(--blue); border-radius: 4px; }
 .blockHead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-bottom: 2px; }
 .blockTitle { font-weight: 700; }
 .blockNote { margin: 0; font-size: 13px; color: var(--ink-3); }
-@container (max-width: 760px) {
+@container (max-width: 640px) {
   .blockPair { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -635,7 +637,7 @@
 .questionGroup > button:disabled, .askGroup > button:disabled { cursor: default; opacity: 0.6; }
 .questionsNote { margin: 6px 0 0; font-size: 13px; color: var(--ink-3); }
 
-.doseTable { width: 100%; min-width: 34rem; border-collapse: collapse; font-size: 14px; }
+.doseTable { width: 100%; min-width: 28rem; border-collapse: collapse; font-size: 14px; }
 .doseTable thead tr { background: var(--thead); text-align: left; }
 .doseTable th { padding: 8px 10px; text-align: left; }
 .doseTable th:first-child, .doseTable th:nth-child(2) { width: 17%; }
@@ -666,7 +668,7 @@
 .asks { display: flex; flex-direction: column; gap: 8px; }
 .askRow { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 12px; }
 .askLabel { font-size: 14px; font-weight: 700; }
-.askGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
+.askGroup > button[data-prefilled], .questionGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
 .askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
 
 /* --------------------------------- plan -------------------------------- */

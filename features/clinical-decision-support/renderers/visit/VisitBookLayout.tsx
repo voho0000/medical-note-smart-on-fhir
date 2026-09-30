@@ -325,8 +325,9 @@ function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
 interface QuestionsView {
   title: string
   answers: string
-  rows: { id: string; label: string; answer?: boolean; recordHolds?: boolean }[]
+  rows: { id: string; label: string; answer?: boolean; record?: boolean; recordHolds?: boolean }[]
   bulkNone?: boolean
+  labels?: { yes: string; no: string }
   note?: string
 }
 
@@ -334,15 +335,29 @@ interface QuestionsView {
 function questionsOf(point: object | undefined): QuestionsView | undefined {
   const raw = (point as { questions?: unknown } | undefined)?.questions
   if (!raw || typeof raw !== 'object') return undefined
-  const { title, answers, rows, bulkNone, note } = raw as Record<string, unknown>
+  const { title, answers, rows, bulkNone, note, labels } = raw as Record<string, unknown>
   if (typeof title !== 'string' || typeof answers !== 'string' || !Array.isArray(rows)) return undefined
   const parsed = rows.flatMap((row): QuestionsView['rows'] => {
-    const { id, label, answer, recordHolds } = (row ?? {}) as Record<string, unknown>
+    const { id, label, answer, record, recordHolds } = (row ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof label !== 'string') return []
-    return [{ id, label, ...(typeof answer === 'boolean' ? { answer } : {}), ...(recordHolds === true ? { recordHolds: true } : {}) }]
+    return [{
+      id,
+      label,
+      ...(typeof answer === 'boolean' ? { answer } : {}),
+      ...(typeof record === 'boolean' ? { record } : {}),
+      ...(recordHolds === true ? { recordHolds: true } : {}),
+    }]
   })
   if (!parsed.length) return undefined
-  return { title, answers, rows: parsed, ...(bulkNone === true ? { bulkNone: true } : {}), ...(typeof note === 'string' ? { note } : {}) }
+  const { yes, no } = (labels ?? {}) as Record<string, unknown>
+  return {
+    title,
+    answers,
+    rows: parsed,
+    ...(bulkNone === true ? { bulkNone: true } : {}),
+    ...(typeof yes === 'string' && typeof no === 'string' ? { labels: { yes, no } } : {}),
+    ...(typeof note === 'string' ? { note } : {}),
+  }
 }
 
 interface StartDoseRowView { name: string; dose: string; role: string; when: string; proposed?: boolean }
@@ -367,6 +382,7 @@ export type ClassInput = NonNullable<VisitAction['physicianInput']>
 interface ClassChoice { id: string; label: string; physicianInput?: ClassInput; chosen?: boolean }
 interface ClassificationView {
   title: string
+  rowLabel?: string
   classes: (ClassChoice & { definition: string; current?: boolean })[]
   patient?: string
   note?: string
@@ -384,7 +400,7 @@ function classInputOf(raw: unknown): ClassInput | undefined {
 function classificationOf(point: object | undefined): ClassificationView | undefined {
   const raw = (point as { classification?: unknown } | undefined)?.classification
   if (!raw || typeof raw !== 'object') return undefined
-  const { title, classes, patient, note, alternatives } = raw as Record<string, unknown>
+  const { title, classes, patient, note, alternatives, rowLabel } = raw as Record<string, unknown>
   if (typeof title !== 'string' || !Array.isArray(classes)) return undefined
   const parsed = classes.flatMap((item): ClassificationView['classes'] => {
     const { id, label, definition, current, physicianInput, chosen } = (item ?? {}) as Record<string, unknown>
@@ -408,6 +424,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
   })
   return {
     title,
+    ...(typeof rowLabel === 'string' ? { rowLabel } : {}),
     classes: parsed,
     ...(typeof patient === 'string' ? { patient } : {}),
     ...(typeof note === 'string' ? { note } : {}),
@@ -447,7 +464,7 @@ function ClassificationTable({ point, isEnglish, onChoose }: { point: DecisionPo
           </thead>
           <tbody>
             <tr>
-              <th scope="row">{isEnglish ? 'Definition' : '定義'}</th>
+              <th scope="row">{table.rowLabel ?? (isEnglish ? 'Definition' : '定義')}</th>
               {table.classes.map((item) => <td key={item.id} data-current={item.current || undefined}>{item.definition}</td>)}
             </tr>
             {table.patient ? (
@@ -546,10 +563,11 @@ type AnswerQuestion = (id: string, value: boolean | undefined) => void
  * reads 「其餘皆無」); pressed again, it takes those 無 back.
  */
 function BulkNone({ questions, isEnglish, onAnswer }: { questions: QuestionsView; isEnglish: boolean; onAnswer?: AnswerQuestion }) {
-  const open = questions.rows.filter((row) => !row.recordHolds && row.answer !== true)
+  // A row the record reads 有, or holds but cannot settle, is the clinician's to answer row by row.
+  const open = questions.rows.filter((row) => !row.recordHolds && (row.answer ?? row.record) !== true)
   if (!onAnswer || !open.length) return null
   const pressed = open.every((row) => row.answer === false)
-  const anyYes = questions.rows.some((row) => row.answer === true)
+  const anyYes = questions.rows.some((row) => (row.answer ?? row.record) === true)
   return (
     <button
       type="button"
@@ -572,7 +590,10 @@ function BulkNone({ questions, isEnglish, onAnswer }: { questions: QuestionsView
 /** A point's questions, each 有／無 as one segmented control; the chosen one pressed again withdraws it. */
 function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions: QuestionsView; isEnglish: boolean; onAnswer?: AnswerQuestion; titled: boolean }) {
   const idBase = useId()
-  const options = [{ value: true, label: isEnglish ? 'Yes' : '有' }, { value: false, label: isEnglish ? 'No' : '無' }]
+  const options = [
+    { value: true, label: questions.labels?.yes ?? (isEnglish ? 'Yes' : '有') },
+    { value: false, label: questions.labels?.no ?? (isEnglish ? 'No' : '無') },
+  ]
   return (
     <div className={styles.questions} data-testid="cdss-book-questions">
       {titled ? (
@@ -586,16 +607,21 @@ function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions:
           <span id={`${idBase}-${row.id}`}>{row.label}</span>
           <div role="group" aria-labelledby={`${idBase}-${row.id}`} className={styles.questionGroup}>
             {options.map((option) => {
-              const selected = row.answer === option.value
+              // The record's reading stands until the clinician answers; pressing it makes it theirs,
+              // pressing their own answer again withdraws it.
+              const prefilled = row.answer === undefined && row.record === option.value
+              const selected = row.answer === option.value || prefilled
               return (
                 <button
                   key={String(option.value)}
                   type="button"
                   aria-pressed={selected}
                   disabled={!onAnswer}
-                  onClick={() => onAnswer?.(row.id, selected ? undefined : option.value)}
+                  data-prefilled={prefilled || undefined}
+                  onClick={() => onAnswer?.(row.id, row.answer === option.value ? undefined : option.value)}
                 >
                   {option.label}
+                  {prefilled ? <span className="sr-only">{isEnglish ? ' (from the record)' : '（紀錄預填）'}</span> : null}
                 </button>
               )
             })}
@@ -713,6 +739,19 @@ export function VisitBookLayout({
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const [mapOpen, setMapOpen] = useState(true)
+  // A point's own questions under its row or line — in place of the page's older question folds there.
+  const pointQuestions = (point: DecisionPointView, className: string) => {
+    const questions = questionsOf(point)
+    if (!questions) return null
+    const answer: AnswerQuestion | undefined = onAnswerQuestion
+      ? (id, value) => onAnswerQuestion(point, questions.answers, id, value)
+      : undefined
+    return (
+      <div className={className}>
+        <PointQuestions questions={questions} isEnglish={isEnglish} titled={questions.rows.length > 1 || Boolean(questions.bulkNone)} {...(answer ? { onAnswer: answer } : {})} />
+      </div>
+    )
+  }
   const classTable = (point: DecisionPointView) => (
     <ClassificationTable
       point={point}
@@ -999,7 +1038,8 @@ export function VisitBookLayout({
           </div>
         </div>
         {classificationOf(point) ? <div className={styles.rowExtras}>{classTable(point)}</div> : null}
-        {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
+        {pointQuestions(point, styles.rowExtras)}
+        {!questionsOf(point) && extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, shown)}
       </div>
     )
@@ -1136,7 +1176,8 @@ export function VisitBookLayout({
           {reasoningButton(point)}
         </span>
         {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
-        {extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
+        {pointQuestions(point, styles.lineWide)}
+        {!questionsOf(point) && extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
     )
@@ -1158,7 +1199,7 @@ export function VisitBookLayout({
         {classificationOf(point) && point.headline && marks.get(point) !== 'done' ? (
           <span className={styles.slotLine}>
             {point.headline}
-            {point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
+            {point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}
           </span>
         ) : null}
       </div>
@@ -1173,9 +1214,9 @@ export function VisitBookLayout({
   )
 
   /** Drawn as a block: a point of this page that decides on a score, asks its own questions, or lays its options out. */
-  const isBlock = (point: DecisionPointView, entry: BookEntry) => entry.kind !== 'slot' && entry.kind !== 'skip'
+  const isBlock = (point: DecisionPointView, entry: BookEntry, section: Section) => entry.kind !== 'slot' && entry.kind !== 'skip'
     && point.source === sourceOfPage
-    && Boolean(scoreTableOf(point) || questionsOf(point) || optionTableOf(point))
+    && Boolean(scoreTableOf(point) || optionTableOf(point) || (questionsOf(point) && section.pointLabels?.[point.dp]))
 
   /**
    * A point as the prototype draws the AF anticoagulation chapter (owner
@@ -1286,7 +1327,7 @@ export function VisitBookLayout({
       const entry = entryOf(point)
       if (entry.kind === 'skip') continue
       const asLine = entry.kind === 'row' && !entry.queued && ['info', 'done'].includes(marks.get(point)!)
-      const kind = isBlock(point, entry) ? 'blocks'
+      const kind = isBlock(point, entry, section) ? 'blocks'
         : inTable(point) || (entry.kind === 'row' && !asLine) ? 'table'
           : entry.kind === 'slot' ? 'slot' : 'lines'
       // A chapter with a table has one: every row joins it, wherever it falls.

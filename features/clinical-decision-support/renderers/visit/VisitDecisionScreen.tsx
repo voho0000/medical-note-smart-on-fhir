@@ -657,8 +657,10 @@ export function VisitDecisionScreen({
     )
     const entryOf = (point: DecisionPointView): BookEntry => {
       if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: bookAsks }
-      // A point answered in its classification table (HF DP-01's phenotype).
-      if ((point as { classification?: unknown }).classification) return { kind: 'slot', point, content: null }
+      // A point answered in its classification table (HF DP-01's phenotype); a table
+      // only to read (AF DP-17's agents by LVEF) sits on the point's own line.
+      const classes = (point as { classification?: { classes?: { physicianInput?: unknown }[] } }).classification?.classes
+      if (classes?.some((item) => item.physicianInput)) return { kind: 'slot', point, content: null }
       const head = headRowOf(point)
       if (head) return { kind: 'row', point, row: head, queued: true }
       const covering = coveringRowOf(point)
