@@ -266,4 +266,35 @@ describe('the pocket-handbook layout', () => {
       expect(document.querySelector('[data-book-box="DP-08"]')).toHaveTextContent('改 warfarin')
     })
   })
+
+  describe('laid out as the prototype (P9 HF)', () => {
+    it('one table per chapter: settled and not-applicable pillars as muted rows in it', () => {
+      render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+      const drugs = document.querySelector<HTMLElement>('[data-book-section="drugs"]')!
+      const tables = drugs.querySelectorAll('[role="group"]')
+      expect(tables).toHaveLength(1)
+      const rows = [...tables[0]!.querySelectorAll<HTMLElement>('[data-book-dp]')]
+      expect(rows.map((row) => row.dataset.bookDp)).toEqual(['DP-10', 'DP-09', 'DP-07', 'DP-08'])
+      expect(rows.filter((row) => row.hasAttribute('data-quiet')).map((row) => row.dataset.bookDp)).toEqual(['DP-10', 'DP-07', 'DP-08'])
+      // Not applicable here, they are rows of the table, not the 不適用 line.
+      expect(drugs.querySelector('[data-book-absent="drugs"][data-state="not-applicable"]')).not.toHaveTextContent('DP-07')
+      const comorbidity = document.querySelector<HTMLElement>('[data-book-section="comorbidity"]')!
+      expect(comorbidity.querySelectorAll('[role="group"]')).toHaveLength(1)
+    })
+
+    it('the red-flag strip is 紅旗; a point waiting on the every-visit answers links to them', () => {
+      render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+      expect(entry('DP-24')).toHaveTextContent(/^DP-24\s紅旗\s今日分流：胸痛/)
+      const link = within(entry('DP-06')).getByRole('button', { name: '等本次喘／體重的回答' })
+      fireEvent.click(link)
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    })
+
+    it('says why a point does not apply, where it fits in a few words', () => {
+      render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+      const line = document.querySelector<HTMLElement>('[data-book-absent="oac"][data-state="not-applicable"]')!
+      expect(line).toHaveTextContent('DP-12 VKA 與 TTR（未用 warfarin）')
+      expect(document.querySelector('[data-book-absent="oac"][data-state="not-included"]')).toHaveTextContent('尚未納入')
+    })
+  })
 })

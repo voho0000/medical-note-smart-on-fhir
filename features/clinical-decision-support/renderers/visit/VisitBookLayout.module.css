@@ -356,7 +356,8 @@
 .sectionAside { margin-left: auto; font-size: 13px; color: var(--ink-3); }
 .sectionSettled { margin-left: auto; font-size: 13px; color: var(--green); font-weight: 700; }
 .redFlag { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--row-safety); font-size: 14px; scroll-margin-top: 80px; outline: none; }
-.redFlagWhy { display: block; font-size: 13px; color: var(--ink-3); }
+.redFlag .lineWhy { color: var(--ink-3); }
+.lines > .redFlag { grid-column: 1 / -1; margin-bottom: 6px; }
 .cite { margin-left: 2px; color: var(--ink-4); font-size: 11px; }
 
 .dpTag { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink-4); }
@@ -386,6 +387,13 @@
 .entry[data-tone='safety'] { background: var(--row-safety); }
 .rowCells > div { padding: 12px 10px; min-width: 0; }
 .cellGuide { color: var(--ink-2); }
+/* A table point with nothing to decide today: muted, as the prototype's DP-07·08 and DP-31 rows. */
+.entry[data-quiet] { color: var(--ink-3); }
+.quietSpan { grid-column: 3 / -1; }
+.quietDone { color: var(--green); font-weight: 500; }
+@container (max-width: 600px) {
+  .quietSpan { grid-column: auto; }
+}
 .cellMuted { color: var(--ink-6); }
 .small { font-size: 13px; color: var(--ink-3); }
 .question { font-weight: 700; margin: 0 0 4px; }
@@ -413,10 +421,12 @@
 }
 
 /* Reminders: DP | name | one line. */
-.lines { display: flex; flex-direction: column; }
+/* A chapter's reminders share one label column, as the prototype's grid does. */
+.lines { display: grid; grid-template-columns: 58px fit-content(9.5em) minmax(0, 1fr); column-gap: 10px; }
 .line {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 58px 110px minmax(0, 1fr);
+  grid-template-columns: subgrid;
   gap: 0 10px;
   padding: 3px 0;
   font-size: 14px;
@@ -427,10 +437,26 @@
 .line:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); border-radius: 4px; }
 .line > .lineWide { grid-column: 1 / -1; }
 .lineText { min-width: 0; }
-.lineWhy { display: block; font-size: 13px; color: var(--ink-4); }
+.lineWhy { color: var(--ink-3); }
+.lineControls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 10px; vertical-align: middle; }
+/* On a reminder line the buttons are the prototype's outline ones, not today's primary. */
+.lineControls.inner :global(button[data-visit-primary]) { background: var(--sheet); border-color: var(--btn-line); color: var(--ink); font-weight: 400; }
+.lineControls.inner :global(button[data-visit-primary]:hover) { background: var(--thead); }
+.askLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.askLink:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
+.cellMissing { display: block; font-size: 13px; color: var(--warn-ink); }
 .lineAsk { color: var(--blue-ink); }
 @container (max-width: 600px) {
-  .line { grid-template-columns: 58px minmax(0, 1fr); }
+  .lines { grid-template-columns: 58px minmax(0, 1fr); }
   .line > .lineText { grid-column: 2; }
 }
 
@@ -669,7 +695,7 @@
 
 .inner :global(button[data-slot='button']) {
   height: auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: 8px;
   border: 1px solid var(--btn-line);

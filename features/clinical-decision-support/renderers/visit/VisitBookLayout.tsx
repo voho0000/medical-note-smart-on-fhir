@@ -123,6 +123,8 @@ export interface BookChapterView {
   dps: readonly string[]
   /** The part of the chapter's question each point answers (AF 抗凝：DP-07 「要不要」). */
   pointLabels?: Readonly<Record<string, string>>
+  /** The points the chapter lays out as its one table, settled or not applicable ones included. */
+  table?: readonly string[]
 }
 
 /** The model's chapters, where the pack gives them; undefined for an older pack. */
@@ -130,7 +132,7 @@ export function bookChaptersOf(model: object): BookChapterView[] | undefined {
   const raw = (model as { book?: unknown }).book
   if (!Array.isArray(raw)) return undefined
   const chapters = raw.flatMap((item): BookChapterView[] => {
-    const { id, title, short, aside, settled, plan, dps, pointLabels } = (item ?? {}) as Record<string, unknown>
+    const { id, title, short, aside, settled, plan, dps, pointLabels, table } = (item ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof title !== 'string' || !Array.isArray(dps)) return []
     const labels = pointLabels && typeof pointLabels === 'object'
       ? Object.fromEntries(Object.entries(pointLabels as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
@@ -144,6 +146,7 @@ export function bookChaptersOf(model: object): BookChapterView[] | undefined {
       ...(plan === true ? { plan: true } : {}),
       dps: dps.filter((dp): dp is string => typeof dp === 'string'),
       ...(Object.keys(labels).length ? { pointLabels: labels } : {}),
+      ...(Array.isArray(table) ? { table: table.filter((dp): dp is string => typeof dp === 'string') } : {}),
     }]
   })
   return chapters.length ? chapters : undefined
@@ -189,6 +192,7 @@ interface Section {
   block?: VisitBlock
   points: DecisionPointView[]
   pointLabels?: Readonly<Record<string, string>>
+  table?: readonly string[]
 }
 
 /**
@@ -210,6 +214,7 @@ function sectionsOf(points: readonly DecisionPointView[], chapters: readonly Boo
         ...(chapter.settled ? { settled: true } : {}),
         ...(chapter.plan ? { plan: true } : {}),
         ...(chapter.pointLabels ? { pointLabels: chapter.pointLabels } : {}),
+        ...(chapter.table?.length ? { table: chapter.table } : {}),
         points: mine,
       }
     })
@@ -232,6 +237,13 @@ function sectionsOf(points: readonly DecisionPointView[], chapters: readonly Boo
     }
   }
   return sections
+}
+
+/** A not-applicable point's reason, where its line says it in a few words; else nothing. */
+function shortReason(headline: string): string | undefined {
+  let width = 0
+  for (const character of headline) width += character.charCodeAt(0) <= 0xff ? 0.5 : 1
+  return width <= 14 ? headline : undefined
 }
 
 const sectionAnchor = (key: string) => `cdss-book-section-${key.replace(/[^a-z0-9-]/gi, '-')}`
@@ -915,16 +927,23 @@ export function VisitBookLayout({
     const basis = basisOf(shown)
     const guide = point.guideline?.points[0]
     const cite = citationOf(point)
-    // 本病人現在: the values the row reads; beside criteria, the reason line.
-    const nowCell = criteria.length || !basis.length
-      ? (shown.why ? <span>{shown.why}</span> : <span className={styles.cellMuted}>—</span>)
-      : (
+    // 本病人現在: the values the row reads, and what the record lacks (「缺 ferritin、TSAT」);
+    // beside criteria, or with neither, the reason line.
+    const needs = shown.needsData ?? []
+    const missing = needs.length
+      ? <span className={styles.cellMissing}>{isEnglish ? `Missing: ${needs.join(', ')}` : `缺：${needs.join('、')}`}</span>
+      : null
+    const nowCell = !criteria.length && basis.length ? (
+      <>
         <ul className={styles.basisList}>
           {basis.map((item) => (
             <li key={`${item.label}|${item.value}`}>{item.label} <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
           ))}
         </ul>
-      )
+        {missing}
+      </>
+    ) : !criteria.length && missing ? missing
+      : shown.why ? <span>{shown.why}</span> : <span className={styles.cellMuted}>—</span>
     const tone = current && (mark === 'act' || mark === 'safety') ? (row.safety ? 'safety' : 'act') : undefined
     return (
       <div
@@ -987,10 +1006,73 @@ export function VisitBookLayout({
   }
 
   /** A reminder: DP | name | one line; covered points say by which. */
-  const renderLine = (point: DecisionPointView, by?: DecisionPointView) => {
+  /**
+   * A table point with nothing to decide today, as the prototype's muted rows:
+   * a settled pillar (DP-10 「已在目標，繼續」), a comorbidity to read (DP-31),
+   * or one that does not apply here, its reason across the last two columns
+   * (DP-07·08 in HFpEF).
+   */
+  const renderQuietRow = (point: DecisionPointView) => {
+    const mark = marks.get(point)!
+    const absentHere = ABSENT_STATES.has(point.state)
+    const basis = basisOf(point)
+    const criteria = criteriaOf(point)
+    const guide = point.guideline?.points[0]
+    const cite = citationOf(point)
+    const line = <>{point.headline ?? point.label}{point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}</>
+    return (
+      <div
+        key={`${point.source}:${point.dp}`}
+        id={bookAnchor(point)}
+        tabIndex={-1}
+        className={styles.entry}
+        data-quiet=""
+        data-book-dp={point.dp}
+        data-book-mark={mark}
+      >
+        <div className={styles.rowCells}>
+          {nameCell(point)}
+          <div>
+            {/* A few values; a long evidence list reads in 看依據, the line says what counts. */}
+            {!absentHere && !criteria.length && basis.length && basis.length <= 3 ? (
+              <ul className={styles.basisList}>
+                {basis.map((item) => (
+                  <li key={`${item.label}|${item.value}`}>{item.label} <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
+                ))}
+              </ul>
+            ) : <span className={styles.cellMuted}>—</span>}
+          </div>
+          {absentHere ? (
+            <div className={styles.quietSpan}>{line}</div>
+          ) : (
+            <>
+              <div className={styles.cellGuide}>
+                {criteria.length ? <Criteria point={point} basis={basis} isEnglish={isEnglish} /> : guide ?? <span className={styles.cellMuted}>—</span>}
+                {cite ? <sup className={styles.cite}>{cite}</sup> : null}
+              </div>
+              <div className={mark === 'done' ? styles.quietDone : undefined}>{line}</div>
+            </>
+          )}
+        </div>
+        {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
+        {reasoning(point, point)}
+      </div>
+    )
+  }
+
+  // Where the every-visit questions are asked: a point waiting on their answer links there.
+  const asksPoint = points.find((point) => point.dp === 'DP-03' && point.source === sourceOfPage && !ABSENT_STATES.has(point.state))
+  const lineHeadline = (point: DecisionPointView, text: string) => (
+    marks.get(point) === 'ask' && asksPoint && asksPoint !== point
+      ? <button type="button" className={styles.askLink} onClick={() => goTo(asksPoint)}>{text}</button>
+      : text
+  )
+
+  const renderLine = (point: DecisionPointView, by?: DecisionPointView, row?: QueueRow) => {
     const mark = marks.get(point)!
     const extras = extrasOf(point)
     const panel = reasoning(point, point)
+    const why = !by && point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null
     // Today's triage (HF DP-24, AF DP-00) is the red-flag strip at the head of its chapter.
     if (!by && /-triage$/.test(point.semanticId) && !extras && !panel) {
       return (
@@ -1002,12 +1084,15 @@ export function VisitBookLayout({
           data-book-dp={point.dp}
           data-book-mark={mark}
         >
-          <span className={styles.dpTag}>{point.dp}</span>　<b>{point.label}</b>　
-          <span className={mark === 'ask' ? styles.lineAsk : undefined}>{point.headline ?? point.label}</span>
-          {point.why ? <span className={styles.redFlagWhy}>{point.why}</span> : null}
+          <span className={styles.dpTag}>{point.dp}</span>　<b>{isEnglish ? 'Red flags' : '紅旗'}</b>　
+          <span className="sr-only">{point.label}：</span>
+          {lineHeadline(point, point.headline ?? point.label)}
+          {why}
         </p>
       )
     }
+    // A point with buttons that is not today's decision (用藥核對's 已核對): its buttons on the line.
+    const step = row ? row.current ?? row.steps[row.steps.length - 1] : undefined
     return (
       <div
         key={`${point.source}:${point.dp}`}
@@ -1026,8 +1111,28 @@ export function VisitBookLayout({
           <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}：</span>
           {by
             ? <>{isEnglish ? `Decided with ${by.dp} ${by.label}` : `與 ${by.dp} ${by.label} 一起決定`}{point.headline ? ` · ${point.headline}` : ''}</>
-            : point.headline ?? point.label}
-          {!by && point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
+            : lineHeadline(point, point.headline ?? point.label)}
+          {why}
+          {row && step ? (
+            <span className={`${styles.lineControls} ${styles.inner}`}>
+              {row.current ? (
+                <VisitDecisionControls
+                  point={step.point}
+                  surface="map"
+                  isEnglish={isEnglish}
+                  onDecide={onDecide ? (action) => onDecide(step, action, false) : undefined}
+                />
+              ) : (
+                <VisitDecisionControls
+                  point={step.point}
+                  decision={step.decision}
+                  surface="map"
+                  isEnglish={isEnglish}
+                  onClear={onClear ? () => onClear(step) : undefined}
+                />
+              )}
+            </span>
+          ) : null}
           {reasoningButton(point)}
         </span>
         {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
@@ -1050,7 +1155,7 @@ export function VisitBookLayout({
         <span className={styles.dpTag}>{point.dp}</span>
         <b>{point.label}</b>
         {/* Answered in its table, the point says where it stands beside its name. */}
-        {classificationOf(point) && point.headline ? (
+        {classificationOf(point) && point.headline && marks.get(point) !== 'done' ? (
           <span className={styles.slotLine}>
             {point.headline}
             {point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
@@ -1173,12 +1278,20 @@ export function VisitBookLayout({
 
   /** A section's present points, consecutive rows in one table, consecutive lines in one list. */
   const renderSection = (section: Section) => {
-    const present = section.points.filter((point) => !ABSENT_STATES.has(point.state))
+    const inTable = (point: DecisionPointView) => Boolean(section.table?.includes(point.dp))
+    // A chapter's table points stay in its table even when settled or not applicable.
+    const present = section.points.filter((point) => !ABSENT_STATES.has(point.state) || inTable(point))
     const runs: { kind: 'table' | 'lines' | 'slot' | 'blocks'; items: { point: DecisionPointView; entry: BookEntry }[] }[] = []
     for (const point of present) {
       const entry = entryOf(point)
       if (entry.kind === 'skip') continue
-      const kind = isBlock(point, entry) ? 'blocks' : entry.kind === 'row' ? 'table' : entry.kind === 'slot' ? 'slot' : 'lines'
+      const asLine = entry.kind === 'row' && !entry.queued && ['info', 'done'].includes(marks.get(point)!)
+      const kind = isBlock(point, entry) ? 'blocks'
+        : inTable(point) || (entry.kind === 'row' && !asLine) ? 'table'
+          : entry.kind === 'slot' ? 'slot' : 'lines'
+      // A chapter with a table has one: every row joins it, wherever it falls.
+      const table = kind === 'table' && section.table?.length ? runs.find((run) => run.kind === 'table') : undefined
+      if (table) { table.items.push({ point, entry }); continue }
       const last = runs[runs.length - 1]
       if (last && last.kind === kind && kind !== 'slot') last.items.push({ point, entry })
       else runs.push({ kind, items: [{ point, entry }] })
@@ -1211,7 +1324,7 @@ export function VisitBookLayout({
       if (run.kind === 'lines') {
         return (
           <div key={`lines-${index}`} className={styles.lines}>
-            {run.items.map(({ point, entry }) => renderLine(point, entry.kind === 'covered' ? entry.by : undefined))}
+            {run.items.map(({ point, entry }) => renderLine(point, entry.kind === 'covered' ? entry.by : undefined, entry.kind === 'row' ? entry.row : undefined))}
           </div>
         )
       }
@@ -1223,7 +1336,10 @@ export function VisitBookLayout({
             <span>{isEnglish ? 'The guideline says' : '指引怎麼說'}</span>
             <span>{isEnglish ? 'Today' : '今天'}</span>
           </div>
-          {run.items.map(({ point, entry }) => (entry.kind === 'row' ? renderRow(point, entry.row, entry.queued) : null))}
+          {/* A table point with buttons but nothing to decide today reads as a muted row; one decided today keeps its row. */}
+          {run.items.map(({ point, entry }) => (entry.kind === 'row' && !(inTable(point) && !entry.queued && marks.get(point) === 'info')
+            ? renderRow(point, entry.row, entry.queued)
+            : renderQuietRow(point)))}
         </div>
       )
     })
@@ -1250,7 +1366,8 @@ export function VisitBookLayout({
 
   // The values the decisions read, by date, as the header's second line.
   const byDate = new Map<string, VisitDecisionModel['keyValues']>()
-  for (const item of keyValues) {
+  // Newest first, as the prototype's header reads.
+  for (const item of [...keyValues].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))) {
     if (!item.value.trim() || /^[—–-]+$/.test(item.value.trim())) continue
     const date = displayDate(item.date, now) ?? ''
     byDate.set(date, [...(byDate.get(date) ?? []), item])
@@ -1258,7 +1375,8 @@ export function VisitBookLayout({
 
   const mapLines = (section: Section) => (
     <ul className={styles.mapLines}>
-      {section.points.map((point) => {
+      {/* What does not apply goes last, as the page lists it. */}
+      {[...section.points.filter((point) => !ABSENT_STATES.has(point.state)), ...section.points.filter((point) => ABSENT_STATES.has(point.state))].map((point) => {
         const mark = marks.get(point)!
         const note = mark === 'act' || mark === 'safety'
           ? MARK_WORDS[mark]
@@ -1288,13 +1406,14 @@ export function VisitBookLayout({
   )
 
   const renderChapter = ({ section, num }: { section: Section; num: string }) => {
-    const absent = section.points.filter((point) => ABSENT_STATES.has(point.state))
+    // A table point that does not apply is a muted row of the table, not in the 不適用 line.
+    const absent = section.points.filter((point) => ABSENT_STATES.has(point.state) && !section.table?.includes(point.dp))
     return (
       <section
         key={section.key}
         id={sectionAnchor(section.key)}
         tabIndex={-1}
-        className={`${styles.section} ${major(section) ? '' : styles.minor}`}
+        className={`${styles.section} ${major(section) || section !== chaptersOnly[chaptersOnly.length - 1] ? '' : styles.minor}`}
         aria-labelledby={`${sectionAnchor(section.key)}-title`}
         data-book-section={section.key}
       >
@@ -1304,17 +1423,25 @@ export function VisitBookLayout({
           {section.aside ? <span className={section.settled ? styles.sectionSettled : styles.sectionAside}>{section.aside}</span> : null}
         </div>
         {renderSection(section)}
-        {absent.length ? (
-          <p className={styles.absent} data-book-absent={section.key}>
-            {isEnglish ? 'Not applicable　' : '不適用　'}
-            {absent.map((point, pointIndex) => (
-              <span key={`${point.source}:${point.dp}`} id={bookAnchor(point)} tabIndex={-1}>
-                {pointIndex ? ' · ' : ''}
-                <span className={styles.dpInline}>{point.dp}</span> {point.label}
-              </span>
-            ))}
-          </p>
-        ) : null}
+        {([['not-applicable', isEnglish ? 'Not applicable　' : '不適用　'], ['not-included', isEnglish ? 'Not yet covered　' : '尚未納入　']] as const).map(([state, words]) => {
+          const here = absent.filter((point) => point.state === state)
+          if (!here.length) return null
+          return (
+            <p key={state} className={styles.absent} data-book-absent={section.key} data-state={state}>
+              {words}
+              {here.map((point, pointIndex) => {
+                // Why, where it fits in a few words (「未用 warfarin」「併入 DP-01…」).
+                const reason = state === 'not-applicable' && point.headline ? shortReason(point.headline) : undefined
+                return (
+                  <span key={`${point.source}:${point.dp}`} id={bookAnchor(point)} tabIndex={-1}>
+                    {pointIndex ? ' · ' : ''}
+                    <span className={styles.dpInline}>{point.dp}</span> {point.label}{reason ? `（${reason}）` : ''}
+                  </span>
+                )
+              })}
+            </p>
+          )
+        })}
         {section.block && blockFooters?.[section.block] && numbered.filter((item) => item.section.block === section.block).at(-1)?.section === section
           ? <div className={styles.inner}>{blockFooters[section.block]}</div>
           : null}
