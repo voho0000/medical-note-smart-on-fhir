@@ -206,43 +206,24 @@ describe('the pocket-handbook layout', () => {
       expect(within(entry('DP-01')).getByRole('button', { name: '選 HFpEF' })).toBeInTheDocument()
     })
 
-    it('還不確定 opens DP-34 inside DP-01\'s table, as the prototype: its criteria, the symptoms and signs it waits on, then 確認 HFpEF (P1, #219 review)', () => {
+    it('DP-34 is DP-01\'s table, as the prototype 「DP-01 · DP-34」: no row, no questions of its own; the table\'s answer settles both (P1)', () => {
       render(<BookPage id="p1-suspected-hfpef" page="hf" />)
       fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '還不確定' }))
-      // One table for both points, as the prototype's 「DP-01 · DP-34」; no DP-34 of its own.
-      expect(within(entry('DP-01')).getByTestId('cdss-book-classification').querySelector('th')).toHaveTextContent('DP-01 · DP-34')
+      const table = () => within(entry('DP-01')).getByTestId('cdss-book-classification')
+      expect(table().querySelector('th')).toHaveTextContent('DP-01 · DP-34')
+      // Owner request 2026-09-30: 「Prototype 的DP34不用填症狀，完全照著prototype」.
       expect(document.querySelector('[data-book-dp="DP-34"]')).toBeNull()
-      const dp34 = () => entry('DP-01').querySelector<HTMLElement>('[data-book-merged="DP-34"]')!
-      // Nothing on record says symptoms or signs: DP-34 waits on them, and asks them in the page's own rows.
-      expect(dp34()).toHaveTextContent('先完成症狀／徵象')
-      expect(within(dp34()).getByTestId('cdss-book-merged-criteria')).toBeInTheDocument()
-      const signs = () => within(dp34()).getByTestId('cdss-book-signs')
-      expect([...signs().querySelectorAll('[data-book-sign-group]')].map((group) => group.getAttribute('data-book-sign-group'))).toEqual(['symptoms', 'signs'])
-      // None of the old question cards.
       expect(screen.queryByTestId('cdss-hf-question-symptoms')).toBeNull()
       expect(screen.queryByTestId('cdss-hf-questions')).toBeNull()
-      expect(within(dp34()).queryByRole('button', { name: '確認 HFpEF' })).toBeNull()
-      // 全部皆無 on the signs, and pressed again, taken back.
-      const examined = () => signs().querySelector<HTMLElement>('[data-book-sign-group="signs"]')!
-      fireEvent.click(within(examined()).getByRole('button', { name: '全部皆無' }))
-      expect(useClinicVitalsStore.getState().byPatientId[PATIENT]?.signAnswers.jvp?.value).toBe('absent')
-      expect(useClinicVitalsStore.getState().byPatientId[PATIENT]?.signAnswers.ascites?.value).toBe('absent')
-      fireEvent.click(within(examined()).getByRole('button', { name: /全部皆無 · 再按復原/ }))
-      expect(useClinicVitalsStore.getState().byPatientId[PATIENT]?.signAnswers.jvp).toBeUndefined()
-      // The echo values behind criterion 2: the same HFA-PEFF／H₂FPEF calculator 01 opens.
-      fireEvent.click(within(dp34()).getByTestId('cdss-book-hfpef-calculator'))
-      expect(screen.getByRole('dialog')).toHaveTextContent('HFA-PEFF')
-      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
-      // A symptom answered here is the page's answer (signAnswers), and the pack re-reads it.
-      const dyspnoea = signs().querySelector<HTMLElement>('[data-book-sign="exertional-dyspnea"]')!
-      fireEvent.click(within(dyspnoea).getByRole('button', { name: '有' }))
-      expect(useClinicVitalsStore.getState().byPatientId[PATIENT]?.signAnswers['exertional-dyspnea']?.value).toBe('present')
-      expect(dp34()).not.toHaveTextContent('先完成症狀／徵象')
-      // Today's box, as every decision on the page, and the confirmation settles DP-34.
-      fireEvent.click(within(dp34()).getByRole('button', { name: '確認 HFpEF' }))
+      expect(screen.queryByRole('button', { name: /HFA-PEFF/ })).toBeNull()
+      // The map's DP-34 leads to the table.
+      fireEvent.click(mapLine('DP-34'))
+      expect(document.activeElement).toBe(entry('DP-01'))
+      // 確認 HFpEF in the table is the clinician's HFpEF: DP-01 and DP-34 settle together.
+      fireEvent.click(within(table()).getByTestId('cdss-book-class-hfpEF'))
+      expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'done')
       expect(mapLine('DP-34')).toHaveAttribute('data-book-mark', 'done')
-      expect(entry('DP-01').querySelector('[data-book-merged="DP-34"]')).toBeNull()
-      expect(within(entry('DP-01')).getByTestId('cdss-book-classification').querySelector('th')).toHaveTextContent('DP-01 · DP-34')
+      expect(table().querySelector('th')).toHaveTextContent('DP-01 · DP-34')
     })
 
     it('at a first visit with an LVEF of 28%: 確認 HFrEF, and HFpEF not on offer (P2)', () => {

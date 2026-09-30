@@ -77,10 +77,7 @@ import {
   type VisitSignItem,
   type VisitSignSide,
   type VisitStep,
-  VISIT_EXAM_ITEMS,
-  VISIT_SYMPTOM_ITEMS,
 } from './heart-failure-visit-flow'
-import { BookSignQuestions } from './visit/BookSignQuestions'
 import { heartFailureMedicationSafetyAssessment } from './heart-failure-medication-safety'
 import { CdssModuleSections } from './CdssModuleSections'
 import { HfDiagnosisConfirmation } from './HfDiagnosisConfirmation'
@@ -480,14 +477,6 @@ export interface HeartFailureMapSurfaceSlots {
   /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
   diagnosticAssessment: ReactNode
   /**
-   * The symptom and sign questions alone — HFpEF's first criterion, the one
-   * DP-34 waits on (「先完成症狀／徵象」) — in the pocket-handbook page's
-   * yes／no rows, over the same answers (`signAnswers`) as 本次評估.
-   */
-  symptomsAndSigns: ReactNode
-  /** Opens the HFA-PEFF／H₂FPEF calculator, where the echo values behind HFpEF's criterion 2 are entered. */
-  openHfpefCalculator?: () => void
-  /**
    * What the map's status line adds beside the pack's values: the rhythm, the
    * record's other values (Na, Hb, SpO₂, BMI) and what it lacks, given the
    * keys the line already shows so none is printed twice.
@@ -575,16 +564,6 @@ export function HeartFailureMapSurfaces({
     ? subset(flow.questions.filter(inDiagnosisCard), true)
     : subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)), true)
   const diagnosticFlow = subset(assessmentAsksSuspicion ? [] : flow.questions.filter((question) => diagnosticIds.includes(question.id)))
-  const signsOpen = flow.questions.some((question) => (question.id === 'symptoms' || question.id === 'signs') && question.state !== 'locked')
-  const signItems = (items: readonly VisitSignItem[]) => items.map((item) => ({
-    term: item.term,
-    label: isEnglish ? item.en : item.zh,
-    short: isEnglish ? item.shortEn : item.shortZh,
-    common: item.common,
-  }))
-  const signAnswers = Object.fromEntries(
-    Object.entries(clinicVitals?.signAnswers ?? {}).map(([term, answer]) => [term, answer?.value]),
-  )
   const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
   const questionsCard = (questionFlow: VisitFlowModel) => (
     <QuestionsCard
@@ -636,18 +615,6 @@ export function HeartFailureMapSurfaces({
         trendAsksElsewhere
       />
     ) : undefined,
-    symptomsAndSigns: signsOpen ? (
-      <BookSignQuestions
-        groups={[
-          { id: 'symptoms', title: isEnglish ? 'Symptoms the patient describes' : '病人描述的症狀', items: signItems(VISIT_SYMPTOM_ITEMS) },
-          { id: 'signs', title: isEnglish ? 'Signs you find' : '你檢查到的徵象', items: signItems(VISIT_EXAM_ITEMS) },
-        ]}
-        answers={signAnswers}
-        isEnglish={isEnglish}
-        {...(onSaveClinicVitals && !flow.readOnly ? { onAnswer: (patch: Record<string, 'present' | 'absent' | null>) => onSaveClinicVitals({ signAnswers: patch }) } : {})}
-      />
-    ) : null,
-    ...(openCalculator ? { openHfpefCalculator: () => openCalculator('hfa-peff') } : {}),
     diagnosticAssessment: (
       <div className="space-y-2" data-testid="cdss-visit-hf-diagnostic-assessment">
         {/* One confirmation: where question 1 asks the diagnosis, or the HFpEF

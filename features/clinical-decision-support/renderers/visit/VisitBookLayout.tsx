@@ -60,10 +60,10 @@ export type BookEntry =
   | { kind: 'covered'; point: DecisionPointView; by: DecisionPointView }
   | { kind: 'line'; point: DecisionPointView }
   /**
-   * `merged`: a point drawn inside this one's table (the prototype's 「DP-01 ·
-   * DP-34」: HF's HFpEF confirmation beside the phenotype), with its own entry.
+   * `merged`: a point this one's table stands for too, named in its tag (the
+   * prototype's 「DP-01 · DP-34」) and drawn nowhere else.
    */
-  | { kind: 'slot'; point: DecisionPointView; content: ReactNode; merged?: { point: DecisionPointView; entry: BookEntry } }
+  | { kind: 'slot'; point: DecisionPointView; content: ReactNode; merged?: DecisionPointView }
   | { kind: 'skip'; point: DecisionPointView; anchorOf: DecisionPointView }
 
 export interface VisitBookLayoutProps {
@@ -1197,51 +1197,7 @@ export function VisitBookLayout({
     )
   }
 
-  /**
-   * A point drawn inside another's table (DP-34 in DP-01's): while it is
-   * open, its name and where it stands, its criteria ✓ by ✓, the inputs it
-   * waits on, and today's box; settled, the table's tag says it is there.
-   */
-  const renderMerged = (point: DecisionPointView, entry: BookEntry) => {
-    if (point.state === 'done' && entry.kind !== 'row') return null
-    const row = entry.kind === 'row' ? entry : undefined
-    if (row && !row.row.current && point.state === 'done') return null
-    const extras = extrasOf(point)
-    return (
-      <div className={styles.merged} data-book-merged={point.dp} data-book-mark={marks.get(point)}>
-        <div className={styles.mergedHead}>
-          <span className={styles.dpTag}>{point.dp}</span>
-          <b>{point.label}</b>
-          {!row && point.headline ? (
-            <span className={styles.slotLine}>
-              {point.headline}
-              {point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}
-            </span>
-          ) : null}
-        </div>
-        {point.checklist?.length ? (
-          <table className={styles.scoreTable} aria-label={point.label} data-testid="cdss-book-merged-criteria">
-            <tbody>
-              {point.checklist.map((item) => (
-                <tr key={item.key} data-met={item.present || undefined}>
-                  <td className={styles.scoreMark}>
-                    <span aria-hidden="true">{item.present ? '✓' : '○'}</span>
-                    <span className="sr-only">{item.present ? (isEnglish ? 'met' : '成立') : (isEnglish ? 'not yet' : '未成立')}</span>
-                  </td>
-                  <td>{item.label}</td>
-                  <td className={styles.scoreEvidence}>{item.value ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : null}
-        {extras ? <div className={`${styles.signWrap} ${styles.inner}`}>{extras}</div> : null}
-        {row ? blockDecision(point, entry) : null}
-      </div>
-    )
-  }
-
-  const renderSlot = (point: DecisionPointView, content: ReactNode, merged?: { point: DecisionPointView; entry: BookEntry }) => (
+  const renderSlot = (point: DecisionPointView, content: ReactNode, merged?: DecisionPointView) => (
     <div
       key={`${point.source}:${point.dp}`}
       id={bookAnchor(point)}
@@ -1261,8 +1217,7 @@ export function VisitBookLayout({
           </span>
         ) : null}
       </div>
-      {classTable(point, merged ? `${point.dp} · ${merged.point.dp}` : undefined)}
-      {merged ? renderMerged(merged.point, merged.entry) : null}
+      {classTable(point, merged ? `${point.dp} · ${merged.dp}` : undefined)}
       {content || extrasOf(point) ? (
         <div className={styles.inner}>
           {content}

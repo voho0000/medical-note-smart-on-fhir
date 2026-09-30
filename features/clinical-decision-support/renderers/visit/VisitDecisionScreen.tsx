@@ -697,10 +697,10 @@ export function VisitDecisionScreen({
       }
       return { kind: 'line', point }
     }
-    // The prototype draws HF's DP-34 inside DP-01's table (「DP-01 · DP-34」):
-    // the HFpEF confirmation is the phenotype's other half. Its criteria, the
-    // symptoms and signs it waits on, and its box go there; the map rail's
-    // DP-34 leads there.
+    // The prototype has no DP-34 of its own: DP-01's table stands for it
+    // (「DP-01 · DP-34」), the HFpEF confirmation being the phenotype's other
+    // half, answered in that table (owner request 2026-09-30: 「Prototype 的
+    // DP34不用填症狀，完全照著prototype」). The map rail's DP-34 leads there.
     const dp01 = model.points.find((point) => point.dp === 'DP-01' && point.source === 'hf')
     const dp34 = model.points.find((point) => point.dp === 'DP-34' && point.source === 'hf')
     const mergesIntoDp01 = (point: DecisionPointView) => (
@@ -709,7 +709,7 @@ export function VisitDecisionScreen({
     const entryOf = (point: DecisionPointView): BookEntry => {
       if (mergesIntoDp01(point)) return { kind: 'skip', point, anchorOf: dp01! }
       const own = ownEntryOf(point)
-      if (point === dp01 && own.kind === 'slot' && dp34 && mergesIntoDp01(dp34)) return { ...own, merged: { point: dp34, entry: ownEntryOf(dp34) } }
+      if (point === dp01 && own.kind === 'slot' && dp34 && mergesIntoDp01(dp34)) return { ...own, merged: dp34 }
       return own
     }
     const markOf = (point: DecisionPointView): BookMark => {
