@@ -137,12 +137,36 @@ export function afQuestionGroupTitle(id: string, isEnglish: boolean): string | u
  * the AF visit flow and the decision map, over the same answers.
  */
 /**
- * The groups that are today's checklists of problems — where 「全部皆無」 means
- * what it says. Groups read from the history (diagnosis, stroke-risk history,
- * valves, HAS-BLED, comorbidities) have no such button: a bulk 無 there could
- * overwrite what the record holds.
+ * The groups that are checklists of problems — where 「全部皆無」 means what it
+ * says: today's symptoms, side effects and bleeding, and the stroke-risk
+ * history, valves and immediate safety, HAS-BLED, comorbidities and screening
+ * risks (owner, 2026-09-30: 盡量這種的都要有全部皆無的按鈕). Not the diagnosis,
+ * whose 無 turns the page to a reassessment, nor the dronedarone NHI
+ * criteria, rate and rhythm, or the antithrombotic indications: their rows
+ * are criteria and findings, not problems to rule out.
+ *
+ * A bulk 無 never writes over the record. A row the record reads 有 is left as
+ * it is, and so is one the record holds but could not settle (a suspected
+ * diagnosis, a value the pack cannot read): it stays 待確定 with what the
+ * record holds under it, for the clinician to answer row by row.
  */
-const BULK_NONE_GROUPS: ReadonlySet<string> = new Set(['followup', 'adverse', 'bleeding'])
+const BULK_NONE_GROUPS: ReadonlySet<string> = new Set([
+  'screening', 'followup', 'adverse', 'bleeding', 'bleedingRisk', 'stroke', 'safety', 'comorbidity',
+])
+/**
+ * The HAS-BLED questions and the score rows the pack reads them into. The pack
+ * scores a dialysis, a creatinine >2.26, a cirrhosis, a major bleed or an
+ * antiplatelet／NSAID on the prescription from the record when no answer is
+ * given, so the question shows that reading rather than 待確定.
+ */
+const HAS_BLED_SCORE_ROWS: Readonly<Record<string, string>> = {
+  abnormalRenal: 'renal',
+  abnormalLiver: 'liver',
+  hasBledStroke: 'stroke',
+  bleedingHistory: 'bleeding',
+  bleedingDrugs: 'drugs',
+  excessAlcohol: 'alcohol',
+}
 /** Items whose 有 is good news; a bulk 無 would record the opposite of 「沒有問題」. */
 const BULK_NONE_EXCLUDED: ReadonlySet<string> = new Set(['treatmentBenefit'])
 
@@ -166,11 +190,17 @@ export function AfQuestionGroups({
 }) {
   const diagnosis = board.items.find((r) => r.id === 'af-diagnosis-and-pattern')?.diagnosisContext
   const confirmed = diagnosis?.mode === 'follow-up'
-  const evidenceFor = (id: string) =>
-    result.recommendations
-      .flatMap((r) => r.evidenceTables ?? [])
-      .flatMap((t) => t.items)
-      .find((row) => row.id === `af-stroke:${id}` || row.id === `af-clinic:${id}`)
+  const evidenceFor = (id: string) => {
+    const rows = result.recommendations.flatMap((r) => r.evidenceTables ?? []).flatMap((t) => t.items)
+    // A HAS-BLED question's record reading is its score row; one the record
+    // cannot fill (「未確認」) is no reading at all.
+    const scoreRow = HAS_BLED_SCORE_ROWS[id]
+    if (scoreRow) {
+      const row = rows.find((candidate) => candidate.id === `af-hasbled:${scoreRow}`)
+      return row && row.direction !== 'unknown' ? row : undefined
+    }
+    return rows.find((row) => row.id === `af-stroke:${id}` || row.id === `af-clinic:${id}`)
+  }
 
   // Display the pack's evidence decision directly; only deliberate corrections are stored.
   const answerValue = (id: string): boolean | undefined => {
@@ -195,8 +225,13 @@ export function AfQuestionGroups({
   // What each group's rows held before 全部皆無 was pressed, for a second press to restore.
   const [beforeNone, setBeforeNone] = useState<Record<string, Record<string, boolean | undefined>>>({})
   if (groups.length === 0) return null
+  // The record holds something on this row it could not settle — a suspected
+  // diagnosis, a switched-off finding, a value the pack cannot read.
+  const recordHeld = (id: string) => (
+    answers[id] === undefined && answerValue(id) === undefined && evidenceFor(id)?.derivability === 'record-derived'
+  )
   const noneTargets = (groupId: string) => availableQuestions.filter((q) => (
-    q.group === groupId && !BULK_NONE_EXCLUDED.has(q.id) && answerValue(q.id) !== true
+    q.group === groupId && !BULK_NONE_EXCLUDED.has(q.id) && answerValue(q.id) !== true && !recordHeld(q.id)
   ))
   // Pressed while every row it covers was answered 無 by the clinician —
   // a record's prefilled 無 is not the clinician's answer.
@@ -244,9 +279,17 @@ export function AfQuestionGroups({
             const applied = noneApplied(group.id)
             const anyYes = availableQuestions.some((q) => q.group === group.id && !BULK_NONE_EXCLUDED.has(q.id) && answerValue(q.id) === true)
             const targets = noneTargets(group.id)
+            const held = availableQuestions.filter((q) => q.group === group.id && recordHeld(q.id)).length
             const label = anyYes ? (en ? 'Rest: none' : '其餘皆無') : (en ? 'None of these' : '全部皆無')
             return (
-              <div className="flex justify-end px-3 pb-2">
+              <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 px-3 pb-2">
+                {held ? (
+                  <span className="text-xs text-muted-foreground" data-testid={`cdss-af-none-held-${group.id}`}>
+                    {en
+                      ? `${held} held in the record: answer ${held === 1 ? 'it' : 'them'} one by one`
+                      : `病歷有紀錄的 ${held} 項請逐項確認`}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   className={cn(
@@ -284,6 +327,12 @@ export function AfQuestionGroups({
                     answerValue(q.id) !== undefined ? (
                       <span className="mt-1 block text-xs text-muted-foreground">
                         {en ? 'Prefilled from records: ' : '病歷預填：'}
+                        {evidenceFor(q.id)?.value}
+                        {evidenceFor(q.id)?.date ? ` · ${evidenceFor(q.id)?.date}` : ''}
+                      </span>
+                    ) : recordHeld(q.id) ? (
+                      <span className="mt-1 block text-xs text-muted-foreground" data-af-record-held={q.id}>
+                        {en ? 'In the record, not settled: ' : '病歷有紀錄、未能判定：'}
                         {evidenceFor(q.id)?.value}
                         {evidenceFor(q.id)?.date ? ` · ${evidenceFor(q.id)?.date}` : ''}
                       </span>
