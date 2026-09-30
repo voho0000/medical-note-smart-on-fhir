@@ -102,6 +102,18 @@ describe('the pocket-handbook layout', () => {
     // 收起依據 in the panel closes it.
     fireEvent.click(within(panel).getByRole('button', { name: '收起依據' }))
     expect(within(row).queryByTestId('cdss-book-reasoning')).toBeNull()
+    // DP-09's start: 起始劑量怎麼選, footnote f its own step, the values beside it.
+    fireEvent.click(within(entry('DP-09')).getByRole('button', { name: /看依據/ }))
+    const start = within(entry('DP-09')).getByTestId('cdss-book-start-doses')
+    expect(start).toHaveTextContent('起始劑量怎麼選（ESC 2026 Table 11）')
+    expect(start).toHaveTextContent('本病人：K 4.4、eGFR 40')
+    expect(within(start).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual([
+      'spironolactone12.5 mg o.d.可選的較低起始：腎功能或高血鉀需謹慎時（Table 11 註 f）',
+      '25 mg o.d.起始（Table 11：12.5–25 mg o.d.）',
+      '50 mg o.d.目標（Table 11）；RALES 試驗劑量 25 mg；心衰竭惡化且 K 允許時可加到 50 mg',
+      'eplerenone25 mg o.d.起始（Table 11）',
+      '50 mg o.d.目標（Table 11）',
+    ])
     // A reminder has no 看依據.
     expect(within(entry('DP-15')).queryByRole('button', { name: /看依據/ })).toBeNull()
   })

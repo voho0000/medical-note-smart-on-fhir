@@ -399,6 +399,10 @@
 .optTable td { padding: 6px 10px; border-top: 1px solid var(--line-soft); vertical-align: top; }
 .optTable tbody tr:last-child td { border-bottom: 1px solid var(--line-soft); }
 .optTable tr[data-current] td { background: var(--blue-soft); }
+.optTable tr[data-proposed] td { background: var(--blue-soft); }
+.optTable tr[data-proposed] .optPatient { color: var(--blue-ink); font-weight: 700; }
+.optTable tr[data-role='optional-start'] .optPatient { font-weight: 500; }
+.panelValues { font-weight: 400; color: var(--ink-4); }
 .optTable tr[data-current] .optPatient { color: var(--blue-ink); font-weight: 700; }
 .optTable tr[data-status='excluded'] .optPatient { color: var(--red); font-weight: 700; }
 .optTable tr[data-status='individual'] .optPatient,
