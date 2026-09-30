@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { detectOptionalPackages } from './optional-package-state.mjs'
 
@@ -50,6 +51,20 @@ export function writeOptionalBuildTsconfig(root, config) {
     exclude: [...base.exclude, ...config.excluded],
   }, null, 2) + '\n'
   const target = resolve(root, file)
-  if (!existsSync(target) || readFileSync(target, 'utf8') !== content) writeFileSync(target, content)
+  let current
+  try { current = readFileSync(target, 'utf8') } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  if (current !== content) {
+    // Replace the directory entry atomically instead of following a target
+    // symlink or letting Next.js read a partially written configuration.
+    const temporary = join(root, `.tsconfig.optional.${randomUUID()}.tmp`)
+    try {
+      writeFileSync(temporary, content, { flag: 'wx' })
+      renameSync(temporary, target)
+    } finally {
+      rmSync(temporary, { force: true })
+    }
+  }
   return file
 }

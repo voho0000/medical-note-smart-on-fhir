@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync, symlinkSync, lstatSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -76,4 +76,27 @@ test('full builds use the real modules; absent CDSS and SDK are independent', as
   assert.equal(noSdk.env.NEXT_PUBLIC_CDSS_AVAILABLE, 'true')
   assert.equal(noSdk.env.NEXT_PUBLIC_SDK_IMPORT_AVAILABLE, 'false')
   assert.equal(noSdk.aliases['@/vendor/nhi-fhir-bridge-sdk-json/browser.js'], './src/optional/sdk-json.ts')
+})
+
+test('generated type config replaces a symlink without modifying its target', { skip: process.platform === 'win32' }, async () => {
+  const { optionalBuildConfig, writeOptionalBuildTsconfig } = await import('../optional-build-config.mjs')
+  const root = mkdtempSync(join(tmpdir(), 'optional-tsconfig-'))
+  try {
+    writeFileSync(join(root, 'tsconfig.build.json'), JSON.stringify({ exclude: ['node_modules'] }))
+    const protectedFile = join(root, 'keep.txt')
+    writeFileSync(protectedFile, 'keep this content')
+    const target = join(root, 'tsconfig.optional.generated.json')
+    symlinkSync(protectedFile, target)
+    const config = optionalBuildConfig(root, {
+      state: { labs: false, care: false, education: false, fhir: false }, sdkImport: false,
+    })
+    assert.equal(writeOptionalBuildTsconfig(root, config), 'tsconfig.optional.generated.json')
+    assert.equal(readFileSync(protectedFile, 'utf8'), 'keep this content')
+    assert.equal(lstatSync(target).isSymbolicLink(), false)
+    const generated = JSON.parse(readFileSync(target, 'utf8'))
+    assert.deepEqual(generated.compilerOptions.paths['@/vendor/nhi-fhir-bridge-sdk-json/browser.js'], ['./src/optional/sdk-json.ts'])
+    assert.equal(readdirSync(root).some(name => name.endsWith('.tmp')), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
