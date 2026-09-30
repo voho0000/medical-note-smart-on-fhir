@@ -145,10 +145,11 @@ beforeEach(() => {
 })
 
 describe('real pack · P3 new AF (AF page)', () => {
-  it('opens a first visit on 診斷 with the coded AF to confirm, as the HF page does', () => {
+  it('leads a first visit with the coded AF to confirm, as the HF page does', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
     expect(queue('status')).toEqual([{ dp: 'DP-01', primary: 'AF' }])
+    // The diagnosis first, the every-visit questions after it, on one page.
+    expect(row('DP-01').compareDocumentPosition(screen.getByTestId('cdss-visit-follow-up')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // A question, not a recommendation: the answers alike, side by side.
     expect([...row('DP-01').querySelectorAll('[data-visit-action]')].map((button) => button.textContent)).toEqual(['AF', 'AFL', '都有'])
     fireEvent.click(primaryOf('DP-01'))
@@ -157,9 +158,9 @@ describe('real pack · P3 new AF (AF page)', () => {
     // The cell carries today's answer, as every decided cell does.
     expect(cell('DP-01', 'af')).toHaveTextContent('已記錄AF')
     expect(cell('DP-01', 'af')).toHaveAttribute('data-state', 'done')
-    // The follow-up asks wait in 追蹤, named by the switch; nothing moves by itself.
-    expect(screen.getByTestId('cdss-visit-status-view-other-pending')).toHaveTextContent('AF 症狀')
-    expect(document.querySelector('[data-visit-ask="af-symptoms"]')).toBeNull()
+    // The follow-up asks are right after it; nothing moves by itself.
+    expect(document.querySelector('[data-visit-ask="af-symptoms"]')).not.toBeNull()
+    expect(screen.getByTestId('cdss-visit-column-status')).toHaveAttribute('data-open', 'true')
   })
 
   it('「都有」 names both, and the answer can be changed from its cell', () => {
@@ -188,7 +189,6 @@ describe('real pack · P3 new AF (AF page)', () => {
 
   it('asks symptoms and bleeding and walks the anticoagulation chain in one row', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
     expect(document.querySelector('[data-visit-ask="af-symptoms"]')).not.toBeNull()
     expect(document.querySelector('[data-visit-ask="bleeding"]')).not.toBeNull()
     expect(queue('treatment')).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
@@ -208,7 +208,6 @@ describe('real pack · P3 new AF (AF page)', () => {
 
   it('queues rhythm control once symptoms are answered 「有」, and keeps screening out of the queue', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
     fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
     expect(queue().map((item) => item.dp)).toContain('DP-18')
     expect(primaryOf('DP-18')).toHaveTextContent('討論節律控制')
@@ -449,12 +448,14 @@ describe('real pack · DP-03\'s fuller questions, drawn as a point', () => {
 // visit the page is the system's first look: 01 opens on 診斷, the clinician
 // answers the diagnosis, and the baseline work-up is there.
 describe('real pack · P4 at the system’s first visit', () => {
-  it('opens on 診斷 with the diagnosis unanswered, the record beside it; one press answers it', () => {
+  it('leads with the diagnosis unanswered, the record beside it; one press answers it', () => {
     render(<ScenarioMap id="p4-stable-optimised" firstVisit />)
     expect(document.body.textContent).toContain('HFrEF（LVEF 35%，03-10）：首次評估')
     expect(document.body.textContent).not.toContain('新診斷')
-    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    // Not folded: at the system's first visit the diagnosis heads 01.
+    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
+    expect(view.compareDocumentPosition(screen.getByTestId('cdss-visit-follow-up')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const dp01 = within(view).getByTestId('cdss-hf-question-hf-suspicion')
     expect(dp01).toHaveAttribute('data-state', 'open')
     expect(dp01).toHaveTextContent('I50.22')
@@ -473,7 +474,8 @@ describe('real pack · P4 on 01’s 診斷 view', () => {
   // diagnosis the record already carries is not confirmed a second time.
   it('offers no 補記診斷確認紀錄 for a diagnosis the record holds; DP-01 names it', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    // A returning patient: the settled diagnosis is folded after the asks.
+    expect(screen.getByTestId('cdss-visit-diagnosis-fold')).toContainElement(screen.getByTestId('cdss-visit-hf-diagnosis-view'))
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
     expect(within(view).queryByText('補記診斷確認紀錄')).toBeNull()
@@ -515,9 +517,9 @@ describe('real pack · P7 worsening congestion', () => {
     })
     expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
     // DP-04 (reassessment) is one of 01's diagnosis points: a diagnosis
-    // stands, so 01 opens on 追蹤 — and DP-04 is on the overview all the same,
-    // its own card one press away.
-    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    // stands, so 01 leads with the asks — and DP-04 is on the overview all
+    // the same, its own card one press away.
+    expect(screen.getByTestId('cdss-visit-lead-status').firstElementChild).toBe(screen.getByTestId('cdss-visit-follow-up'))
     expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
     fireEvent.click(cell('DP-04'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-04')
@@ -622,8 +624,8 @@ describe('real pack · the other scenarios', () => {
     // No 「比上次」 before a diagnosis: 01 is open on 診斷, and 追蹤 waits for one.
     expect(document.querySelector('[data-visit-ask]')).toBeNull()
     expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
-    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toBeDisabled()
+    expect(screen.queryByTestId('cdss-visit-follow-up')).toBeNull()
+    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
     // The assessment is in view and asks the diagnosis itself, as its only
     // question until it is answered: HFrEF, HFpEF or 還不確定 — no 「否」.
     const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
@@ -704,21 +706,14 @@ describe('real pack · the other scenarios', () => {
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfpEF', hfpEfConfirmed: true })
-    // The answer stays where it was given, on 診斷, and can be changed there.
-    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    // The answer stays where it was given, heading 01, and can be changed there.
+    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
     expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFpEF（醫師判斷）')
     // A new diagnosis is still asked 喘／體重比上次 (many a first CDSS visit is
-    // a returning patient): they stay in 追蹤, one home per question, and 診斷
-    // names them — at the switch and at 01's foot, which leads to 追蹤 before
-    // 02. Nothing moves until the clinician presses.
-    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
-    expect(screen.getByTestId('cdss-visit-status-view-other-pending')).toHaveTextContent('「追蹤」還有：喘比上次、體重比上次')
-    const step = screen.getByTestId('cdss-visit-next-step-status')
-    expect(step).toHaveTextContent('下一步：追蹤（喘比上次、體重比上次）')
-    expect(screen.queryByTestId('cdss-visit-next-status')).toBeNull()
+    // a returning patient): they follow the diagnosis in 01, on the same page.
+    // Nothing moves until the clinician presses.
+    expect(screen.getByTestId('cdss-visit-hf-diagnosis-view').compareDocumentPosition(screen.getByTestId('cdss-visit-asks')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(step)
-    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
     fireEvent.click(document.querySelector('[data-visit-ask="weight-trend"][data-value="same"]')!)
     // Then 下一區 leads on to 02, when the clinician presses it.
@@ -806,7 +801,6 @@ describe('real pack · what a clinician reads without opening anything', () => {
 
   it('keeps the AF follow-up questions folded at a first AF visit until an ask says 有 (P3)', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
     expect(screen.getByTestId('cdss-visit-asks-detail')).not.toHaveAttribute('open')
     expect(screen.getByTestId('cdss-visit-asks-detail-toggle')).not.toHaveTextContent('待')
     fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
@@ -1006,15 +1000,14 @@ describe('real pack · returning to a card from the overview', () => {
     expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
   })
 
-  it('takes DP-03’s link to the fuller questions under 追蹤 on a first visit, where 01 opens on 診斷 (P5)', () => {
+  it('takes DP-03’s link to the fuller questions on a first visit, where 01 leads with the diagnosis (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" firstVisit />)
-    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByTestId('cdss-visit-asks-detail')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-hf-diagnosis-view').compareDocumentPosition(screen.getByTestId('cdss-visit-asks-detail')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.click(cell('DP-03'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-03')
     fireEvent.click(screen.getByTestId('cdss-visit-go-to-asks-detail'))
-    // The questions live under 追蹤: the switch moves there, and they are open.
-    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    // The card gives way to the section, and the questions are open.
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
     const detail = screen.getByTestId('cdss-visit-asks-detail') as HTMLDetailsElement
     expect(detail.open).toBe(true)
     expect(detail).toBeVisible()

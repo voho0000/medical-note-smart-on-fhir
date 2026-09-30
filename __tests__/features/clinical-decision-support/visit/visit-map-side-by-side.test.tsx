@@ -158,6 +158,39 @@ describe('the map beside its details', () => {
     expect(map).toHaveAttribute('data-layout', 'side-by-side')
   })
 
+  // Owner feedback 2026-09-30: the work began half a page down, under a
+  // headline, the values and four step boxes that repeated the column.
+  it('lets the column be the visit’s steps beside the details: no step bar, each section headed, the summary last', () => {
+    atWidth(700)
+    render(<Harness model={p4Model()} />)
+    expect(screen.queryByTestId('cdss-visit-steps')).toBeNull()
+    // The section shown says what it is at the head of the details.
+    expect(screen.getByRole('heading', { level: 3, name: '01 現況 · 診斷／追蹤' })).not.toHaveClass('sr-only')
+    // The values are the column's head, not a bar over the work.
+    expect(screen.getByTestId('cdss-visit-overview')).toContainElement(screen.getByTestId('cdss-visit-values-row'))
+    expect(screen.getByTestId('cdss-visit-overview').firstElementChild).toBe(screen.getByTestId('cdss-visit-values-row'))
+    // The summary is the column's last step, and one press from any section's head.
+    const summary = screen.getByTestId('cdss-visit-section-toggle-summary')
+    expect(screen.getByTestId('cdss-visit-sections').lastElementChild).toBe(summary)
+    fireEvent.click(summary)
+    expect(summary).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByTestId('cdss-visit-column-summary')).toBeVisible()
+    expect(screen.getByTestId('cdss-visit-section-toggle-status')).not.toHaveAttribute('aria-current')
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    fireEvent.click(screen.getByTestId('cdss-visit-to-summary-treatment'))
+    expect(screen.getByTestId('cdss-visit-column-summary')).toBeVisible()
+    expect(document.activeElement).toBe(document.getElementById('cdss-visit-column-summary-title'))
+  })
+
+  it('keeps the step bar where the map stacks, and no summary entry in the folded list', () => {
+    atWidth(500)
+    render(<Harness model={p4Model()} />)
+    expect(screen.getByTestId('cdss-visit-steps')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-visit-section-toggle-summary')).toBeNull()
+    expect(screen.queryByTestId('cdss-visit-to-summary-status')).toBeNull()
+    expect(screen.getByRole('heading', { level: 3, name: '01 現況 · 診斷／追蹤' })).toHaveClass('sr-only')
+  })
+
   it('stacks under 36rem, where a section’s name folds it closed as before', () => {
     atWidth(500)
     render(<Harness model={p4Model()} />)

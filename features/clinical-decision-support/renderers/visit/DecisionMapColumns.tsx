@@ -471,7 +471,8 @@ export function DecisionMapColumns({
   rowDps,
   leadCardKeys,
   initialOpen,
-  stepsBeforeNext,
+  overviewTop,
+  workingTop,
   pendingLine,
   chainOf,
   summary,
@@ -515,12 +516,10 @@ export function DecisionMapColumns({
   leadCardKeys?: ReadonlySet<string>
   /** The section open at first paint. */
   initialOpen?: VisitBlock | null
-  /**
-   * A step still inside a section that comes before the next one (01's 追蹤
-   * after a diagnosis made on 診斷): its foot button offers it instead of
-   * 「下一區」, and the clinician presses it — nothing moves on its own.
-   */
-  stepsBeforeNext?: Partial<Record<VisitBlock, { label: string; onGo: () => void }>>
+  /** At the head of the column (the clinical values), over the sections. */
+  overviewTop?: ReactNode
+  /** At the head of the working area, over whatever step it shows (an inline editor opened from the values). */
+  workingTop?: ReactNode
   /**
    * The line over a card at a section's head, where another row's step now
    * asks it (DP-09's 「選 DOAC」 on DP-07's row) rather than the point's own
@@ -721,8 +720,11 @@ export function DecisionMapColumns({
         style={columnHeight ? { '--cdss-column-height': `${columnHeight}px` } as CSSProperties : undefined}
         data-testid="cdss-visit-overview"
       >
+        {overviewTop}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <h3 id="cdss-visit-map-title" className="text-sm font-semibold text-foreground">
+          {/* Beside the details the column needs no name: its sections are
+              the visit's steps. Stacked, the name heads the folded list. */}
+          <h3 id="cdss-visit-map-title" className={cn('text-sm font-semibold text-foreground', sideBySide && 'sr-only')}>
             {isEnglish ? `Decision map · all ${model.points.length} points` : `決策地圖 · 全部 ${model.points.length} 個決策點`}
           </h3>
           {needle ? null : (
@@ -855,6 +857,25 @@ export function DecisionMapColumns({
               </div>
             )
           })}
+          {/* Beside the details the column is the visit's steps: 01, 02, 03,
+              then the summary (owner feedback 2026-09-30: the four boxes over
+              the details repeated it). */}
+          {sideBySide && summary ? (
+            <button
+              type="button"
+              className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:border-primary aria-[current=true]:ring-1 aria-[current=true]:ring-primary"
+              aria-current={summaryShown ? 'true' : undefined}
+              aria-controls="cdss-visit-column-summary"
+              onClick={() => showStep('summary')}
+              data-testid="cdss-visit-section-toggle-summary"
+            >
+              <ClipboardCopy className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-foreground">{isEnglish ? 'This visit’s summary' : '本次摘要'}</span>
+                <span className="block text-xs text-muted-foreground">{summary.status}</span>
+              </span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -868,16 +889,22 @@ export function DecisionMapColumns({
       <div ref={workingRef} className="@container min-w-0 space-y-2 [&_*]:scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-working">
         {/* Where the visit is, and what each step still needs: in view at the
             head of the details as they scroll. */}
-        <div ref={stepsRef} className="z-10 bg-background/95 py-0.5 backdrop-blur-sm @min-[20rem]:sticky @min-[20rem]:top-2">
-          <VisitSteps
-            shown={shownStep}
-            summaries={stepSummaries}
-            closedNote={closedNote}
-            {...(summary ? { summaryStatus: summary.status } : {})}
-            isEnglish={isEnglish}
-            onGo={showStep}
-          />
+        {/* Stacked, the steps head the details and stay in view as they
+            scroll; beside the column its section names are the steps, and
+            the details start with the work itself. */}
+        <div ref={stepsRef} className={cn(!sideBySide && 'z-10 bg-background/95 py-0.5 @min-[20rem]:sticky @min-[20rem]:top-2')}>
+          {sideBySide ? null : (
+            <VisitSteps
+              shown={shownStep}
+              summaries={stepSummaries}
+              closedNote={closedNote}
+              {...(summary ? { summaryStatus: summary.status } : {})}
+              isEnglish={isEnglish}
+              onGo={showStep}
+            />
+          )}
         </div>
+        {workingTop}
         {BLOCK_ORDER.map((block) => {
           const nextBlock = BLOCK_ORDER[BLOCK_ORDER.indexOf(block) + 1]
           const note = closedNote(block)
@@ -912,9 +939,30 @@ export function DecisionMapColumns({
               data-block={block}
               data-open={isOpen ? 'true' : undefined}
             >
-              {/* The steps above name the section; its full name is read out,
-                  and a move from a foot button lands here. */}
-              <h3 id={`cdss-visit-column-${block}-title`} tabIndex={-1} className="sr-only">{blockTitle(block, isEnglish)}</h3>
+              {/* Stacked, the steps above name the section and its name is read
+                  out; beside the column it heads the section, with the way to
+                  the summary. A move from a foot button lands here. */}
+              <div className={cn(sideBySide && 'flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5')}>
+                <h3
+                  id={`cdss-visit-column-${block}-title`}
+                  tabIndex={-1}
+                  className={cn(sideBySide ? 'min-w-0 flex-1 text-sm font-semibold text-[color:var(--section-ink)] focus-visible:outline-none' : 'sr-only')}
+                >
+                  {blockTitle(block, isEnglish)}
+                </h3>
+                {sideBySide && summary ? (
+                  <button
+                    type="button"
+                    className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted/50 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => showStep('summary', true)}
+                    data-testid={`cdss-visit-to-summary-${block}`}
+                  >
+                    <ClipboardCopy className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    {isEnglish ? 'Summary' : '本次摘要'}
+                    <span className="text-muted-foreground">· {summary.status}</span>
+                  </button>
+                ) : null}
+              </div>
               {head ? (
                 // The module a tile opened, at the head of its section.
                 <div className="space-y-1.5 scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-detail-slot" data-dp={head.dp}>
@@ -1010,20 +1058,7 @@ export function DecisionMapColumns({
                 ) : null}
                 {columnFooters?.[block]}
                 {block === 'outlook' ? outlookSlot : null}
-                {stepsBeforeNext?.[block] ? (
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="button"
-                      className={nextButtonClass}
-                      data-section={SECTION_TONE[block]}
-                      onClick={stepsBeforeNext[block]!.onGo}
-                      data-testid={`cdss-visit-next-step-${block}`}
-                    >
-                      {stepsBeforeNext[block]!.label}
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                ) : !nextBlock && summary ? (
+                {!nextBlock && summary ? (
                   <div className="flex justify-end pt-1">
                     <button
                       type="button"
@@ -1066,7 +1101,13 @@ export function DecisionMapColumns({
             data-testid="cdss-visit-column-summary"
             data-open={summaryShown ? 'true' : undefined}
           >
-            <h3 id="cdss-visit-column-summary-title" tabIndex={-1} className="sr-only">{isEnglish ? 'This visit’s summary' : '本次摘要'}</h3>
+            <h3
+              id="cdss-visit-column-summary-title"
+              tabIndex={-1}
+              className={cn(sideBySide ? 'px-0.5 text-sm font-semibold text-foreground focus-visible:outline-none' : 'sr-only')}
+            >
+              {isEnglish ? 'This visit’s summary' : '本次摘要'}
+            </h3>
             {/* The summary is where a visit ends, and what it copies is only
                 what was decided: a section still asking for something says
                 so here, one press from it, before the note leaves the page. */}

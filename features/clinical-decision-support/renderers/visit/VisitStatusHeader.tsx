@@ -14,12 +14,6 @@ const TREND = {
 } as const
 
 /**
- * The status line: the pack's one sentence for where this patient stands, the
- * values it rests on with their dates and direction, and — when the pack
- * reopened the assessment — why. The only host words are the progress of
- * today's queue.
- */
-/**
  * A value's date as a clinician reads it beside the number: nothing for
  * today's, month-day within this year, the full date otherwise.
  */
@@ -38,26 +32,56 @@ function isMissingValue(value: string): boolean {
   return !value.trim() || /^[—–-]+$/.test(value.trim())
 }
 
-export function VisitStatusHeader({
+/**
+ * The pack's sentence for where this patient stands — or, once everything
+ * queued is recorded, its own words for that (`headlineWhenDecided`), with
+ * what still needs the clinician outside the queue.
+ */
+export function visitStatusSentence(model: VisitDecisionModel, rows: readonly QueueRow[], stillToConfirm: number, isEnglish: boolean): { text: string; decided: boolean } {
+  const allDecided = rows.length > 0 && rows.every((row) => !row.current)
+  return allDecided && model.headlineWhenDecided
+    ? { text: `${model.headlineWhenDecided}${stillToConfirm ? (isEnglish ? ` · ${stillToConfirm} still to confirm` : ` · 還有 ${stillToConfirm} 項需你確認`) : ''}`, decided: true }
+    : { text: model.headline, decided: false }
+}
+
+/**
+ * That sentence for a screen reader and the page's structure only. On screen
+ * each decision says it for itself, the decided sentence heads the summary,
+ * and the sentence opens the copied note (owner feedback 2026-09-30: the line
+ * 「HFrEF（LVEF 57.2%，05-05）：首次評估」 need not take a row).
+ */
+export function VisitStatusLine({ model, sentence }: { model: VisitDecisionModel; sentence: string }) {
+  return (
+    <section
+      className="sr-only"
+      aria-labelledby="cdss-visit-headline"
+      data-testid="cdss-visit-status"
+      data-stage={model.stage}
+      data-flags={model.flags?.join(' ') || undefined}
+    >
+      <h3 id="cdss-visit-headline">{sentence}</h3>
+    </section>
+  )
+}
+
+/**
+ * The values the decisions read, with their dates and direction, and the way
+ * to add or correct one — at the head of the map's column, folded to LVEF and
+ * what stands out (a value behind today's safety item, or one the laboratory
+ * itself flagged). Not pinned over the work: each decision prints the values
+ * it read, and clinicians read the labs before they open the CDSS (owner
+ * feedback 2026-09-30: 「臨床數值不用固定在上面」).
+ */
+export function VisitValues({
   model,
-  rows,
   isEnglish,
   now,
   onEditValues,
   onEditValue,
   valueAddons,
   extras,
-  actions,
-  stillToConfirm = 0,
 }: {
   model: VisitDecisionModel
-  rows: readonly QueueRow[]
-  /**
-   * Points still needing the clinician outside the queue (DP-05's baseline,
-   * DP-13's blood pressure): once the queue is recorded, the pack's 「今天的
-   * 決定都記下了」 says so too, rather than reading as nothing left.
-   */
-  stillToConfirm?: number
   isEnglish: boolean
   now: Date
   /** Opens the page's clinical-values editor. */
@@ -66,31 +90,17 @@ export function VisitStatusHeader({
   onEditValue?: (key: string) => void
   /** Drawn after a value, by its key (LVEF's 報告). */
   valueAddons?: Partial<Record<string, ReactNode>>
-  /** Page-wide links drawn beside 補填／修改量測 (the map's 顯示全部). */
-  actions?: ReactNode
   /**
-   * The page's other values, in the line's own grammar and inside it — the
-   * rhythm, Na, Hb, SpO₂, BMI and what the record lacks — so everything the
-   * decisions read sits in one compact place (clinician feedback 2026-09-28).
+   * The page's other values, in the same grammar and inside the same list —
+   * the rhythm, Na, Hb, SpO₂, BMI and what the record lacks — so everything
+   * the decisions read sits in one compact place (clinician feedback 2026-09-28).
    */
   extras?: ReactNode
 }) {
-  const pending = rows.filter((row) => row.current).length
-  const allDecided = rows.length > 0 && pending === 0
-  // Once everything queued is recorded the pack may say so in its own words;
-  // otherwise its sentence stands. How many are left is said once, on the
-  // queue itself (已決定 x/y), not repeated here.
-  const headline = allDecided && model.headlineWhenDecided
-    ? `${model.headlineWhenDecided}${stillToConfirm ? (isEnglish ? ` · ${stillToConfirm} still to confirm` : ` · 還有 ${stillToConfirm} 項需你確認`) : ''}`
-    : model.headline
-  // The values fold behind 「臨床數值」, as the three sections' do: clinicians
-  // read the labs before they open the CDSS (MediPrisma shows the record on
-  // the left), and each decision box prints the values it read. Folded, the
-  // line keeps LVEF and what stands out — a value behind today's safety item,
-  // or one the laboratory itself flagged (clinician feedback 2026-09-28).
   const valuesOpen = useVisitValuesStore((state) => state.open)
   const setValuesOpen = useVisitValuesStore((state) => state.setOpen)
   const hasValues = model.keyValues.length > 0 || Boolean(extras)
+  if (!hasValues && !onEditValues) return null
   const summaryValues = model.keyValues.filter((item) => item.key === 'LVEF' || item.alert || item.abnormal)
   const renderValue = (item: VisitDecisionModel['keyValues'][number]) => {
     const trend = item.trend ? TREND[item.trend] : undefined
@@ -116,7 +126,7 @@ export function VisitStatusHeader({
     return (
       <div
         key={item.key}
-        className={cn('flex items-baseline gap-1.5', item.alert && 'rounded-md bg-destructive/10 px-1.5')}
+        className={cn('flex flex-wrap items-baseline gap-x-1.5', item.alert && 'rounded-md bg-destructive/10 px-1.5')}
         data-key={item.key}
         data-stale={item.stale ? 'true' : undefined}
         data-missing={missing ? 'true' : undefined}
@@ -129,7 +139,7 @@ export function VisitStatusHeader({
             <button
               type="button"
               className={cn(
-                'inline-flex min-h-11 items-center gap-1 rounded-md px-1 underline decoration-dotted underline-offset-4 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'inline-flex min-h-8 items-center gap-1 rounded-md px-1 underline decoration-dotted underline-offset-4 hover:bg-muted pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 item.stale ? 'text-amber-800 dark:text-amber-300' : 'text-muted-foreground',
               )}
               onClick={() => onEditValue?.(item.key)}
@@ -156,89 +166,82 @@ export function VisitStatusHeader({
     )
   }
   return (
-    // Tight to the sections below it: no rule, no padding under the values
-    // (clinician feedback 2026-09-28: 「中間空白太多」).
-    <section
-      className="space-y-1.5"
-      aria-labelledby="cdss-visit-headline"
-      data-testid="cdss-visit-status"
-      data-stage={model.stage}
-      data-flags={model.flags?.join(' ') || undefined}
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        <h3 id="cdss-visit-headline" className="min-w-0 flex-1 text-base font-semibold leading-snug text-foreground">
-          {headline}
-        </h3>
-        {actions}
+    // The whole first line opens and folds the values (clinician feedback
+    // 2026-09-28: 「一整個 row 都是可點擊 toggle」); a button or link on it
+    // (補填, 報告) does its own thing. The toggle is what a keyboard reaches.
+    <section className="rounded-md border border-border bg-background" aria-labelledby="cdss-visit-values-toggle" data-testid="cdss-visit-values-row">
+      <div
+        className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 text-sm hover:bg-muted/30"
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest('button, a')) return
+          setValuesOpen(!valuesOpen)
+        }}
+        data-testid="cdss-visit-values-header"
+      >
+        {hasValues ? (
+          <button
+            type="button"
+            id="cdss-visit-values-toggle"
+            className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded text-xs font-semibold text-primary pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-expanded={valuesOpen}
+            aria-controls="cdss-visit-values"
+            onClick={() => setValuesOpen(!valuesOpen)}
+            data-testid="cdss-visit-values-toggle"
+          >
+            {isEnglish ? 'Clinical values' : '臨床數值'}
+            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', valuesOpen && 'rotate-180')} aria-hidden="true" />
+          </button>
+        ) : (
+          <span id="cdss-visit-values-toggle" className="text-xs font-semibold text-muted-foreground">{isEnglish ? 'Clinical values' : '臨床數值'}</span>
+        )}
         {onEditValues ? (
           <button
             type="button"
-            className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ml-auto inline-flex min-h-8 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onEditValues}
             data-testid="cdss-visit-edit-values"
           >
             <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-            {isEnglish ? 'Add / correct measurements' : '補填／修改量測'}
+            {isEnglish ? 'Add / correct' : '補填／修改'}
           </button>
+        ) : null}
+        {!valuesOpen && summaryValues.length ? (
+          <dl className="flex basis-full flex-wrap items-baseline gap-x-3 gap-y-0.5 pb-0.5" data-testid="cdss-visit-key-values-summary">{summaryValues.map(renderValue)}</dl>
         ) : null}
       </div>
       {hasValues ? (
-        // As the three sections' 「臨床數值與來源」 row, in the map's form: the
-        // whole first line opens and folds the values (clinician feedback
-        // 2026-09-28: 「一整個 row 都是可點擊 toggle」), not its first words
-        // alone; a link on it (報告) still does its own thing. The button is
-        // the control a keyboard reaches.
-        <div className="rounded-md border border-border bg-background" data-testid="cdss-visit-values-row">
-          <div
-            className="flex min-h-11 cursor-pointer flex-wrap items-baseline gap-x-4 gap-y-1 rounded-md px-2.5 py-2 text-sm hover:bg-muted/30"
-            // A larger mouse target for the button inside it; a button or link
-            // on the line (the toggle itself, 報告) handles its own press.
-            onClick={(event) => {
-              if ((event.target as HTMLElement).closest('button, a')) return
-              setValuesOpen(!valuesOpen)
-            }}
-            data-testid="cdss-visit-values-header"
-          >
-            <button
-              type="button"
-              className="inline-flex shrink-0 items-baseline gap-1 rounded text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-expanded={valuesOpen}
-              aria-controls="cdss-visit-values"
-              onClick={() => setValuesOpen(!valuesOpen)}
-              data-testid="cdss-visit-values-toggle"
-            >
-              {isEnglish ? 'Clinical values' : '臨床數值'}
-              <ChevronDown className={cn('h-3.5 w-3.5 translate-y-0.5 transition-transform motion-reduce:transition-none', valuesOpen && 'rotate-180')} aria-hidden="true" />
-            </button>
-            {!valuesOpen && summaryValues.length ? (
-              <dl className="contents" data-testid="cdss-visit-key-values-summary">{summaryValues.map(renderValue)}</dl>
-            ) : null}
-          </div>
-          <div hidden={!valuesOpen} className="border-t border-border px-2.5 py-2">
-            <dl id="cdss-visit-values" className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm" data-testid="cdss-visit-key-values">
-              {model.keyValues.map(renderValue)}
-              {extras}
-            </dl>
-          </div>
-        </div>
-      ) : null}
-      {model.triggers.length ? (
-        <div
-          className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm dark:border-amber-500/30 dark:bg-amber-500/10"
-          data-testid="cdss-visit-triggers"
-        >
-          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
-            {isEnglish ? 'Reassessment opened by' : '重新評估的原因'}
-          </p>
-          <ul className="mt-1 space-y-0.5">
-            {model.triggers.map((trigger) => (
-              <li key={trigger.id} className="leading-relaxed text-foreground" data-trigger={trigger.id}>
-                {trigger.text}
-              </li>
-            ))}
-          </ul>
+        <div hidden={!valuesOpen} className="border-t border-border px-2 py-1.5">
+          {/* One value a line down the column; across the width where the map stacks. */}
+          <dl id="cdss-visit-values" className="grid gap-y-1 text-sm @max-[36rem]:flex @max-[36rem]:flex-wrap @max-[36rem]:items-baseline @max-[36rem]:gap-x-4" data-testid="cdss-visit-key-values">
+            {model.keyValues.map(renderValue)}
+            {extras}
+          </dl>
         </div>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * Why the pack reopened the assessment (「09-10 HF 急診」), in one line at the
+ * head of 01, where the reassessment is decided.
+ */
+export function VisitTriggers({ model, isEnglish }: { model: VisitDecisionModel; isEnglish: boolean }) {
+  if (!model.triggers.length) return null
+  return (
+    <p
+      className="rounded-md border border-amber-300/70 bg-amber-50 px-2.5 py-1.5 text-sm leading-relaxed text-foreground dark:border-amber-500/30 dark:bg-amber-500/10"
+      data-testid="cdss-visit-triggers"
+    >
+      <span className="mr-1 text-xs font-semibold text-amber-900 dark:text-amber-200">
+        {isEnglish ? 'Reassessment opened by:' : '重新評估的原因：'}
+      </span>
+      {model.triggers.map((trigger, index) => (
+        <span key={trigger.id} data-trigger={trigger.id}>
+          {index > 0 ? (isEnglish ? '; ' : '；') : ''}
+          {trigger.text}
+        </span>
+      ))}
+    </p>
   )
 }

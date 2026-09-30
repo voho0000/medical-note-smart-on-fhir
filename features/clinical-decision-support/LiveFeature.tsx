@@ -150,7 +150,9 @@ function DiseaseSwitcher({
       className="flex flex-wrap items-center gap-2"
       data-testid="cdss-disease-switch"
     >
-      <span className="text-xs font-medium text-muted-foreground">
+      {/* The switch itself names the diseases, and dims the ones this record
+          does not activate; the count is read out, not printed. */}
+      <span className="sr-only">
         {isEnglish
           ? `Disease (${applicablePackIds.size} applicable)`
           : `疾病（${applicablePackIds.size} 項適用）`}
@@ -257,7 +259,7 @@ function LayoutSwitcher({
   const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
-      <span className="text-xs font-medium text-muted-foreground">
+      <span className="sr-only">
         {isEnglish ? 'View' : '畫面'}
       </span>
       <div
@@ -740,13 +742,14 @@ export default function LiveClinicalDecisionSupportFeature({
           ? `Clinical rules ${result.packVersion}`
           : `臨床規則版本 ${result.packVersion}`}
       >
-        {/* One line: the title, the disease and the layout side by side, so
-            the page's own content starts near the top (clinician feedback
-            2026-09-28: 「集中一行，不然資訊都一半的頁高才出現」). */}
-        <h2 className="shrink-0 truncate text-base font-semibold tracking-tight text-foreground">
+        {/* One line: the disease and the layout, so the page's own content
+            starts near the top (clinician feedback 2026-09-28: 「集中一行，不然
+            資訊都一半的頁高才出現」). The selected disease names the page; the
+            title is read out, not printed (owner feedback 2026-09-30). */}
+        <h2 className="sr-only">
           {result.title}
         </h2>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 [&>[data-testid=cdss-layout-switch]]:ml-auto">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}
