@@ -322,6 +322,8 @@
   padding: 8px 36px 36px;
 }
 @container (max-width: 600px) {
+  /* A phone keeps the screen for the page: the header scrolls away with it. */
+  .head { position: static; }
   .sheet { padding: 8px 16px 24px; }
   .headInner { padding: 12px 16px; }
   .body { padding: 16px 12px 0; }
