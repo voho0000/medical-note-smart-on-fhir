@@ -98,6 +98,12 @@ export interface VisitBookLayoutProps {
   decided: readonly { key: string; dp: string; source: string; label: string; check?: string }[]
   /** The note 複製到病歷 copies. */
   summaryText: string
+  /**
+   * Writes a class chosen in a point's classification table (HF DP-01's
+   * phenotype) as the answer to the point's question; without it the table
+   * is read-only.
+   */
+  onChooseClass?: (point: DecisionPointView, input: ClassInput) => void
 }
 
 /** A chapter as the model carries it (`VisitBookChapter`), read defensively. */
@@ -266,28 +272,76 @@ function startDosesOf(point: object | undefined): { title: string; values?: stri
   return parsed.length ? { title, ...(typeof values === 'string' ? { values } : {}), rows: parsed } : undefined
 }
 
-interface ClassificationView { title: string; classes: { id: string; label: string; definition: string; current?: boolean }[]; patient?: string; note?: string }
+/** What choosing a class writes: the physician input the point's own question writes. */
+export type ClassInput = NonNullable<VisitAction['physicianInput']>
+
+interface ClassChoice { id: string; label: string; physicianInput?: ClassInput; chosen?: boolean }
+interface ClassificationView {
+  title: string
+  classes: (ClassChoice & { definition: string; current?: boolean })[]
+  patient?: string
+  note?: string
+  alternatives: (ClassChoice & { physicianInput: ClassInput })[]
+}
+
+function classInputOf(raw: unknown): ClassInput | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const { request, optionId } = raw as Record<string, unknown>
+  if (typeof request !== 'string') return undefined
+  return { request, ...(typeof optionId === 'string' ? { optionId } : {}) } as ClassInput
+}
 
 /** A point's classification table (HF DP-01's phenotype), read defensively like `changesOf`. */
 function classificationOf(point: object | undefined): ClassificationView | undefined {
   const raw = (point as { classification?: unknown } | undefined)?.classification
   if (!raw || typeof raw !== 'object') return undefined
-  const { title, classes, patient, note } = raw as Record<string, unknown>
+  const { title, classes, patient, note, alternatives } = raw as Record<string, unknown>
   if (typeof title !== 'string' || !Array.isArray(classes)) return undefined
   const parsed = classes.flatMap((item): ClassificationView['classes'] => {
-    const { id, label, definition, current } = (item ?? {}) as Record<string, unknown>
+    const { id, label, definition, current, physicianInput, chosen } = (item ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof label !== 'string' || typeof definition !== 'string') return []
-    return [{ id, label, definition, ...(current === true ? { current: true } : {}) }]
+    const input = classInputOf(physicianInput)
+    return [{
+      id,
+      label,
+      definition,
+      ...(current === true ? { current: true } : {}),
+      ...(input ? { physicianInput: input } : {}),
+      ...(chosen === true ? { chosen: true } : {}),
+    }]
   })
   if (!parsed.length) return undefined
-  return { title, classes: parsed, ...(typeof patient === 'string' ? { patient } : {}), ...(typeof note === 'string' ? { note } : {}) }
+  const others = (Array.isArray(alternatives) ? alternatives : []).flatMap((item): ClassificationView['alternatives'] => {
+    const { id, label, physicianInput, chosen } = (item ?? {}) as Record<string, unknown>
+    const input = classInputOf(physicianInput)
+    if (typeof id !== 'string' || typeof label !== 'string' || !input) return []
+    return [{ id, label, physicianInput: input, ...(chosen === true ? { chosen: true } : {}) }]
+  })
+  return {
+    title,
+    classes: parsed,
+    ...(typeof patient === 'string' ? { patient } : {}),
+    ...(typeof note === 'string' ? { note } : {}),
+    alternatives: others,
+  }
 }
 
-/** The classes side by side, the patient's column marked, as the prototype's DP-01 table. */
-function ClassificationTable({ point, isEnglish }: { point: DecisionPointView; isEnglish: boolean }) {
+/**
+ * The classes side by side, the patient's column marked, as the prototype's
+ * DP-01 table — and, where the pack says what each class answers and the page
+ * can write it, the place the clinician answers (owner request 2026-09-30:
+ * 「新的可能要讓醫師可以點」): a button under each class it offers, and the
+ * answers beside the classes (「還不確定」) under the table.
+ */
+function ClassificationTable({ point, isEnglish, onChoose }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void }) {
   const table = classificationOf(point)
   if (!table) return null
   const current = table.classes.find((item) => item.current)
+  const choosable = onChoose && (table.classes.some((item) => item.physicianInput) || table.alternatives.length > 0)
+  const choose = (item: ClassChoice) => {
+    // The same answer again writes nothing new.
+    if (item.physicianInput && !item.chosen) onChoose?.(item.physicianInput)
+  }
   return (
     <div className={styles.classWrap} data-testid="cdss-book-classification">
       <div className={styles.optScroll}>
@@ -315,9 +369,54 @@ function ClassificationTable({ point, isEnglish }: { point: DecisionPointView; i
                   : <td colSpan={table.classes.length}>{table.patient}</td>}
               </tr>
             ) : null}
+            {choosable && table.classes.some((item) => item.physicianInput) ? (
+              <tr data-testid="cdss-book-class-choices">
+                <th scope="row">{isEnglish ? 'Your call' : '你的判斷'}</th>
+                {table.classes.map((item) => (
+                  <td key={item.id} data-current={item.current || undefined}>
+                    {item.physicianInput ? (
+                      <button
+                        type="button"
+                        className={styles.classChoose}
+                        aria-pressed={Boolean(item.chosen)}
+                        onClick={() => choose(item)}
+                        data-testid={`cdss-book-class-${item.id}`}
+                      >
+                        {item.chosen
+                          ? `✓ ${item.label}`
+                          : item.current
+                            ? (isEnglish ? `Confirm ${item.label}` : `確認 ${item.label}`)
+                            : (isEnglish ? `Choose ${item.label}` : `選 ${item.label}`)}
+                      </button>
+                    ) : (
+                      <span className={styles.classOff}>
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">{isEnglish ? 'Not on offer' : '不可選'}</span>
+                      </span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
+      {choosable && table.alternatives.length > 0 ? (
+        <div className={styles.classAlternatives}>
+          {table.alternatives.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={styles.classChoose}
+              aria-pressed={Boolean(item.chosen)}
+              onClick={() => choose(item)}
+              data-testid={`cdss-book-class-${item.id}`}
+            >
+              {item.chosen ? `✓ ${item.label}` : item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <p className={styles.classNote}>{table.title}{table.note ? `　${table.note}` : ''}</p>
     </div>
   )
@@ -380,9 +479,17 @@ export function VisitBookLayout({
   chapters,
   decided,
   summaryText,
+  onChooseClass,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const [mapOpen, setMapOpen] = useState(true)
+  const classTable = (point: DecisionPointView) => (
+    <ClassificationTable
+      point={point}
+      isEnglish={isEnglish}
+      {...(onChooseClass ? { onChoose: (input: ClassInput) => onChooseClass(point, input) } : {})}
+    />
+  )
   const { copied, copy } = useCopyToClipboard()
   const sections = sectionsOf(points, chapters, isEnglish)
   // The guideline sources the page cites, numbered as they first appear; the
@@ -653,7 +760,7 @@ export function VisitBookLayout({
             )}
           </div>
         </div>
-        {classificationOf(point) ? <div className={styles.rowExtras}><ClassificationTable point={point} isEnglish={isEnglish} /></div> : null}
+        {classificationOf(point) ? <div className={styles.rowExtras}>{classTable(point)}</div> : null}
         {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, shown)}
       </div>
@@ -704,7 +811,7 @@ export function VisitBookLayout({
           {!by && point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
           {reasoningButton(point)}
         </span>
-        {classificationOf(point) ? <div className={styles.lineWide}><ClassificationTable point={point} isEnglish={isEnglish} /></div> : null}
+        {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
         {extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
@@ -723,12 +830,21 @@ export function VisitBookLayout({
       <div className={styles.slotHead}>
         <span className={styles.dpTag}>{point.dp}</span>
         <b>{point.label}</b>
+        {/* Answered in its table, the point says where it stands beside its name. */}
+        {classificationOf(point) && point.headline ? (
+          <span className={styles.slotLine}>
+            {point.headline}
+            {point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
+          </span>
+        ) : null}
       </div>
-      <ClassificationTable point={point} isEnglish={isEnglish} />
-      <div className={styles.inner}>
-        {content}
-        {extrasOf(point)}
-      </div>
+      {classTable(point)}
+      {content || extrasOf(point) ? (
+        <div className={styles.inner}>
+          {content}
+          {extrasOf(point)}
+        </div>
+      ) : null}
     </div>
   )
 

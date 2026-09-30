@@ -37,6 +37,7 @@ import type {
   VisitDecisionModel,
 } from '../../types'
 import { DecisionMapColumns } from './DecisionMapColumns'
+import { BookAsks } from './BookAsks'
 import { VisitBookLayout, bookChaptersOf, type BookEntry, type BookMark } from './VisitBookLayout'
 import { DecisionPointDetail } from './DecisionPointDetail'
 import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
@@ -622,44 +623,33 @@ export function VisitDecisionScreen({
   const status = visitStatusSentence(model, rows, stillToConfirm, isEnglish)
 
   if (book) {
+    // The pocket-handbook page draws the pack's model and nothing of the
+    // page's older question cards (owner request 2026-09-30: 「原本的 UI 跟問題
+    // 那些都廢棄了，包含 DP03」): DP-01's phenotype table asks the diagnosis,
+    // DP-03 the pack's every-visit asks, and every other point — DP-34's
+    // HFpEF confirmation among them — decides on its own row. So no point is
+    // left out as asked elsewhere: the rows are all of them.
     const samePoint = (a: DecisionPointView, b: DecisionPointView) => a.dp === b.dp && a.source === b.source
-    const headRowOf = (point: DecisionPointView) => rows.find((row) => samePoint(row.steps[0].point, point))
+    const headRowOf = (point: DecisionPointView) => allRows.find((row) => samePoint(row.steps[0].point, point))
     // A row that walks on to other points (an older pack's DP-07 → DP-08)
     // stands for them too.
-    const coveringRowOf = (point: DecisionPointView) => rows.find((row) => row.steps.some((step, index) => (
+    const coveringRowOf = (point: DecisionPointView) => allRows.find((row) => row.steps.some((step, index) => (
       index > 0 && samePoint(step.point, point) && !samePoint(step.point, row.steps[0].point)
     )))
-    const askedInBlock = diagnosisView?.answeredBy?.dps ?? []
-    const diagnosisHome = diagnosisContent
-      ? model.points.find((point) => point.source === sourceOfPage && askedInBlock.includes(point.dp) && !ABSENT_STATES.has(point.state))
-      : undefined
+    const bookAsks = (
+      <BookAsks
+        asks={model.asks}
+        answers={answers}
+        isEnglish={isEnglish}
+        onAnswer={onAnswer}
+        pagePackId={model.packId}
+        {...(answerSources ? { sources: answerSources } : {})}
+      />
+    )
     const entryOf = (point: DecisionPointView): BookEntry => {
-      if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: followUpLead }
-      if (diagnosisHome && point.source === sourceOfPage && askedInBlock.includes(point.dp) && !ABSENT_STATES.has(point.state)) {
-        if (samePoint(point, diagnosisHome)) {
-          return {
-            kind: 'slot',
-            point,
-            content: diagnosisFirst ? diagnosisContent : (
-              <details
-                open={diagnosisFoldOpen ?? diagnosisPending}
-                onToggle={(event) => {
-                  const open = event.currentTarget.open
-                  if (open !== (diagnosisFoldOpen ?? diagnosisPending)) setDiagnosisFoldOpen(open)
-                }}
-                className="group/fold rounded-md border border-border bg-background"
-              >
-                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2.5 text-sm font-medium text-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                  <span className="min-w-0 flex-1">{point.headline ?? (isEnglish ? 'Diagnosis and phenotype' : '診斷與分型')}</span>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/fold:rotate-180" aria-hidden="true" />
-                </summary>
-                <div className="border-t border-border p-2">{diagnosisContent}</div>
-              </details>
-            ),
-          }
-        }
-        return { kind: 'skip', point, anchorOf: diagnosisHome }
-      }
+      if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: bookAsks }
+      // A point answered in its classification table (HF DP-01's phenotype).
+      if ((point as { classification?: unknown }).classification) return { kind: 'slot', point, content: null }
       const head = headRowOf(point)
       if (head) return { kind: 'row', point, row: head, queued: true }
       const covering = coveringRowOf(point)
@@ -687,6 +677,8 @@ export function VisitDecisionScreen({
         return point.state === 'done' ? 'done' : 'info'
       }
       if (entry.kind === 'slot' && point.dp === 'DP-03') return unansweredAsks.length ? 'ask' : 'done'
+      // The diagnosis still to answer in its table.
+      if (entry.kind === 'slot' && DECISION_STATES.has(point.state)) return 'act'
       if (point.state === 'safety') return 'safety'
       if (point.state === 'ask') return 'ask'
       if (point.state === 'done') return 'done'
@@ -775,6 +767,9 @@ export function VisitDecisionScreen({
           {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
           decided={bookDecided}
           summaryText={summaryText}
+          // A class chosen in DP-01's table is the answer the diagnosis
+          // question's own control wrote, handed back the same way.
+          {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
         />
         {footer}
       </div>

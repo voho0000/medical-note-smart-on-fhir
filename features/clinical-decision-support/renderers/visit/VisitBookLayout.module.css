@@ -434,7 +434,8 @@
 
 /* A block the page asks in (每次必問, the diagnosis). */
 .slot { display: flex; flex-direction: column; gap: 8px; scroll-margin-top: 80px; outline: none; }
-.slotHead { display: flex; align-items: baseline; gap: 10px; }
+.slotHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.slotLine { min-width: 0; flex: 1 1 16rem; font-size: 14px; }
 
 .absent { margin: 0; font-size: 13px; color: var(--ink-5); }
 .absent .dpInline { font-family: var(--mono); }
@@ -505,6 +506,56 @@
 .classTable td[data-current] { background: var(--blue-soft); }
 .classPatient { font-weight: 500; }
 .classNote { margin: 0; font-size: 12px; color: var(--ink-4); }
+/* Choosing a class: the answer toggle, as the page's other answers are drawn. */
+.classChoose {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--btn-line);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.classChoose:hover { background: var(--thead); }
+.classChoose:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.classChoose[aria-pressed='true'] { border-color: var(--blue); background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; cursor: default; }
+@media (pointer: coarse) { .classChoose { min-height: 44px; } }
+.classOff { color: var(--ink-6); }
+.classAlternatives { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The every-visit questions (DP-03): one row each, a segmented control. */
+.asks { display: flex; flex-direction: column; gap: 8px; }
+.askRow { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 12px; }
+.askLabel { font-size: 14px; font-weight: 700; }
+.askGroup {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--sheet);
+}
+.askGroup > button {
+  min-height: 40px;
+  min-width: 56px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--btn-line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+.askGroup > button:last-child { border-right: 0; }
+.askGroup > button:hover { background: var(--thead); }
+.askGroup > button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.askGroup > button[aria-pressed='true'] { background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
+.askGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
+.askGroup > button:disabled { cursor: default; opacity: 0.6; }
+@media (pointer: coarse) { .askGroup > button { min-height: 44px; } }
+.askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
 
 /* --------------------------------- plan -------------------------------- */
 

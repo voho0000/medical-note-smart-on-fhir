@@ -3,12 +3,13 @@
  * scenario bundles: the decision map beside the page, each point once, the
  * reasoning of a point to weigh under 看依據 — and the same decisions as the map.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
+import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -30,7 +31,8 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
   const afAnswers = useAfAnswers(PATIENT)
-  const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers }), [afAnswers, answers, id, page])
+  const [phenotype, setPhenotype] = useState<PhenotypeAnswer>()
+  const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers, phenotype }), [afAnswers, answers, id, page, phenotype])
   return (
     <ClinicalDecisionSupportView
       result={run.result}
@@ -47,6 +49,8 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
       onVisitAnswer={(ask, value) => useVisitAnswersStore.getState().answer(PATIENT, ask, value)}
       afAnswers={afAnswers}
       onAfAnswer={(questionId, value) => useAfAnswersStore.getState().answer(PATIENT, questionId, value)}
+      phenotypeAnswer={phenotype}
+      onAnswerPhenotype={setPhenotype}
     />
   )
 }
@@ -62,6 +66,7 @@ afterAll(() => window.history.pushState({}, '', '/'))
 beforeEach(() => {
   usePhysicianDecisionsStore.getState().clearDecisions(PATIENT)
   useAfAnswersStore.getState().clear(PATIENT)
+  useVisitAnswersStore.getState().clearAnswers(PATIENT)
 })
 
 describe('the pocket-handbook layout', () => {
@@ -150,5 +155,60 @@ describe('the pocket-handbook layout', () => {
     fireEvent.click(primary())
     expect(mapLine('DP-07')).toHaveAttribute('data-book-mark', 'done')
     expect(screen.getByTestId('cdss-book-end')).toHaveTextContent('apixaban 5 mg bid')
+  })
+
+  describe('DP-01 is answered in its phenotype table, once (owner request 2026-09-30)', () => {
+    it('before a diagnosis: the table offers HFrEF, HFpEF and 還不確定; the old question is gone (P1)', () => {
+      render(<BookPage id="p1-suspected-hfpef" page="hf" />)
+      const dp01 = entry('DP-01')
+      expect(dp01).toHaveTextContent('HFrEF 還是 HFpEF？')
+      // No second DP-01: neither the old question nor the diagnosis view.
+      expect(screen.queryByTestId('cdss-hf-question-hf-suspicion')).toBeNull()
+      expect(screen.queryByTestId('cdss-visit-hf-diagnosis-view')).toBeNull()
+      expect(document.querySelectorAll('[data-book-dp="DP-01"]')).toHaveLength(1)
+      expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'act')
+      const table = within(dp01).getByTestId('cdss-book-classification')
+      expect(within(table).getByRole('button', { name: '選 HFrEF' })).toHaveAttribute('aria-pressed', 'false')
+      expect(within(table).getByRole('button', { name: '還不確定' })).toBeInTheDocument()
+      // Choosing HFpEF is the diagnosis: the table marks it, and DP-01 settles.
+      fireEvent.click(within(table).getByRole('button', { name: '選 HFpEF' }))
+      const chosen = within(entry('DP-01')).getByTestId('cdss-book-class-hfpEF')
+      expect(chosen).toHaveTextContent('✓ HFpEF')
+      expect(chosen).toHaveAttribute('aria-pressed', 'true')
+      expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'done')
+    })
+
+    it('還不確定 is chosen in the table too; a phenotype after it settles the diagnosis (P1)', () => {
+      render(<BookPage id="p1-suspected-hfpef" page="hf" />)
+      fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '還不確定' }))
+      expect(within(entry('DP-01')).getByTestId('cdss-book-class-unsure')).toHaveAttribute('aria-pressed', 'true')
+      expect(mapLine('DP-01')).not.toHaveAttribute('data-book-mark', 'done')
+      fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '選 HFrEF' }))
+      expect(within(entry('DP-01')).getByTestId('cdss-book-class-hfrEF')).toHaveAttribute('aria-pressed', 'true')
+      // With a diagnosis the pack's question no longer offers 還不確定; the
+      // other phenotype stays, so a mistaken choice can be taken back.
+      expect(within(entry('DP-01')).queryByTestId('cdss-book-class-unsure')).toBeNull()
+      expect(within(entry('DP-01')).getByRole('button', { name: '選 HFpEF' })).toBeInTheDocument()
+    })
+
+    it('at a first visit with an LVEF of 28%: 確認 HFrEF, and HFpEF not on offer (P2)', () => {
+      render(<BookPage id="p2-new-hfref" page="hf" />)
+      const table = within(entry('DP-01')).getByTestId('cdss-book-classification')
+      expect(within(table).getByRole('button', { name: '確認 HFrEF' })).toBeInTheDocument()
+      expect(within(table).queryByTestId('cdss-book-class-hfpEF')).toBeNull()
+      expect(within(table).getByText('不可選')).toBeInTheDocument()
+    })
+  })
+
+  it('DP-03 asks the pack\'s every-visit questions and nothing of the old cards (P9)', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+    const asks = within(entry('DP-03')).getByTestId('cdss-book-asks')
+    expect(within(asks).getAllByRole('group').map((group) => group.getAttribute('aria-labelledby') && document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent))
+      .toEqual(['喘比上次', '體重比上次'])
+    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
+    expect(screen.queryByText('其他症狀、徵象與 NYHA')).toBeNull()
+    fireEvent.click(within(asks).getByRole('button', { name: '穩定' }))
+    expect(within(asks).getByRole('button', { name: '穩定' })).toHaveAttribute('aria-pressed', 'true')
+    expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT]!)['dyspnoea-trend']).toBe('stable')
   })
 })
