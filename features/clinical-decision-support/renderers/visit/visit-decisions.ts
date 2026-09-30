@@ -9,28 +9,34 @@
  * chain is still open — is the pack's (`settleVisitDecisions` and its parts,
  * personalized-care 2.12.0; owner decision 2026-09-30: 決策狀態邏輯移到 pack,
  * step 1). So are the summary the note copies and the plan's rechecks
- * (`visitSummaryText`, `visitPlan`; step 2). The host keeps its names for
- * them so its callers and tests stand unchanged, and reads the pack's rules
- * through them.
+ * (`visitSummaryText`, `visitPlan`; step 2), and today's queue rows — their
+ * order, the chain each walks and what follows from a decision
+ * (`visitQueueRows`, `queuedPointDps`, `dependentDecisionKeys`; step 3). The
+ * host keeps its names for them so its callers and tests stand unchanged, and
+ * reads the pack's rules through them.
  */
 import {
   decisionPointSteps,
+  dependentDecisionKeys as packDependentDecisionKeys,
   effectiveVisitAnswer,
   isSameLocalDay,
   nextStepDecisionKey,
   nextStepView,
-  pointsDecidedBy,
+  queuedPointDps as packQueuedPointDps,
   recheckIntervalText,
   recordLabelOf,
   settledDecisionFor,
   settleVisitDecisions,
   visitDecisionKey,
   visitPlan,
+  visitQueueRows,
   visitSummaryText,
   type SettledDecisionPoint,
   type VisitDecisionSettlement,
   type VisitPlan,
   type VisitPlanItem,
+  type VisitQueueRow,
+  type VisitQueueStep,
 } from '@voho0000/personalized-care'
 import type {
   PhysicianDecision,
@@ -134,16 +140,6 @@ export const DECISION_STATES: ReadonlySet<DecisionPointState> = new Set(['safety
 /** The states folded to the foot of a column until 「顯示全部」. */
 export const ABSENT_STATES: ReadonlySet<DecisionPointState> = new Set(['not-applicable', 'not-included'])
 
-/**
- * Decisions that carry the chain on to its next step. 「開始抗凝」 opens the
- * question of which drug; 「暫緩」 does not.
- */
-const PROCEEDING_KINDS: ReadonlySet<PhysicianDecision['decision']> = new Set([
-  'prescribed',
-  'dose-adjusted',
-  'ordered',
-])
-
 export { isSameLocalDay, recordLabelOf }
 
 /** What was decided today about one point, and which of its actions it was. */
@@ -170,28 +166,17 @@ export function decisionFor(
 }
 
 /**
- * The decisions that followed from the one under `key`: the later steps of any
- * queue row it heads or walks through (「開始抗凝」 → 「apixaban 5 mg bid」), and
- * the steps a point reveals under `key:next`. Clearing or re-taking a step
- * leaves them without the decision they answered, so they go with it — else
- * re-pressing 「開始抗凝」 would bring the old dose back as decided (#166 review).
+ * The recorded decisions that followed from the one under `key` — the later
+ * steps of any queue row it heads or walks through, and the steps stored under
+ * `key:…` — which go with it when it is taken back or decided anew (#166
+ * review). The pack's `dependentDecisionKeys`.
  */
 export function dependentDecisionKeys(
   key: string,
   rows: readonly QueueRow[],
   decisions: PhysicianDecisionMap | undefined,
 ): string[] {
-  const dependents = new Set<string>()
-  for (const row of rows) {
-    const index = row.steps.findIndex((step) => step.key === key)
-    if (index < 0) continue
-    for (const step of row.steps.slice(index + 1)) dependents.add(step.key)
-  }
-  for (const stored of Object.keys(decisions ?? {})) {
-    if (stored.startsWith(`${key}:`)) dependents.add(stored)
-  }
-  dependents.delete(key)
-  return [...dependents].filter((dependent) => decisions?.[dependent])
+  return packDependentDecisionKeys(key, rows, decisions)
 }
 
 /** What recording `action` on `point` writes to the decisions store. */
@@ -211,17 +196,8 @@ export function decisionInputFor(
   }
 }
 
-export interface QueueStep {
-  /** The store key this step's decision lives under. */
-  key: string
-  point: DecisionPointView
-  decision?: PointDecision
-  /**
-   * Other points of the page this step answers (DP-07's DOAC choice: DP-08,
-   * DP-09), set where a queue row reveals it.
-   */
-  decides?: readonly string[]
-}
+/** One step of a queue row, and the points of the page it answers besides its own (the pack's). */
+export type QueueStep = VisitQueueStep<PhysicianDecision>
 
 /**
  * A point's steps as far as today's decisions reach: the point itself, then —
@@ -300,87 +276,26 @@ export function decisionBasis(
   return items
 }
 
-export interface QueueRow {
-  /** The row's identity: its first point's decision key. */
-  key: string
-  /** The chain this row walks, decided steps first. */
-  steps: QueueStep[]
-  /** The first undecided step, or undefined when the row is decided. */
-  current?: QueueStep
-  safety: boolean
-}
+/** A queue row: the chain it walks, its first undecided step, whether it is a safety row (the pack's). */
+export type QueueRow = VisitQueueRow<PhysicianDecision>
 
 /**
- * The next step of a chain: the first point after `after`, in the pack's own
- * order, that waits in the same group, from the same pack, with actions to
- * offer.
- */
-function nextWaitingPoint(
-  points: readonly DecisionPointView[],
-  after: DecisionPointView,
-  used: ReadonlySet<string>,
-): DecisionPointView | undefined {
-  const index = points.indexOf(after)
-  return points.slice(index + 1).find((point) => (
-    point.state === 'waiting'
-    && point.group === after.group
-    && point.source === after.source
-    && point.actions.length > 0
-    && !used.has(point.dp)
-  ))
-}
-
-/**
- * Today's queue, one row per queued point. A row whose step was decided in a
- * way that carries the chain on takes the chain's next waiting step in the same
- * row (「開始抗凝」 → 「apixaban 5 mg bid」), so a chain costs one row, never
- * three.
+ * Today's queue, one row per queued point, in the model's order — a revealed
+ * step answering the points it decides on the same map, and, for a pack that
+ * describes no `next`, the row walking on to its chain's next waiting point
+ * after a decision that carries the chain on. The pack's `visitQueueRows`.
  */
 export function buildQueueRows(
   model: VisitDecisionModel,
   decisions: PhysicianDecisionMap | undefined,
   now: Date,
 ): QueueRow[] {
-  const byDp = new Map(model.points.map((point) => [point.dp, point]))
-  const used = new Set<string>(model.queue)
-  const rows: QueueRow[] = []
-  for (const dp of model.queue) {
-    const head = byDp.get(dp)
-    if (!head) continue
-    // A pack that describes the chain's next step on the point itself is
-    // followed exactly; otherwise the row walks on to the chain's next waiting
-    // point in the same group.
-    const steps: QueueStep[] = pointSteps(head, decisions, now)
-    // A revealed step that answers other points covers them too — only the
-    // page's own points from the same pack: HF DP-14 folds AF DP-07's step,
-    // and HF's DP-08／DP-09 are not the ones it decides.
-    const decides = steps.length > 1 ? pointsDecidedBy(head, model.points).map((point) => point.dp) : []
-    if (decides.length) steps[1] = { ...steps[1], decides }
-    let last = steps[steps.length - 1]
-    while (!head.next && last.decision && PROCEEDING_KINDS.has(last.decision.record.decision)) {
-      const next = nextWaitingPoint(model.points, last.point, used)
-      if (!next) break
-      used.add(next.dp)
-      last = { key: visitDecisionKey(next), point: next, decision: decisionFor(next, decisions, now) }
-      steps.push(last)
-    }
-    rows.push({
-      key: visitDecisionKey(head),
-      steps,
-      current: steps.find((step) => !step.decision),
-      safety: head.state === 'safety',
-    })
-  }
-  return rows
+  return visitQueueRows(model, decisions, now)
 }
 
-/**
- * The decision points each queue row currently covers, by dp — with the
- * points a revealed step answers (DP-07's DOAC choice covers DP-08 and DP-09,
- * as a chain walked onto them would), so they read as today's, not 「等上一步」.
- */
+/** The decision points the queue rows currently cover, by dp (the pack's `queuedPointDps`). */
 export function queuedPointDps(rows: readonly QueueRow[]): ReadonlySet<string> {
-  return new Set(rows.flatMap((row) => row.steps.flatMap((step) => [step.point.dp, ...(step.decides ?? [])])))
+  return packQueuedPointDps(rows)
 }
 
 /** One recheck a decision recorded today asked for (the pack's). */
