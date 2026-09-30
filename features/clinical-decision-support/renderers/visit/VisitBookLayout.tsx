@@ -128,14 +128,21 @@ export interface BookChapterView {
   pointLabels?: Readonly<Record<string, string>>
   /** The points the chapter lays out as its one table, settled or not applicable ones included. */
   table?: readonly string[]
+  /** Rows the table also draws for a point living in another chapter (HF 藥物's diuretic row). */
+  tableRefs?: readonly BookTableRef[]
+  /** Points of the table drawn as one row (HFpEF's RAS inhibition and beta-blocker). */
+  tableMerged?: readonly BookTableMerge[]
 }
+
+export interface BookTableRef { dp: string; chapter: string; after?: string; label: string; now?: string }
+export interface BookTableMerge { dps: readonly string[]; label: string; note?: string }
 
 /** The model's chapters, where the pack gives them; undefined for an older pack. */
 export function bookChaptersOf(model: object): BookChapterView[] | undefined {
   const raw = (model as { book?: unknown }).book
   if (!Array.isArray(raw)) return undefined
   const chapters = raw.flatMap((item): BookChapterView[] => {
-    const { id, title, short, aside, settled, plan, dps, pointLabels, table } = (item ?? {}) as Record<string, unknown>
+    const { id, title, short, aside, settled, plan, dps, pointLabels, table, tableRefs, tableMerged } = (item ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof title !== 'string' || !Array.isArray(dps)) return []
     const labels = pointLabels && typeof pointLabels === 'object'
       ? Object.fromEntries(Object.entries(pointLabels as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
@@ -150,9 +157,30 @@ export function bookChaptersOf(model: object): BookChapterView[] | undefined {
       dps: dps.filter((dp): dp is string => typeof dp === 'string'),
       ...(Object.keys(labels).length ? { pointLabels: labels } : {}),
       ...(Array.isArray(table) ? { table: table.filter((dp): dp is string => typeof dp === 'string') } : {}),
+      ...(refsOf(tableRefs).length ? { tableRefs: refsOf(tableRefs) } : {}),
+      ...(mergesOf(tableMerged).length ? { tableMerged: mergesOf(tableMerged) } : {}),
     }]
   })
   return chapters.length ? chapters : undefined
+}
+
+function refsOf(raw: unknown): BookTableRef[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item): BookTableRef[] => {
+    const { dp, chapter, after, label, now } = (item ?? {}) as Record<string, unknown>
+    if (typeof dp !== 'string' || typeof chapter !== 'string' || typeof label !== 'string') return []
+    return [{ dp, chapter, label, ...(typeof after === 'string' ? { after } : {}), ...(typeof now === 'string' ? { now } : {}) }]
+  })
+}
+
+function mergesOf(raw: unknown): BookTableMerge[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item): BookTableMerge[] => {
+    const { dps, label, note } = (item ?? {}) as Record<string, unknown>
+    if (!Array.isArray(dps) || typeof label !== 'string') return []
+    const ids = dps.filter((dp): dp is string => typeof dp === 'string')
+    return ids.length > 1 ? [{ dps: ids, label, ...(typeof note === 'string' ? { note } : {}) }] : []
+  })
 }
 
 export function bookAnchor(point: Pick<DecisionPointView, 'source' | 'dp'>): string {
@@ -198,6 +226,8 @@ interface Section {
   points: DecisionPointView[]
   pointLabels?: Readonly<Record<string, string>>
   table?: readonly string[]
+  tableRefs?: readonly BookTableRef[]
+  tableMerged?: readonly BookTableMerge[]
 }
 
 /**
@@ -220,6 +250,8 @@ function sectionsOf(points: readonly DecisionPointView[], chapters: readonly Boo
         ...(chapter.plan ? { plan: true } : {}),
         ...(chapter.pointLabels ? { pointLabels: chapter.pointLabels } : {}),
         ...(chapter.table?.length ? { table: chapter.table } : {}),
+        ...(chapter.tableRefs?.length ? { tableRefs: chapter.tableRefs } : {}),
+        ...(chapter.tableMerged?.length ? { tableMerged: chapter.tableMerged } : {}),
         points: mine,
       }
     })
@@ -908,7 +940,10 @@ export function VisitBookLayout({
     return `${url.pathname}${url.search}${url.hash}`
   })()
   const scrollTo = (id: string) => {
-    const target = document.getElementById(id)
+    // A point drawn inside a merged row is reached at the row: its own
+    // anchor is an empty mark, with nothing to show focus on.
+    const anchor = document.getElementById(id)
+    const target = anchor?.closest<HTMLElement>('[data-book-merged]') ?? anchor
     target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
     target?.focus?.({ preventScroll: true })
   }
@@ -1456,6 +1491,100 @@ export function VisitBookLayout({
     )
   }
 
+  /**
+   * A table's rows in order, with the pack's additions (the prototype's
+   * medicines table): a merged group drawn as one row where none of its points
+   * is decided today, and a row for a point living in another chapter after
+   * the point it follows (else at the end).
+   */
+  type TableItem =
+    | { kind: 'point'; point: DecisionPointView; entry: BookEntry }
+    | { kind: 'merged'; merge: BookTableMerge; points: DecisionPointView[] }
+    | { kind: 'ref'; ref: BookTableRef; point: DecisionPointView }
+  const tableEntries = (section: Section, items: readonly { point: DecisionPointView; entry: BookEntry }[]): TableItem[] => {
+    // Merged only while every member does not apply and none holds a
+    // decision today: a recorded one keeps its row, its record and 「改」.
+    const quiet = (item: { point: DecisionPointView; entry: BookEntry }) => ABSENT_STATES.has(item.point.state)
+      && !(item.entry.kind === 'row' && item.entry.row.steps.some((step) => step.decision))
+    const merges = (section.tableMerged ?? []).filter((merge) => merge.dps.every((dp) => {
+      const item = items.find((candidate) => candidate.point.dp === dp)
+      return item && quiet(item)
+    }))
+    const refs = (section.tableRefs ?? []).flatMap((ref) => {
+      const point = points.find((candidate) => candidate.dp === ref.dp && candidate.source === sourceOfPage)
+        ?? points.find((candidate) => candidate.dp === ref.dp)
+      return point && !ABSENT_STATES.has(point.state) ? [{ ref, point }] : []
+    })
+    const out: TableItem[] = []
+    const placed = new Set<BookTableRef>()
+    for (const item of items) {
+      const merge = merges.find((candidate) => candidate.dps.includes(item.point.dp))
+      // A merged group is drawn once, where its first point falls.
+      if (!merge) out.push({ kind: 'point', ...item })
+      else if (!out.some((entry) => entry.kind === 'merged' && entry.merge === merge)) {
+        out.push({ kind: 'merged', merge, points: merge.dps.flatMap((dp) => items.filter((candidate) => candidate.point.dp === dp).map((candidate) => candidate.point)) })
+      }
+      for (const { ref, point } of refs) {
+        if (ref.after === item.point.dp && !placed.has(ref)) {
+          out.push({ kind: 'ref', ref, point })
+          placed.add(ref)
+        }
+      }
+    }
+    for (const { ref, point } of refs) if (!placed.has(ref)) out.push({ kind: 'ref', ref, point })
+    return out
+  }
+
+  /** A row for a point whose home is another chapter: what it is here, and a way to it. */
+  const renderRefRow = (ref: BookTableRef, point: DecisionPointView) => {
+    const home = numbered.find(({ section }) => section.key === ref.chapter)
+    const guide = point.guideline?.points[0]
+    // Once decided in its own chapter, the row says what was recorded there.
+    const entry = entryOf(point)
+    const decided = entry.kind === 'row' ? entry.row.steps.filter((step) => step.decision) : []
+    return (
+      <div key={`ref:${point.source}:${point.dp}`} className={styles.entry} data-quiet="" data-book-ref={point.dp}>
+        <div className={styles.rowCells}>
+          <div>
+            <span className={styles.dpTag}>{point.dp}</span>
+            <br />
+            <b>{ref.label}</b>
+          </div>
+          <div>{ref.now ?? <span className={styles.cellMuted}>—</span>}</div>
+          <div className={styles.cellGuide}>{guide ?? <span className={styles.cellMuted}>—</span>}</div>
+          <div>
+            {decided.length ? <BookChainDone steps={decided} /> : <span>{point.headline ?? point.label}</span>}
+            {home ? (
+              <>
+                <br />
+                <button type="button" className={styles.whyPill} onClick={() => goTo(point)}>
+                  {isEnglish ? `See ${home.num} ${home.section.short}` : `見 ${home.num} ${home.section.short}`}
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /** Points the pack draws as one row: their tags, one name, one line. */
+  const renderMergedRow = (merge: BookTableMerge, grouped: readonly DecisionPointView[]) => (
+    <div key={`merged:${merge.dps.join('+')}`} className={styles.entry} tabIndex={-1} aria-label={`${merge.dps.join(' · ')} ${merge.label}`} data-quiet="" data-book-merged={merge.dps.join(' ')}>
+      {/* Each point keeps its anchor, so the map's line still lands on the row; focus goes to the row itself. */}
+      {grouped.map((point) => <span key={point.dp} id={bookAnchor(point)} data-book-dp={point.dp} data-book-mark={marks.get(point)} />)}
+      <div className={styles.rowCells}>
+        <div>
+          <span className={styles.dpTag}>{merge.dps.join(' · ')}</span>
+          <br />
+          <b>{merge.label}</b>
+        </div>
+        <div><span className={styles.cellMuted}>—</span></div>
+        <div className={styles.quietSpan}>{merge.note ?? grouped.map((point) => point.headline).join(isEnglish ? '; ' : '；')}</div>
+      </div>
+    </div>
+  )
+
   /** A section's present points, consecutive rows in one table, consecutive lines in one list. */
   const renderSection = (section: Section) => {
     const inTable = (point: DecisionPointView) => Boolean(section.table?.includes(point.dp))
@@ -1517,9 +1646,13 @@ export function VisitBookLayout({
             <span>{isEnglish ? 'Today' : '今天'}</span>
           </div>
           {/* A table point with buttons but nothing to decide today reads as a muted row; one decided today keeps its row. */}
-          {run.items.map(({ point, entry }) => (entry.kind === 'row' && !(inTable(point) && !entry.queued && marks.get(point) === 'info')
-            ? renderRow(point, entry.row, entry.queued)
-            : renderQuietRow(point)))}
+          {tableEntries(section, run.items).map((item) => (item.kind === 'ref'
+            ? renderRefRow(item.ref, item.point)
+            : item.kind === 'merged'
+              ? renderMergedRow(item.merge, item.points)
+              : item.entry.kind === 'row' && !(inTable(item.point) && !item.entry.queued && marks.get(item.point) === 'info')
+                ? renderRow(item.point, item.entry.row, item.entry.queued)
+                : renderQuietRow(item.point)))}
         </div>
       )
     })

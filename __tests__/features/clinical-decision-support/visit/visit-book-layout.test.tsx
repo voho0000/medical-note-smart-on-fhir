@@ -38,7 +38,7 @@ const PATIENT = 'book-patient'
  */
 let mode: 'window' | 'inline' = 'window'
 
-function BookPage({ id, page, chrome }: { id: ScenarioId; page: 'hf' | 'af'; chrome?: VisitBookChrome | null }) {
+function BookPage({ id, page, chrome, patch }: { id: ScenarioId; page: 'hf' | 'af'; chrome?: VisitBookChrome | null; patch?: (model: ReturnType<typeof scenarioRun>['model']) => ReturnType<typeof scenarioRun>['model'] }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
@@ -54,7 +54,7 @@ function BookPage({ id, page, chrome }: { id: ScenarioId; page: 'hf' | 'af'; chr
       locale="zh-TW"
       layout="map"
       patientId={PATIENT}
-      visitModel={run.model}
+      visitModel={patch ? patch(run.model) : run.model}
       companionResults={run.companion ? [run.companion] : undefined}
       profileFacts={run.profile.facts}
       physicianDecisions={decisions}
@@ -414,13 +414,46 @@ describe.each([
       const drugs = document.querySelector<HTMLElement>('[data-book-section="drugs"]')!
       const tables = drugs.querySelectorAll('[role="group"]')
       expect(tables).toHaveLength(1)
-      const rows = [...tables[0]!.querySelectorAll<HTMLElement>('[data-book-dp]')]
-      expect(rows.map((row) => row.dataset.bookDp)).toEqual(['DP-10', 'DP-09', 'DP-07', 'DP-08'])
-      expect(rows.filter((row) => row.hasAttribute('data-quiet')).map((row) => row.dataset.bookDp)).toEqual(['DP-10', 'DP-07', 'DP-08'])
+      // The prototype's rows: SGLT2i, MRA, the diuretic (DP-06, asked in 2), then
+      // RAS inhibition and beta-blocker as one row — neither a foundation in HFpEF.
+      const rows = [...tables[0]!.children].filter((row): row is HTMLElement => row instanceof HTMLElement && !row.hasAttribute('aria-hidden'))
+      expect(rows.map((row) => row.dataset.bookDp ?? (row.dataset.bookRef ? `ref ${row.dataset.bookRef}` : `merged ${row.dataset.bookMerged}`))).toEqual([
+        'DP-10', 'DP-09', 'ref DP-06', 'merged DP-07 DP-08',
+      ])
+      expect(rows.filter((row) => row.hasAttribute('data-quiet')).map((row) => row.dataset.bookDp ?? row.dataset.bookRef ?? row.dataset.bookMerged)).toEqual(['DP-10', 'DP-06', 'DP-07 DP-08'])
+      const diuretic = rows[2]!
+      expect(diuretic).toHaveTextContent('利尿劑')
+      expect(diuretic).toHaveTextContent('furosemide 每日 20 mg')
+      expect(diuretic).toHaveTextContent('有鬱血：依容積狀態動態調整 loop 利尿劑（I A）')
+      const merged = rows[3]!
+      expect(merged).toHaveTextContent('RAS 抑制、β 阻斷劑')
+      expect(merged).toHaveTextContent('HFpEF 非基礎用藥；因高血壓或 AF 心率需要時，照共病使用（見 4）')
+      // The map's lines still land on the merged row.
+      expect(entry('DP-07').closest('[data-book-merged]')).toBe(merged)
+      expect(entry('DP-08').closest('[data-book-merged]')).toBe(merged)
+      // A map line for a merged point lands on the row, focused, not on its empty mark.
+      fireEvent.click(mapLine('DP-08'))
+      expect(document.activeElement).toBe(merged)
+      // 見 2 goes to DP-06 where it is asked.
+      const scroll = Element.prototype.scrollIntoView as jest.Mock
+      scroll.mockClear()
+      fireEvent.click(within(diuretic).getByRole('button', { name: /見 2/ }))
+      expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById(entry('DP-06').id))
       // Not applicable here, they are rows of the table, not the 不適用 line.
       expect(drugs.querySelector('[data-book-absent="drugs"][data-state="not-applicable"]')).not.toHaveTextContent('DP-07')
       const comorbidity = document.querySelector<HTMLElement>('[data-book-section="comorbidity"]')!
       expect(comorbidity.querySelectorAll('[role="group"]')).toHaveLength(1)
+    })
+
+    it('merges only points that do not apply: one settled beside one not applicable keeps its own row', () => {
+      render(<BookPage id="p2-new-hfref" page="hf" patch={(model) => ({
+        ...model,
+        points: model.points.map((point) => (point.dp === 'DP-07' ? { ...point, state: 'done' as const, actions: [] } : point.dp === 'DP-08' ? { ...point, state: 'not-applicable' as const, actions: [] } : point)),
+        queue: model.queue.filter((dp) => dp !== 'DP-07' && dp !== 'DP-08'),
+        book: model.book?.map((chapter) => (chapter.id === 'drugs' ? { ...chapter, tableMerged: [{ dps: ['DP-07', 'DP-08'], label: 'RAS·β', note: 'x' }] } : chapter)),
+      })} />)
+      expect(document.querySelector('[data-book-merged]')).toBeNull()
+      expect(entry('DP-07').closest('[data-book-merged]')).toBeNull()
     })
 
     it('the red-flag strip is 紅旗; DP-06 asks its signs in place, beside the 2×2 they place the patient in', () => {
@@ -457,6 +490,10 @@ describe.each([
         // Read as a plain record: the trigger ids are the pack's, newer than some consumers' types.
         const stored = visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT] ?? {}) as Readonly<Record<string, string | undefined>>
         expect(stored['trigger-infection']).toBe('yes')
+        // Decided in 2, the medicines table's diuretic row says what was recorded.
+        fireEvent.click(within(dp06.querySelector<HTMLElement>('[data-book-box="DP-06"]')!).getByRole('button', { name: '先查誘因' }))
+        const diuretic = document.querySelector<HTMLElement>('[data-book-section="drugs"] [data-book-ref="DP-06"]')!
+        expect(diuretic.querySelector('[data-visit-chain-done="DP-06"]')).toHaveTextContent('先查誘因')
       } finally {
         jest.useRealTimers()
       }
