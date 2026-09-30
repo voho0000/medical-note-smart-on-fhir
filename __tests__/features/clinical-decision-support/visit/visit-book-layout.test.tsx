@@ -38,7 +38,7 @@ const PATIENT = 'book-patient'
  */
 let mode: 'window' | 'inline' = 'window'
 
-function BookPage({ id, page, chrome }: { id: ScenarioId; page: 'hf' | 'af'; chrome?: VisitBookChrome | null }) {
+function BookPage({ id, page, chrome, patch }: { id: ScenarioId; page: 'hf' | 'af'; chrome?: VisitBookChrome | null; patch?: (model: ReturnType<typeof scenarioRun>['model']) => ReturnType<typeof scenarioRun>['model'] }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
@@ -54,7 +54,7 @@ function BookPage({ id, page, chrome }: { id: ScenarioId; page: 'hf' | 'af'; chr
       locale="zh-TW"
       layout="map"
       patientId={PATIENT}
-      visitModel={run.model}
+      visitModel={patch ? patch(run.model) : run.model}
       companionResults={run.companion ? [run.companion] : undefined}
       profileFacts={run.profile.facts}
       physicianDecisions={decisions}
@@ -431,6 +431,9 @@ describe.each([
       // The map's lines still land on the merged row.
       expect(entry('DP-07').closest('[data-book-merged]')).toBe(merged)
       expect(entry('DP-08').closest('[data-book-merged]')).toBe(merged)
+      // A map line for a merged point lands on the row, focused, not on its empty mark.
+      fireEvent.click(mapLine('DP-08'))
+      expect(document.activeElement).toBe(merged)
       // 見 2 goes to DP-06 where it is asked.
       const scroll = Element.prototype.scrollIntoView as jest.Mock
       scroll.mockClear()
@@ -440,6 +443,17 @@ describe.each([
       expect(drugs.querySelector('[data-book-absent="drugs"][data-state="not-applicable"]')).not.toHaveTextContent('DP-07')
       const comorbidity = document.querySelector<HTMLElement>('[data-book-section="comorbidity"]')!
       expect(comorbidity.querySelectorAll('[role="group"]')).toHaveLength(1)
+    })
+
+    it('merges only points that do not apply: one settled beside one not applicable keeps its own row', () => {
+      render(<BookPage id="p2-new-hfref" page="hf" patch={(model) => ({
+        ...model,
+        points: model.points.map((point) => (point.dp === 'DP-07' ? { ...point, state: 'done' as const, actions: [] } : point.dp === 'DP-08' ? { ...point, state: 'not-applicable' as const, actions: [] } : point)),
+        queue: model.queue.filter((dp) => dp !== 'DP-07' && dp !== 'DP-08'),
+        book: model.book?.map((chapter) => (chapter.id === 'drugs' ? { ...chapter, tableMerged: [{ dps: ['DP-07', 'DP-08'], label: 'RAS·β', note: 'x' }] } : chapter)),
+      })} />)
+      expect(document.querySelector('[data-book-merged]')).toBeNull()
+      expect(entry('DP-07').closest('[data-book-merged]')).toBeNull()
     })
 
     it('the red-flag strip is 紅旗; DP-06 asks its signs in place, beside the 2×2 they place the patient in', () => {

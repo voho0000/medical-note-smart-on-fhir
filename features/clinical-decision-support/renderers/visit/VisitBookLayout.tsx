@@ -940,7 +940,10 @@ export function VisitBookLayout({
     return `${url.pathname}${url.search}${url.hash}`
   })()
   const scrollTo = (id: string) => {
-    const target = document.getElementById(id)
+    // A point drawn inside a merged row is reached at the row: its own
+    // anchor is an empty mark, with nothing to show focus on.
+    const anchor = document.getElementById(id)
+    const target = anchor?.closest<HTMLElement>('[data-book-merged]') ?? anchor
     target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
     target?.focus?.({ preventScroll: true })
   }
@@ -1499,8 +1502,10 @@ export function VisitBookLayout({
     | { kind: 'merged'; merge: BookTableMerge; points: DecisionPointView[] }
     | { kind: 'ref'; ref: BookTableRef; point: DecisionPointView }
   const tableEntries = (section: Section, items: readonly { point: DecisionPointView; entry: BookEntry }[]): TableItem[] => {
+    // Merged only while every member does not apply and none holds a
+    // decision today: a recorded one keeps its row, its record and 「改」.
     const quiet = (item: { point: DecisionPointView; entry: BookEntry }) => ABSENT_STATES.has(item.point.state)
-      || !['act', 'safety', 'ask'].includes(marks.get(item.point)!)
+      && !(item.entry.kind === 'row' && item.entry.row.steps.some((step) => step.decision))
     const merges = (section.tableMerged ?? []).filter((merge) => merge.dps.every((dp) => {
       const item = items.find((candidate) => candidate.point.dp === dp)
       return item && quiet(item)
@@ -1565,9 +1570,9 @@ export function VisitBookLayout({
 
   /** Points the pack draws as one row: their tags, one name, one line. */
   const renderMergedRow = (merge: BookTableMerge, grouped: readonly DecisionPointView[]) => (
-    <div key={`merged:${merge.dps.join('+')}`} className={styles.entry} data-quiet="" data-book-merged={merge.dps.join(' ')}>
-      {/* Each point keeps its anchor, so the map's line still lands on the row. */}
-      {grouped.map((point) => <span key={point.dp} id={bookAnchor(point)} tabIndex={-1} data-book-dp={point.dp} data-book-mark={marks.get(point)} />)}
+    <div key={`merged:${merge.dps.join('+')}`} className={styles.entry} tabIndex={-1} aria-label={`${merge.dps.join(' · ')} ${merge.label}`} data-quiet="" data-book-merged={merge.dps.join(' ')}>
+      {/* Each point keeps its anchor, so the map's line still lands on the row; focus goes to the row itself. */}
+      {grouped.map((point) => <span key={point.dp} id={bookAnchor(point)} data-book-dp={point.dp} data-book-mark={marks.get(point)} />)}
       <div className={styles.rowCells}>
         <div>
           <span className={styles.dpTag}>{merge.dps.join(' · ')}</span>
