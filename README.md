@@ -203,4 +203,8 @@ Yi-Hsin Kuo, MD · Taipei Veterans General Hospital
 
 聯絡：[voho0000@gmail.com](mailto:voho0000@gmail.com)。問題與建議可透過 [GitHub Issues](https://github.com/voho0000/medical-note-smart-on-fhir/issues) 或 App 內回報功能提出。
 
-本專案採 [Apache License 2.0](LICENSE)。
+本專案採 [Apache License 2.0](LICENSE)。作者與貢獻署名見 [NOTICE](NOTICE)。
+
+再散布本專案或衍生作品時，請依 Apache 2.0 第 4 條提供授權副本、標示檔案修改，並保留適用的版權與署名資訊。NOTICE 中適用的署名可依第 4(d) 條保留於 NOTICE、原始碼、文件或適當的介面中。
+
+Authorship and contributor credits are recorded in [NOTICE](NOTICE). When redistributing this project or derivative works, follow Section 4 of the [Apache License 2.0](LICENSE), including its requirements for license copies, modification notices, and applicable attribution notices.
