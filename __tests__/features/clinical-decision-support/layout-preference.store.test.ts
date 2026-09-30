@@ -31,11 +31,11 @@ describe('guidance layout preference', () => {
     expect(defaultLayoutFor('some-future-pack')).toBe('sections')
   })
 
-  it('offers only the decision map and 三區塊 (lipid: 三區塊 and 健保表一)', () => {
+  it('offers only the decision map, 決策地圖 v2 and 三區塊 (lipid: 三區塊 and 健保表一)', () => {
     // `flow`, `board`, `c` and `classic` stay in the type and in the view for
     // what still reads them; none is a face a pilot user can be sent back to.
-    expect(CDSS_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections'])
-    expect(AF_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections'])
+    expect(CDSS_SWITCHABLE_LAYOUTS).toEqual(['map', 'book', 'sections'])
+    expect(AF_SWITCHABLE_LAYOUTS).toEqual(['map', 'book', 'sections'])
     expect(LIPID_SWITCHABLE_LAYOUTS).toEqual(['sections', 'nhi'])
   })
 

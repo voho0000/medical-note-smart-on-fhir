@@ -22,6 +22,8 @@ import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { applyAfCalculatorResults } from '@/features/clinical-decision-support/utils/af-calculators'
 import { applyPhenotypeAnswer } from '@/features/clinical-decision-support/utils/apply-phenotype-answer'
+import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
+import type { ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import type {
   CdssPatientProfile,
@@ -86,7 +88,7 @@ export function scenarioPreviousVisit(id: ScenarioId): string | undefined {
  */
 export function scenarioRun(
   id: ScenarioId,
-  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false, afAnswers }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean; afAnswers?: CdssPatientProfile['afClinicalAnswers'] } = {},
+  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false, afAnswers, clinicVitals }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean; afAnswers?: CdssPatientProfile['afClinicalAnswers']; clinicVitals?: ClinicVitals } = {},
 ): ScenarioRun {
   // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the
   // profile; so does a pillar marked 「不耐受」, the stored previous visit, and
@@ -94,7 +96,8 @@ export function scenarioRun(
   const previous = firstVisit ? undefined : scenarioPreviousVisit(id)
   const loaded = scenarioProfile(id)
   const withAf = afAnswers ? { ...loaded, afClinicalAnswers: afAnswers } : loaded
-  const answered = applyFmtIntolerance(applyPhenotypeAnswer(applyVisitAnswers(withAf, answers), phenotype), intolerant)
+  // The vitals and signs measured in the room, as LiveFeature applies them: before the phenotype answer.
+  const answered = applyFmtIntolerance(applyPhenotypeAnswer(applyClinicVitals(applyVisitAnswers(withAf, answers), clinicVitals), phenotype), intolerant)
   const profile = previous ? applyPreviousVisit(answered, previous) : answered
   if (page === 'af') {
     const result = ATRIAL_FIBRILLATION_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })

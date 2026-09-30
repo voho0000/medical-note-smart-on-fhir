@@ -79,8 +79,12 @@ export interface VisitMapSurfaces {
      */
     followedBy?: { title: string; dps: readonly string[] }
   }
-  /** Inputs a decision point reads, drawn inside that point's opened card. */
-  pointExtras?: (point: DecisionPointView) => ReactNode
+  /**
+   * Inputs a decision point reads, drawn inside that point's opened card. With
+   * `once`, the page shows every point at once (the pocket-handbook layout),
+   * so an input two points share is drawn under the first of them only.
+   */
+  pointExtras?: (point: DecisionPointView, options?: { once?: boolean }) => ReactNode
   /** Folded at the foot of a column: what has no single point to live under. */
   columnFooters?: Partial<Record<VisitBlock, ReactNode>>
 }

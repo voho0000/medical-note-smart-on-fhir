@@ -2446,6 +2446,8 @@ export function ClinicalDecisionSupportView({
             const next = onAnswerPhenotype ? phenotypeAnswerForInput(input, phenotypeAnswer, new Date()) : undefined
             if (next) onAnswerPhenotype?.(next)
           } : undefined}
+          // A point's own questions (AF DP-08's valves) are AF answers.
+          {...(onAfAnswer ? { onPointAnswer: (answers: string, id: string, value: boolean | undefined) => { if (answers === 'af-clinical') onAfAnswer(id, value) } } : {})}
           modules={visitModules}
           unmappedModules={unmappedVisitModules}
           renderDetail={(recommendation) => (
