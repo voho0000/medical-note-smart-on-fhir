@@ -236,10 +236,11 @@
   border-radius: 12px;
   padding: 12px 8px 14px;
 }
-.mapHead { display: flex; align-items: center; justify-content: space-between; padding: 0 0 6px 8px; }
+.mapHead { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 0 6px 8px; }
 .mapHead .mapCount { margin-left: auto; }
-.mapTitle { font-size: 14px; font-weight: 700; }
-.mapCount { font-size: 12px; color: var(--ink-4); }
+.mapTitle { font-size: 14px; font-weight: 700; white-space: nowrap; }
+/* A narrow rail (the CDSS panel) breaks the count at its spaces, never inside 待處理. */
+.mapCount { font-size: 12px; color: var(--ink-4); word-break: keep-all; text-align: right; }
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -473,6 +474,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
 }
 .whyPill { margin-top: 6px; }
 .whyEnd { margin-left: auto; }
@@ -521,6 +523,7 @@
 .classTable tbody tr { border-bottom: 1px solid var(--line-soft); }
 .classTable tbody tr:last-child { border-bottom: 0; }
 .classTable thead th[data-current] { background: var(--blue-bg); color: var(--blue-ink); }
+.classTable thead .dpTag { white-space: nowrap; }
 .classTable td[data-current] { background: var(--blue-soft); }
 .classPatient { font-weight: 500; }
 
@@ -794,15 +797,18 @@
 .priSafety { padding: 0 16px; border: 1px solid var(--red); background: var(--red); color: #FFFFFF; font-weight: 700; }
 .btn { padding: 0 14px; border: 1px solid var(--btn-line); background: var(--sheet); color: var(--ink); }
 .btn:hover { background: var(--thead); }
-.btn[aria-expanded='true'] { background: var(--thead); }
 .pri:focus-visible, .priSafety:focus-visible, .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .pri:disabled, .priSafety:disabled, .btn:disabled { cursor: default; opacity: 0.6; }
 .decided { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.decidedLine { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; outline: none; }
+/* One line as the prototype's: ✓, the choice, 「改」. Text flow, not flex, so a
+   long pack label wraps after the ✓ instead of pushing it onto a line alone. */
+.decidedLine { margin: 0; font-size: 14px; line-height: 1.5; outline: none; }
 .decidedLine:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
 .tick { color: var(--green); flex-shrink: 0; }
+.decidedLine .tick { display: inline-block; vertical-align: -3px; margin-right: 8px; }
 .change {
   min-height: 36px;
+  margin-left: 4px;
   padding: 0 8px;
   border: 0;
   background: transparent;

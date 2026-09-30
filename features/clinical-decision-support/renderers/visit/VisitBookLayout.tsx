@@ -1478,7 +1478,8 @@ export function VisitBookLayout({
             <div className={styles.mapHead}>
               <span className={styles.mapTitle}>{isEnglish ? 'Decision map' : '決策地圖'}</span>
               <span className={styles.mapCount}>
-                {isEnglish ? `${counted.length} DPs · ${pending.length + asking.length} open` : `${counted.length} 個 DP · ${pending.length + asking.length} 待處理`}
+                {/* Non-breaking inside each half, so a narrow rail breaks only at the dot. */}
+                {isEnglish ? `${counted.length}\u00a0DPs · ${pending.length + asking.length}\u00a0open` : `${counted.length}\u00a0個\u00a0DP · ${pending.length + asking.length}\u00a0待處理`}
               </span>
               <button
                 type="button"
