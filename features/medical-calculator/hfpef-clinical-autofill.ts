@@ -208,7 +208,19 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     const text = reportNarrative(r)
     return /atrial\s+fibrillation|心房顫動|\bAF\b/i.test(text) && /possible|suspect|cannot\s+exclude|rule\s*out|\br\/o\b|疑/i.test(text)
   })
-  const afHistory = diagnosis ?? ecg.afHistory ?? (!uncertainAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
+  // An unclassified source that explicitly records AF cannot prove its absence.
+  // Keep the finding for manual review instead of inferring "no" from an older
+  // recognised tracing. Voided, preliminary and future reports are not evidence.
+  const unclassifiedAf = reports.some(report => {
+    if (['entered-in-error', 'cancelled', 'registered', 'partial', 'preliminary'].includes(report.status ?? '')) return false
+    const date = report.effectiveDateTime ?? report.effectivePeriod?.start ?? report.issued ?? ''
+    if (!Number.isFinite(Date.parse(date)) || Date.parse(date) > now.getTime()) return false
+    const text = reportNarrative(report)
+    return classifyReport(report, text) !== 'ecg' && affirmedAf(text, true)
+  })
+  const blocksNegativeAf = uncertainAf || unclassifiedAf
+  const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
+  const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
