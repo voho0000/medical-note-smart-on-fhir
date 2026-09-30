@@ -190,7 +190,7 @@ function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView
   return (
     <div data-visit-criteria="">
       {groups.map((group) => (
-        <div key={group.title} data-visit-criteria-group={group.title}>
+        <div key={group.title} className={styles.critGroup} data-visit-criteria-group={group.title}>
           <p className={dated ? styles.panelLabel : styles.critTitle}>{group.title}</p>
           <ul className={dated ? styles.panelPlain : styles.critList}>
             {group.items.map((item) => {

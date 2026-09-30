@@ -310,6 +310,7 @@
 .basisList li { font-size: 13px; color: var(--ink-3); }
 .basisList b { font-weight: 500; color: var(--ink); font-size: 14px; }
 .critTitle { margin: 0; }
+.critGroup + .critGroup { margin-top: 8px; }
 .critList { margin: 0; padding: 0; list-style: none; }
 .met { color: var(--green); }
 .unmet { color: var(--ink-4); }
