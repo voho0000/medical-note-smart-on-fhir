@@ -12,6 +12,7 @@ import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-su
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
+import { VisitBookChromeContext } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
 import { buildHfpefReading } from '@/features/clinical-decision-support/utils/hfpef-scores'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
@@ -29,6 +30,14 @@ for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as co
 
 const PATIENT = 'book-patient'
 
+/**
+ * The page is drawn twice over: full window (`?visit=book`) and inside the
+ * CDSS panel (決策地圖 v2 in the layout switch, `inline`) — one component, and
+ * every behaviour below must hold in both (owner request 2026-09-30: 「inline
+ * 版…UI 行為要跟書本版一模一樣」).
+ */
+let mode: 'window' | 'inline' = 'window'
+
 function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
@@ -39,6 +48,7 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
   const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers, phenotype, clinicVitals }), [afAnswers, answers, clinicVitals, id, page, phenotype])
   const hfpefReading = useMemo(() => buildHfpefReading({ profile: run.profile, autofill: { resolve: () => undefined } }), [run.profile])
   return (
+    <VisitBookChromeContext.Provider value={mode === 'inline' ? { inline: true } : null}>
     <ClinicalDecisionSupportView
       result={run.result}
       locale="zh-TW"
@@ -61,6 +71,7 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
       hfpefReading={hfpefReading}
       onSaveHfpefInputs={(patch) => useHfpefInputsStore.getState().setInputs(PATIENT, patch)}
     />
+    </VisitBookChromeContext.Provider>
   )
 }
 
@@ -68,7 +79,6 @@ const entry = (dp: string) => document.querySelector<HTMLElement>(`[data-book-dp
 const mapLine = (dp: string) => document.querySelector<HTMLElement>(`[data-book-map-dp="${dp}"]`)!
 
 beforeAll(() => {
-  window.history.pushState({}, '', '/?visit=book')
   Element.prototype.scrollIntoView = jest.fn()
 })
 afterAll(() => window.history.pushState({}, '', '/'))
@@ -79,10 +89,25 @@ beforeEach(() => {
   useClinicVitalsStore.getState().clearVitals(PATIENT)
 })
 
-describe('the pocket-handbook layout', () => {
+describe.each([
+  ['full window (?visit=book)', 'window'],
+  ['inside the CDSS panel (決策地圖 v2)', 'inline'],
+] as const)('the pocket-handbook layout — %s', (_where, where) => {
+  beforeAll(() => {
+    mode = where
+    window.history.pushState({}, '', where === 'window' ? '/?visit=book' : '/')
+  })
+
   it('draws every point of the HF page once, in the map beside it, and DP-01 under 診斷與分型 (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-layout', 'book')
+    // The same page either way; inside the panel it says so, and has no way out of a layout it is not over.
+    if (where === 'inline') {
+      expect(screen.getByTestId('cdss-visit-book')).toHaveAttribute('data-inline', 'true')
+      expect(screen.queryByText('回原版面')).toBeNull()
+    } else {
+      expect(screen.getByTestId('cdss-visit-book')).not.toHaveAttribute('data-inline')
+    }
     const map = screen.getByTestId('cdss-book-map')
     // The map lists every point, the page's absent ones included.
     for (const dp of ['DP-00', 'DP-01', 'DP-07', 'DP-09', 'DP-14', 'DP-16']) expect(within(map).getByText(dp)).toBeInTheDocument()
