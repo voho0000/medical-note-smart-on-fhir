@@ -114,6 +114,9 @@ describe('the pocket-handbook layout', () => {
       'eplerenone25 mg o.d.起始（Table 11）',
       '50 mg o.d.目標（Table 11）',
     ])
+    // A settled point carries 看依據 when the pack says what would reopen it:
+    // P9's DP-10 empagliflozin is fixed-dose, with no line, so none.
+    expect(within(entry('DP-10')).queryByRole('button', { name: /看依據/ })).toBeNull()
     // A reminder has no 看依據.
     expect(within(entry('DP-15')).queryByRole('button', { name: /看依據/ })).toBeNull()
   })

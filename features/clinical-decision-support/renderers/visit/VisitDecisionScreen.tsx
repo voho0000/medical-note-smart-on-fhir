@@ -693,10 +693,16 @@ export function VisitDecisionScreen({
       return 'info'
     }
     // Worth opening: what the decision turns on (criteria), a chain of steps,
-    // or several options to weigh. A reminder is read where it stands.
-    const isComplex = (point: DecisionPointView) => (DECISION_STATES.has(point.state) || Boolean(openStepOf(point))) && Boolean(
-      point.criteria?.length || point.next || (point.chain?.length ?? 0) > 1 || point.actions.length >= 3,
-    )
+    // or several options to weigh — or, on any point, what would change its
+    // answer (the pack's `changesIf`). A reminder without them is read where
+    // it stands.
+    const isComplex = (point: DecisionPointView) => {
+      const changes = (point as { changesIf?: unknown }).changesIf
+      if (!ABSENT_STATES.has(point.state) && Array.isArray(changes) && changes.length > 0) return true
+      return (DECISION_STATES.has(point.state) || Boolean(openStepOf(point))) && Boolean(
+        point.criteria?.length || point.next || (point.chain?.length ?? 0) > 1 || point.actions.length >= 3,
+      )
+    }
     // The cards behind a point, at the foot of its 看依據.
     const moduleCardsOf = (point: DecisionPointView) => point.moduleIds.flatMap((id) => {
       const recommendation = modules.get(id)
