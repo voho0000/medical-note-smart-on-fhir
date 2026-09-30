@@ -144,6 +144,9 @@ describe('optional additions', () => {
     fireEvent.click(primaryOf(row('DP-10')))
     // The pack's words, then what still needs the clinician outside the queue.
     expect(screen.getByRole('heading', { level: 3, name: /^今天的決定都記下了（pack）( · 還有 \d+ 項需你確認)?$/ })).toBeInTheDocument()
+    // Read on screen where the visit ends: at the head of the summary.
+    expect(screen.getByTestId('cdss-visit-column-summary')).toContainElement(screen.getByTestId('cdss-visit-decided-line'))
+    expect(screen.getByTestId('cdss-visit-decided-line')).toHaveTextContent(/^今天的決定都記下了（pack）/)
   })
 
   it('says the day is decided in the pack’s words alone once nothing else needs the clinician', () => {
@@ -250,8 +253,9 @@ describe('optional additions', () => {
     // DP-00 is not listed again as a row; the answer still routes to the
     // phenotype store.
     expect(document.querySelector('[data-visit-queue-dp="DP-00"]')).toBeNull()
-    // This fixture carries every-visit asks, so 01 opens on 追蹤; the question is under 診斷.
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    // This fixture carries every-visit asks, so 01 leads with them; the
+    // question is in the diagnostic assessment after them, on the same page.
+    expect(within(screen.getByTestId('cdss-visit-lead-status')).getByTestId('cdss-hf-suspicion-option-suspected')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-suspected'))
     expect(onAnswerPhenotype).toHaveBeenCalledWith(expect.objectContaining({ hfSuspicion: 'suspected' }))
     expect(within(screen.getByTestId('cdss-visit-column-outlook')).getByTestId('cdss-visit-outlook-module-hf-prognosis-shell')).toBeInTheDocument()
