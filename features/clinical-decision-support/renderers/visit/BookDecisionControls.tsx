@@ -32,12 +32,19 @@ export function BookDecisionControls({
   isEnglish,
   onDecide,
   onClear,
+  safety,
 }: {
   point: DecisionPointView
   decision?: PointDecision
   isEnglish: boolean
   onDecide?: (action: VisitAction) => void
   onClear?: () => void
+  /**
+   * A safety row (the pack's `QueueRow.safety`, set by the chain's head): its
+   * recommendation is the red button on every step, not only on a step whose
+   * own state is safety. Without a row, the point's own state decides.
+   */
+  safety?: boolean
 }) {
   const otherId = useId()
   const [otherOpen, setOtherOpen] = useState(false)
@@ -123,7 +130,7 @@ export function BookDecisionControls({
       <div className={styles.controls}>
         <button
           type="button"
-          className={point.state === 'safety' ? styles.priSafety : styles.pri}
+          className={(safety ?? point.state === 'safety') ? styles.priSafety : styles.pri}
           disabled={readOnly}
           onClick={() => decide(primary)}
           data-visit-primary={point.dp}

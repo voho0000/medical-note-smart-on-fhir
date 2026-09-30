@@ -38,6 +38,11 @@
   --green: #2E6B3A;
   --green-bg: #E5F1E7;
   --red: #B42318;
+  /* Filled buttons: white text on them ≥4.5:1 (WCAG 1.4.3). */
+  --blue-fill: #1F5FA8;
+  --blue-fill-hover: #174E8C;
+  --red-fill: #B42318;
+  --red-fill-hover: #9A1D14;
   --panel: #FAF8F3;
   --panel-line: #E8E3D6;
   --box-line: #E8DFC9;
@@ -101,6 +106,13 @@
   --green: #7DC08A;
   --green-bg: #1F3526;
   --red: #E0776B;
+  /* The text tokens above are too light for white text (#E0776B 2.99:1,
+     #3F7CC4 4.29:1): the fills keep white ≥4.5:1 and the fill ≥3:1 against
+     the sheet, the rows, the boxes and the 看依據 panel (#219 review). */
+  --blue-fill: #3B74BA;
+  --blue-fill-hover: #3D76BD;
+  --red-fill: #C44A3E;
+  --red-fill-hover: #C74E42;
   --panel: #2A2824;
   --panel-line: #3A372F;
   --box-line: #4A3F28;
@@ -184,6 +196,9 @@
   gap: 24px;
   padding: 24px 32px 0;
   align-items: start;
+  /* One column below 880px, and never wider than the page: no answer, label
+     or table may push the page sideways (#219 review, English at 320px). */
+  grid-template-columns: minmax(0, 1fr);
 }
 @container (min-width: 880px) {
   .body { grid-template-columns: 260px minmax(0, 1fr); }
@@ -231,6 +246,7 @@
 /* --------------------------------- map -------------------------------- */
 
 .map {
+  min-width: 0;
   background: var(--sheet);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -442,6 +458,7 @@
   padding: 0;
   border: 0;
   background: transparent;
+  text-align: left;
   color: var(--blue);
   font: inherit;
   text-decoration: underline;
@@ -543,7 +560,9 @@
 }
 
 .scoreTable { width: 100%; border-collapse: collapse; font-size: 14px; }
-.scoreTable td { padding: 5px 8px; border-top: 1px solid var(--line-soft); vertical-align: baseline; }
+.scoreTable td { padding: 5px 8px; border-top: 1px solid var(--line-soft); vertical-align: baseline; overflow-wrap: anywhere; }
+/* overflow-wrap: in English at 320px 「Stroke/TIA/thromboembolism」 and the verdict have
+   no break of their own; they wrap in the column rather than push the page. */
 .scoreTable tr:not([data-met]):not(.scoreTotal) { color: var(--ink-4); }
 .scoreMark { width: 22px; }
 .scoreTable tr[data-met] .scoreMark { color: var(--green); }
@@ -572,11 +591,15 @@
 .questions { display: flex; flex-direction: column; }
 .questionsHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0 4px; }
 .questionsTitle { font-size: 13px; font-weight: 700; color: var(--ink-3); }
-.questionRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-faint); font-size: 14px; }
+.questionRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 6px 0; border-top: 1px solid var(--line-faint); font-size: 14px; }
+/* One segmented control; where the answers are longer than the column (English
+   at 320px) they wrap inside it, a line between the rows, rather than run out. */
 .questionGroup, .askGroup {
   display: inline-flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   width: fit-content;
+  max-width: 100%;
   border: 1px solid var(--btn-line);
   border-radius: 8px;
   overflow: hidden;
@@ -588,6 +611,9 @@
   padding: 0 12px;
   border: 0;
   border-right: 1px solid var(--btn-line);
+  /* The line between wrapped rows; the last row's is clipped by the group. */
+  border-bottom: 1px solid var(--btn-line);
+  margin-bottom: -1px;
   background: transparent;
   color: var(--ink);
   font-size: 14px;
@@ -630,9 +656,14 @@
 /* The every-visit questions (DP-03): one row each, a segmented control. */
 .asks { display: flex; flex-direction: column; gap: 8px; }
 .askRow { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 12px; }
-.askLabel { font-size: 14px; font-weight: 700; }
+.askLabel { min-width: 0; font-size: 14px; font-weight: 700; }
 .askGroup > button[data-prefilled], .questionGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
 .askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
+/* A phone, or the panel at its narrowest: the label above its answers. */
+@container (max-width: 480px) {
+  .askRow { grid-template-columns: minmax(0, 1fr); }
+  .askNote { grid-column: 1; }
+}
 
 /* --------------------------------- plan -------------------------------- */
 
@@ -666,106 +697,6 @@
 .planEmpty { margin: 0; font-size: 14px; color: var(--ink-4); }
 .planPending { margin: 0; font-size: 14px; color: var(--warn-ink); }
 
-/* ------------------------ content drawn by others ----------------------- */
-
-.inner :global(button[data-slot='button']) {
-  height: auto;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: 1px solid var(--btn-line);
-  background: var(--sheet);
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 400;
-  box-shadow: none;
-}
-.inner :global(button[data-slot='button']:hover) { background: var(--thead); }
-.inner :global(button[data-visit-primary]) {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #FFFFFF;
-  font-weight: 700;
-}
-.inner :global(button[data-visit-primary]:hover) { background: var(--blue-hover); }
-.entry[data-tone='safety'] .inner :global(button[data-visit-primary]) { background: var(--red); border-color: var(--red); }
-/* Answers and unranked options are drawn alike. */
-.inner :global([data-visit-question] button[data-visit-primary]) {
-  background: var(--sheet);
-  border-color: var(--btn-line);
-  color: var(--ink);
-  font-weight: 400;
-}
-.inner :global(button[data-visit-change]) {
-  min-height: 36px;
-  min-width: 0;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  color: var(--blue);
-  text-decoration: underline;
-}
-.inner :global([data-visit-decided]) { font-size: 14px; }
-.inner :global([data-visit-decided] > span:first-child) { color: var(--green); font-weight: 700; }
-.inner :global([data-visit-response-check]) { font-size: 13px; color: var(--ink-3); }
-.inner :global([data-visit-chain-done]) { font-size: 13px; color: var(--ink-3); }
-
-/* Answer toggles: one segmented control, the chosen one filled. */
-.inner :global([role='group']:has(> button[aria-pressed])) {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  gap: 0;
-  width: fit-content;
-  border: 1px solid var(--btn-line);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--sheet);
-}
-.inner :global([role='group'] > button[aria-pressed]) {
-  min-height: 40px;
-  min-width: 52px;
-  margin: 0;
-  padding: 0 12px;
-  border: 0;
-  border-right: 1px solid var(--btn-line);
-  border-radius: 0;
-  background: var(--sheet);
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 400;
-  box-shadow: none;
-}
-.inner :global([role='group'] > button[aria-pressed]:last-child) { border-right: 0; }
-.inner :global([role='group'] > button[aria-pressed='true']) { background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
-/* 全部皆無 and the like: a pill. */
-.inner :global(button[aria-pressed]:not([role='group'] > button)) {
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--btn-line);
-  background: var(--sheet);
-  color: var(--ink);
-  font-size: 13px;
-}
-.inner :global(button[aria-pressed='true']:not([role='group'] > button)) {
-  border-color: var(--blue);
-  background: var(--blue-bg);
-  color: var(--blue-ink);
-  font-weight: 700;
-}
-/* Folds and boxes drawn inside: the sheet's own lines. */
-.inner :global(details) { border-color: var(--line-soft); background: transparent; }
-.inner :global(summary) { color: var(--ink); }
-.inner :global(.border-border), .inner :global(.divide-border > *) { border-color: var(--line-faint); }
-.inner :global(.bg-card), .inner :global(.bg-background) { background: var(--sheet); }
-.inner :global(.text-muted-foreground) { color: var(--ink-4); }
-.inner :global(.text-foreground) { color: var(--ink); }
-
-/* Every-visit questions: the label in its own column, the answers segmented. */
-.inner :global([data-visit-ask-row]) { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 6px 10px; }
-.inner :global([data-visit-ask-row] > span:first-child) { min-width: 0; font-size: 14px; font-weight: 700; }
-.inner :global([data-visit-ask-row] > span:not(:first-child)) { grid-column: 2; }
-
 /* In the panel the page starts below the app's header and tabs. */
 .inline .headInner { padding: 10px 16px; }
 .inline .body { padding: 16px 16px 0; }
@@ -793,9 +724,10 @@
   cursor: pointer;
   text-align: center;
 }
-.pri { padding: 0 16px; border: 1px solid var(--blue); background: var(--blue); color: #FFFFFF; font-weight: 700; }
-.pri:hover { background: var(--blue-hover); }
-.priSafety { padding: 0 16px; border: 1px solid var(--red); background: var(--red); color: #FFFFFF; font-weight: 700; }
+.pri { padding: 0 16px; border: 1px solid var(--blue-fill); background: var(--blue-fill); color: #FFFFFF; font-weight: 700; }
+.pri:hover { background: var(--blue-fill-hover); border-color: var(--blue-fill-hover); }
+.priSafety { padding: 0 16px; border: 1px solid var(--red-fill); background: var(--red-fill); color: #FFFFFF; font-weight: 700; }
+.priSafety:hover { background: var(--red-fill-hover); border-color: var(--red-fill-hover); }
 .btn { padding: 0 14px; border: 1px solid var(--btn-line); background: var(--sheet); color: var(--ink); }
 .btn:hover { background: var(--thead); }
 .pri:focus-visible, .priSafety:focus-visible, .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

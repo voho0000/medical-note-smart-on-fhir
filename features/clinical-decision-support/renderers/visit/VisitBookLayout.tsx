@@ -992,6 +992,7 @@ export function VisitBookLayout({
                 <BookDecisionControls
                   point={shown}
                   isEnglish={isEnglish}
+                  safety={row.safety}
                   onDecide={onDecide ? (action) => onDecide(current, action, queued) : undefined}
                 />
               </>
@@ -1127,6 +1128,7 @@ export function VisitBookLayout({
                 <BookDecisionControls
                   point={step.point}
                   isEnglish={isEnglish}
+                  safety={row.safety}
                   onDecide={onDecide ? (action) => onDecide(step, action, false) : undefined}
                 />
               ) : (
@@ -1240,6 +1242,7 @@ export function VisitBookLayout({
             <BookDecisionControls
               point={shown}
               isEnglish={isEnglish}
+              safety={row.safety}
               onDecide={onDecide ? (action) => onDecide(current, action, entry.kind === 'row' && entry.queued) : undefined}
             />
           </>
