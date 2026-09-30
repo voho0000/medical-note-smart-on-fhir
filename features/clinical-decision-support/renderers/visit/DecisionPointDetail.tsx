@@ -288,17 +288,26 @@ export function DecisionPointDetail({
         </div>
       ) : null}
 
+      {point.guideline ? (
+        // What the guideline says about this decision, open as the card opens
+        // (clinician feedback 2026-09-30: 「指引重點你都default打開，免得很多
+        // DP點進去都空空」): the points in the page's language. The cited
+        // sentences behind them are folded with the evidence below.
+        <div className="space-y-1" data-testid="cdss-visit-detail-guideline">
+          <p className="text-xs font-semibold text-muted-foreground">{isEnglish ? 'Guideline points' : '指引重點'}</p>
+          <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground" data-testid="cdss-visit-detail-guideline-points">
+            {point.guideline.points.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
       {point.guideline || cards.length ? (
-        // What the guideline says about this decision and the patient's
-        // evidence behind it, in one fold (clinician feedback 2026-09-30: two
-        // folds, 「指引重點」 and each card's 「指引與依據」, read as clutter): the
-        // points in the page's language, each cited recommendation with its
+        // Where it comes from, in one fold (clinician feedback 2026-09-30:
+        // two folds read as clutter): each cited recommendation with its
         // section, page, class and level, then the cards the point rests on.
-        // A clinician who knows the guidance decides from the row above and
-        // opens this only to check.
         <details className="group/evidence rounded-md border border-border" data-testid="cdss-visit-detail-evidence">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0 flex-1 truncate text-foreground">{isEnglish ? 'Guideline and evidence' : '指引與依據'}</span>
+            <span className="min-w-0 flex-1 truncate text-foreground">{isEnglish ? 'Sources and evidence' : '出處與依據'}</span>
             <span className="min-w-0 truncate font-normal">
               {point.guideline
                 ? [...new Set(point.guideline.references.map((reference) => reference.source))].join(isEnglish ? ', ' : '、')
@@ -308,24 +317,19 @@ export function DecisionPointDetail({
           </summary>
           <div className="space-y-3 border-t border-border px-3 pb-2.5 pt-2">
             {point.guideline ? (
-              <div className="space-y-2" data-testid="cdss-visit-detail-guideline">
-                <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground" data-testid="cdss-visit-detail-guideline-points">
-                  {point.guideline.points.map((line) => <li key={line}>{line}</li>)}
-                </ul>
-                <ol className="space-y-1.5" data-testid="cdss-visit-detail-guideline-references">
-                  {point.guideline.references.map((reference) => (
-                    // The whole quote: two lines of one section and page can open alike (DP-12's 「Intravenous iron supplementation…」).
-                    <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className="text-[11px] leading-4 text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {reference.source} §{reference.section} · p.{reference.page}
-                        {reference.recommendation ? ` · Class ${reference.recommendation.class}, ${reference.recommendation.level}` : ''}
-                      </span>
-                      {isEnglish ? ': ' : '：'}
-                      <span lang="en">“{reference.quote}”</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+              <ol className="space-y-1.5" data-testid="cdss-visit-detail-guideline-references">
+                {point.guideline.references.map((reference) => (
+                  // The whole quote: two lines of one section and page can open alike (DP-12's 「Intravenous iron supplementation…」).
+                  <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className="text-[11px] leading-4 text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {reference.source} §{reference.section} · p.{reference.page}
+                      {reference.recommendation ? ` · Class ${reference.recommendation.class}, ${reference.recommendation.level}` : ''}
+                    </span>
+                    {isEnglish ? ': ' : '：'}
+                    <span lang="en">“{reference.quote}”</span>
+                  </li>
+                ))}
+              </ol>
             ) : null}
             {cards.map((recommendation) => (
               <section

@@ -294,11 +294,13 @@ describe('real pack · P4 stable and optimised', () => {
     expect(detail).not.toHaveTextContent('RALES 試驗劑量 25 mg')
     expect(within(detail).getByRole('heading', { level: 4 })).toHaveTextContent('DP-09 MRA')
     expect(within(detail).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
-    // The guideline points and the module's card in one fold, closed.
+    // The guideline points open as the card opens; their sources and the
+    // module's card in one fold, closed.
+    expect(within(detail).getByTestId('cdss-visit-detail-guideline-points')).toBeVisible()
     const evidence = within(detail).getByTestId('cdss-visit-detail-evidence')
     expect(detail.querySelectorAll(':scope > details')).toHaveLength(1)
     expect(evidence).not.toHaveAttribute('open')
-    expect(evidence.querySelector('summary')).toHaveTextContent('指引與依據')
+    expect(evidence.querySelector('summary')).toHaveTextContent('出處與依據')
     expect(evidence).toContainElement(screen.getByTestId('cdss-visit-detail-module-heart-failure-mra'))
     expect(screen.getByTestId('cdss-visit-detail-module-body-heart-failure-mra')).not.toBeVisible()
     fireEvent.click(evidence.querySelector('summary')!)
