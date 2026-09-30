@@ -117,3 +117,10 @@ HF new-flow clinical information card: owner requested replacing the height tile
 ## AF pilot preview
 
 AF is listed alongside HF and lipid in the HMC host, including production builds for `/app-hmc/`. The existing Beta and unattended launch rules apply; HF remains the default. Owner authorized AF integration and deployment on 2026-09-19.
+
+## Optional private integrations (all routes)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| CDSS「個人化照護指引」與 CDSS 試辦 pack 控制，在 `/`、`/app/`、`/app-hmc/` 及各啟動參數 | Build without the complete CDSS package group: omit the tab and pack controls. With the packages installed: retain all existing Beta, audience and hospital-launch rules. Main clinical reports, AI summary, calculators and FHIR imports remain available. | Explicit owner clarification in chat, 2026-09-30 |
+| 健康存摺 SDK JSON 匯入，在 `/`、`/app/`、`/app-hmc/` 及各啟動參數 | Missing SDK browser artifact or declaration: advertise FHIR Bundle import only and reject SDK JSON with a clear message. With the vendored artifact: retain SDK conversion without requiring the private source repo. | Explicit owner clarification in chat, 2026-09-30 |
