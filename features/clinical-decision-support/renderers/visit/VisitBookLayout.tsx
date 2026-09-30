@@ -1455,7 +1455,7 @@ export function VisitBookLayout({
   const footers = chapters?.length ? BLOCK_ORDER.flatMap((block) => (blockFooters?.[block] ? [blockFooters[block]] : [])) : []
 
   return (
-    <div className={`${styles.book} ${bookSerif.variable}`} data-testid="cdss-visit-book">
+    <div className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
       <header className={styles.head}>
         <div className={styles.headInner}>
           {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
@@ -1488,7 +1488,7 @@ export function VisitBookLayout({
                 ? (isEnglish ? `${asking.length} to answer` : `待答 ${asking.length}`)
                 : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
-          {exitHref ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
+          {exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
         </div>
       </header>
 

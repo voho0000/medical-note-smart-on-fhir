@@ -233,12 +233,18 @@ function LayoutSwitcher({
   onSelect: (layout: CdssLayout) => void
 }) {
   const isEnglish = locale === 'en'
-  const labels: Record<'map' | 'sections' | 'nhi', { label: string; title: string }> = {
+  const labels: Record<'map' | 'book' | 'sections' | 'nhi', { label: string; title: string }> = {
     map: {
       label: isEnglish ? 'Decision map' : '決策地圖',
       title: isEnglish
         ? "Today's decisions first, then the three sections as the map's three columns"
         : '今天要決定的事在最上面；三區塊就是地圖的三欄',
+    },
+    book: {
+      label: isEnglish ? 'Decision map v2' : '決策地圖 v2',
+      title: isEnglish
+        ? 'The decision map as a pocket-handbook page: the map on the left, each point once on the right'
+        : '口袋手冊版面：左邊決策地圖，右邊每個決策點寫一次',
     },
     sections: {
       label: isEnglish ? 'Three sections' : '三區塊',
@@ -256,7 +262,7 @@ function LayoutSwitcher({
     : packId === AF_PACK_ID
       ? AF_SWITCHABLE_LAYOUTS
       : CDSS_SWITCHABLE_LAYOUTS
-  ).filter((id) => id !== 'map' || mapAvailable)
+  ).filter((id) => (id !== 'map' && id !== 'book') || mapAvailable)
   const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
@@ -310,7 +316,8 @@ export default function LiveClinicalDecisionSupportFeature({
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
-  const [bookMode] = useState(isVisitBookMode)
+  // `?visit=book` opens the handbook page whatever layout this browser chose.
+  const [urlBookMode] = useState(isVisitBookMode)
   const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
@@ -543,7 +550,7 @@ export default function LiveClinicalDecisionSupportFeature({
   // and atrial fibrillation today).
   // A retired layout (新版流程, 原版看板) stored before it went reads as no choice.
   const preferredLayout: CdssLayout = layout && !RETIRED_LAYOUTS.includes(layout) ? layout : defaultLayoutFor(selectedPack.id)
-  const wantsMap = preferredLayout === 'map' && hasVisitMap(selectedPack.id)
+  const wantsMap = (preferredLayout === 'map' || preferredLayout === 'book') && hasVisitMap(selectedPack.id)
 
   // A map can read other packs' results beside the page's own — the pack
   // names them (`VisitMapDefinition.companions`): on the heart-failure page,
@@ -698,15 +705,20 @@ export default function LiveClinicalDecisionSupportFeature({
   // The switch offers the map wherever the package can build one; only a map
   // that was asked for and could not be built is withdrawn from it.
   const mapOffered = hasVisitMap(result.packId) && (!wantsMap || mapAvailable)
-  const effectiveLayout: CdssLayout = result.packId === LIPID_PACK_ID
-    ? preferredLayout === 'flow' || preferredLayout === 'map' ? 'sections' : preferredLayout
-    : preferredLayout === 'nhi' || (preferredLayout === 'map' && !mapAvailable) ? 'sections' : preferredLayout
+  const prefersMap = preferredLayout === 'map' || preferredLayout === 'book'
+  const chosenLayout: CdssLayout = result.packId === LIPID_PACK_ID
+    ? preferredLayout === 'flow' || prefersMap ? 'sections' : preferredLayout
+    : preferredLayout === 'nhi' || (prefersMap && !mapAvailable) ? 'sections' : preferredLayout
+  // 決策地圖 v2 is the same map drawn as the handbook page: the view gets the
+  // map, and the handbook is switched on around it.
+  const effectiveLayout: CdssLayout = chosenLayout === 'book' ? 'map' : chosenLayout
+  const bookMode = effectiveLayout === 'map' && (urlBookMode || chosenLayout === 'book')
   const isMap = effectiveLayout === 'map'
   const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
   const isNhiTable = effectiveLayout === 'nhi' && result.packId === LIPID_PACK_ID
   // Atrial fibrillation has two faces: the map, and its own three-section flow,
   // which is what every other stored layout has always shown there.
-  const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : effectiveLayout
+  const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : chosenLayout
   const showLayoutSwitcher = result.packId === HEART_FAILURE_PACK_ID
     || result.packId === LIPID_PACK_ID
     || mapOffered
@@ -806,9 +818,10 @@ export default function LiveClinicalDecisionSupportFeature({
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
-      {/* The pocket-handbook experiment (?visit=book) draws its own header
-          over the page: the disease tabs go into it. */}
-      <VisitBookChromeContext.Provider value={bookMode ? {
+      {/* The pocket-handbook page. Opened by `?visit=book` it draws its own
+          header over the whole window, and the disease tabs go into it; chosen
+          as 決策地圖 v2 it stays in this panel, under the header above. */}
+      <VisitBookChromeContext.Provider value={!bookMode ? null : !urlBookMode ? { inline: true } : {
         tabs: (
           <DiseaseSwitcher
             locale={cdssLocale}
@@ -818,7 +831,7 @@ export default function LiveClinicalDecisionSupportFeature({
             onSelect={setRequestedPackId}
           />
         ),
-      } : null}>
+      }}>
       <ClinicalDecisionSupportView
         calculatorAutofill={autofill}
         afAnswers={afAnswers}

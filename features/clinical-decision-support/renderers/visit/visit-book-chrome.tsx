@@ -9,6 +9,12 @@ import { createContext, type ReactNode } from 'react'
  */
 export interface VisitBookChrome {
   tabs?: ReactNode
+  /**
+   * Chosen as 決策地圖 v2 in the layout switch: the page stays inside the
+   * CDSS panel, beside the patient's record, under the panel's own disease
+   * and layout switches — not over the whole window.
+   */
+  inline?: boolean
 }
 
 export const VisitBookChromeContext = createContext<VisitBookChrome | null>(null)

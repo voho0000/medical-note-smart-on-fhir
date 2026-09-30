@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { CdssRecommendation } from '../../types'
 import type {
@@ -50,6 +50,7 @@ import { MapFold } from './MapFold'
 import { VisitPlan } from './VisitPlan'
 import { displayDate, visitStatusSentence, VisitStatusLine, VisitTriggers, VisitValues } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
+import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
 import rowStyles from './point-rows.module.css'
 
 const ASKS_DETAIL_ID = 'cdss-visit-asks-detail'
@@ -126,9 +127,11 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
-  // The pocket-handbook layout, an experiment opened with `?visit=book`
-  // (owner request 2026-09-30); the map stays the page's layout.
-  const [book] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('visit') === 'book')
+  // The pocket-handbook layout (owner request 2026-09-30): 決策地圖 v2 in the
+  // layout switch, which lends the page its chrome, or `?visit=book`.
+  const bookChrome = useContext(VisitBookChromeContext)
+  const [urlBook] = useState(isVisitBookMode)
+  const book = urlBook || bookChrome !== null
   // Whether the page drew the patient undiagnosed, and whether the diagnosis
   // then came to stand on it: the diagnosis keeps its place at the head of 01
   // rather than moving under the clinician (clinician feedback 2026-09-27:
