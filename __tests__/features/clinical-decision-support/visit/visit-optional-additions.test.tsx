@@ -113,13 +113,14 @@ describe('optional additions', () => {
     // The waiting points are the pack's to settle; the host did not walk into them.
     expect(decisions['visit:af:DP-09']).toBeUndefined()
 
-    // The opened card shows both steps, from the same records.
+    // The opened card keeps the first step, where it can be changed; the
+    // second is the row's, and is not drawn twice.
     const detail = screen.getByTestId('cdss-visit-detail')
     expect(row('DP-07')).toContainElement(detail)
     expect(within(detail).getAllByTestId('cdss-visit-decided').map((element) => element.textContent)).toEqual([
       expect.stringContaining('開始抗凝'),
-      expect.stringContaining('apixaban 5 mg bid'),
     ])
+    expect(row('DP-07').querySelector('[data-visit-decided-about]')?.parentElement).toHaveTextContent('apixaban 5 mg bid')
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('apixaban 5 mg bid：Hb、Cr，30 天內')
   })
 

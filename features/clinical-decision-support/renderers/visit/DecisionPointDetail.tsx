@@ -60,11 +60,41 @@ export function DecisionPointChecklist({
   )
 }
 
-const STEP_STATE: Record<ChainStep['state'], { zh: string; en: string; className: string }> = {
-  done: { zh: '完成', en: 'Done', className: 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/25 dark:bg-emerald-500/10' },
-  current: { zh: '卡在這', en: 'Here now', className: 'border-amber-300 bg-amber-50/70 dark:border-amber-500/35 dark:bg-amber-500/10' },
-  later: { zh: '之後', en: 'Later', className: 'border-border bg-muted/30' },
-  blocked: { zh: '受阻', en: 'Blocked', className: 'border-destructive/40 bg-destructive/5' },
+const STEP_STATE: Record<ChainStep['state'], { zh: string; en: string; className: string; shown: boolean }> = {
+  done: { zh: '完成', en: 'Done', className: 'text-muted-foreground', shown: false },
+  current: { zh: '卡在這', en: 'Here now', className: 'bg-amber-50 text-foreground ring-1 ring-amber-300 dark:bg-amber-500/10 dark:ring-amber-500/35', shown: true },
+  later: { zh: '之後', en: 'Later', className: 'text-muted-foreground', shown: false },
+  blocked: { zh: '受阻', en: 'Blocked', className: 'bg-destructive/5 text-foreground ring-1 ring-destructive/40', shown: true },
+}
+
+/**
+ * The decision chain on one line — 1. 要不要 開始 MRA（卡在這）→ 2. 哪一種
+ * spironolactone → 3. 劑量 起始 12.5–25 mg o.d. — rather than three boxes
+ * that restate, larger, the question printed just above (clinician feedback
+ * 2026-09-30: 「你不覺得畫面很亂」). Where the chain stands is marked on its
+ * step: 卡在這 or 受阻 in words, a finished step with a tick.
+ */
+function DecisionChainLine({ chain, isEnglish }: { chain: readonly ChainStep[]; isEnglish: boolean }) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-xs leading-5" aria-label={isEnglish ? 'Decision chain' : '決策鏈'}>
+      {chain.map((step, index) => {
+        const state = STEP_STATE[step.state]
+        return (
+          <li key={step.id} className="flex min-w-0 max-w-full items-center gap-1" data-chain-step={step.id} data-chain-state={step.state}>
+            {index > 0 ? <span className="shrink-0 text-muted-foreground" aria-hidden="true">→</span> : null}
+            <span className={cn('inline-flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 rounded px-1.5', state.className)}>
+              {step.state === 'done' ? <Check className="h-3 w-3 shrink-0 self-center text-emerald-700 dark:text-emerald-300" aria-hidden="true" /> : null}
+              <span className="shrink-0 font-medium">{index + 1}. <ChainStepName id={step.id} isEnglish={isEnglish} /></span>
+              <span className="min-w-0 break-words">{step.text}</span>
+              <span className={cn('shrink-0 font-semibold', !state.shown && 'sr-only')}>
+                {isEnglish ? ` (${state.en})` : `（${state.zh}）`}
+              </span>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 /**
@@ -87,6 +117,7 @@ export function DecisionPointDetail({
   onClear,
   decidedWith,
   onClose,
+  controlsAbove,
 }: {
   point: DecisionPointView
   /**
@@ -115,6 +146,11 @@ export function DecisionPointDetail({
   onClose: () => void
   /** The page's own inputs this point reads — questions, confirmation, calculator. */
   extras?: ReactNode
+  /**
+   * The step whose buttons (or recorded decision) the row the card opens
+   * under already draws, so the card leaves them out.
+   */
+  controlsAbove?: string
 }) {
   // 「已記錄」 once every step shown is: a chain whose next step is still open
   // (the DOAC after 「開始抗凝」) says its state instead.
@@ -213,25 +249,7 @@ export function DecisionPointDetail({
       ) : null}
 
       {/* Its own chain waits on the step decided here: not drawn over it. */}
-      {point.chain?.length && !decidedWith ? (
-        <ol className="grid gap-2 @min-[40rem]:grid-cols-3" aria-label={isEnglish ? 'Decision chain' : '決策鏈'}>
-          {point.chain.map((step, index) => (
-            <li
-              key={step.id}
-              className={cn('space-y-1 rounded-md border px-3 py-2', STEP_STATE[step.state].className)}
-              data-chain-step={step.id}
-              data-chain-state={step.state}
-            >
-              <p className="text-xs font-semibold text-foreground">
-                {index + 1}. <ChainStepName id={step.id} isEnglish={isEnglish} />
-                {' · '}
-                {isEnglish ? STEP_STATE[step.state].en : STEP_STATE[step.state].zh}
-              </p>
-              <p className="text-xs leading-relaxed text-foreground">{step.text}</p>
-            </li>
-          ))}
-        </ol>
-      ) : null}
+      {point.chain?.length && !decidedWith ? <DecisionChainLine chain={point.chain} isEnglish={isEnglish} /> : null}
 
       {point.checklist?.length ? <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} /> : null}
 
@@ -242,7 +260,10 @@ export function DecisionPointDetail({
         </p>
       ) : null}
 
-      {steps.map((step, index) => (step.point.actions.length ? (
+      {/* A step whose buttons the row above already draws is not drawn
+          again here: one 「開始 MRA」, on the row (clinician feedback
+          2026-09-30: 「光開始MRA按鈕就出現兩次」). */}
+      {steps.map((step, index) => (step.point.actions.length && step.key !== controlsAbove ? (
         <div key={step.key} className="space-y-1" data-visit-detail-step={step.key}>
           {index > 0 ? (
             <div className="space-y-0.5 border-t border-border pt-2">
@@ -267,67 +288,70 @@ export function DecisionPointDetail({
         </div>
       ) : null}
 
-      {point.guideline ? (
-        // What the guideline says about this decision, folded like the
-        // evidence below: the points in the page's language, then each cited
-        // recommendation with its section, page, class and level.
-        <details className="group/guide rounded-md border border-border" data-testid="cdss-visit-detail-guideline">
+      {point.guideline || cards.length ? (
+        // What the guideline says about this decision and the patient's
+        // evidence behind it, in one fold (clinician feedback 2026-09-30: two
+        // folds, 「指引重點」 and each card's 「指引與依據」, read as clutter): the
+        // points in the page's language, each cited recommendation with its
+        // section, page, class and level, then the cards the point rests on.
+        // A clinician who knows the guidance decides from the row above and
+        // opens this only to check.
+        <details className="group/evidence rounded-md border border-border" data-testid="cdss-visit-detail-evidence">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0 flex-1 truncate text-foreground">{isEnglish ? 'Guideline points' : '指引重點'}</span>
-            <span className="shrink-0 font-normal">{[...new Set(point.guideline.references.map((reference) => reference.source))].join(isEnglish ? ', ' : '、')}</span>
-            <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/guide:rotate-180" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-foreground">{isEnglish ? 'Guideline and evidence' : '指引與依據'}</span>
+            <span className="min-w-0 truncate font-normal">
+              {point.guideline
+                ? [...new Set(point.guideline.references.map((reference) => reference.source))].join(isEnglish ? ', ' : '、')
+                : cards.map((recommendation) => recommendation.moduleName ?? recommendation.title).join(isEnglish ? ', ' : '、')}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/evidence:rotate-180" aria-hidden="true" />
           </summary>
-          <div className="space-y-2 border-t border-border px-3 pb-2.5 pt-2">
-            <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground" data-testid="cdss-visit-detail-guideline-points">
-              {point.guideline.points.map((line) => <li key={line}>{line}</li>)}
-            </ul>
-            <ol className="space-y-1.5" data-testid="cdss-visit-detail-guideline-references">
-              {point.guideline.references.map((reference) => (
-                // The whole quote: two lines of one section and page can open alike (DP-12's 「Intravenous iron supplementation…」).
-                <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className="text-[11px] leading-4 text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {reference.source} §{reference.section} · p.{reference.page}
-                    {reference.recommendation ? ` · Class ${reference.recommendation.class}, ${reference.recommendation.level}` : ''}
-                  </span>
-                  {isEnglish ? ': ' : '：'}
-                  <span lang="en">“{reference.quote}”</span>
-                </li>
-              ))}
-            </ol>
+          <div className="space-y-3 border-t border-border px-3 pb-2.5 pt-2">
+            {point.guideline ? (
+              <div className="space-y-2" data-testid="cdss-visit-detail-guideline">
+                <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground" data-testid="cdss-visit-detail-guideline-points">
+                  {point.guideline.points.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+                <ol className="space-y-1.5" data-testid="cdss-visit-detail-guideline-references">
+                  {point.guideline.references.map((reference) => (
+                    // The whole quote: two lines of one section and page can open alike (DP-12's 「Intravenous iron supplementation…」).
+                    <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className="text-[11px] leading-4 text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {reference.source} §{reference.section} · p.{reference.page}
+                        {reference.recommendation ? ` · Class ${reference.recommendation.class}, ${reference.recommendation.level}` : ''}
+                      </span>
+                      {isEnglish ? ': ' : '：'}
+                      <span lang="en">“{reference.quote}”</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+            {cards.map((recommendation) => (
+              <section
+                key={recommendation.id}
+                className={cn('space-y-1.5', point.guideline && 'border-t border-border pt-2.5')}
+                aria-label={recommendation.moduleName ?? recommendation.title}
+                data-testid={`cdss-visit-detail-module-${recommendation.id}`}
+              >
+                <p className="flex min-w-0 items-center gap-2 text-xs font-semibold text-foreground">
+                  {/* The card's own status, as the pack returned it. The row
+                      above reads the same module's visit decision, so the
+                      two agree; no host re-grade is applied on the map. */}
+                  <Badge className={cn('h-5 px-1.5 text-[11px]', statusStyle[recommendation.status])} data-module-status={recommendation.status}>
+                    <StatusIcon status={recommendation.status} />
+                    {statusLabel(recommendation.status, isEnglish)}
+                  </Badge>
+                  <span className="min-w-0 truncate">{recommendation.moduleName ?? recommendation.title}</span>
+                </p>
+                <div className="-mx-2" data-testid={`cdss-visit-detail-module-body-${recommendation.id}`}>
+                  {renderDetail(recommendation)}
+                </div>
+              </section>
+            ))}
           </div>
         </details>
-      ) : null}
-
-      {cards.length ? (
-        <div className="space-y-2 border-t border-border pt-2">
-          {cards.map((recommendation) => (
-            // The guideline and the patient's evidence behind the point, folded:
-            // a clinician who knows the guidance decides from the question and
-            // the buttons above, and opens this only when they want to check.
-            <details
-              key={recommendation.id}
-              className="group/evidence rounded-md border border-border"
-              data-testid={`cdss-visit-detail-module-${recommendation.id}`}
-            >
-              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                {/* The card's own status, as the pack returned it. The cell
-                    above reads the same module's visit decision, so the two
-                    agree; no host re-grade is applied on the map. */}
-                <Badge className={cn('h-5 px-1.5 text-[11px]', statusStyle[recommendation.status])} data-module-status={recommendation.status}>
-                  <StatusIcon status={recommendation.status} />
-                  {statusLabel(recommendation.status, isEnglish)}
-                </Badge>
-                <span className="min-w-0 flex-1 truncate text-foreground">{recommendation.moduleName ?? recommendation.title}</span>
-                <span className="shrink-0 font-normal">{isEnglish ? 'Guideline and evidence' : '指引與依據'}</span>
-                <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/evidence:rotate-180" aria-hidden="true" />
-              </summary>
-              <div className="border-t border-border px-1 pb-2 pt-2" data-testid={`cdss-visit-detail-module-body-${recommendation.id}`}>
-                {renderDetail(recommendation)}
-              </div>
-            </details>
-          ))}
-        </div>
-      ) : point.guideline || decidedWith ? null : (
+      ) : decidedWith ? null : (
         <p className="text-xs text-muted-foreground">
           {point.state === 'not-included'
             ? (isEnglish ? 'No module computes this decision point yet.' : '這個決策點還沒有對應的模組。')

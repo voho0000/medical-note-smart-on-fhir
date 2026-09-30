@@ -280,6 +280,17 @@ export function VisitDecisionScreen({
   const pillarDps = useMemo(() => [...(surfaces?.pillars?.dps ?? []), ...(surfaces?.pillars?.whenActive ?? []), ...(surfaces?.pillars?.followedBy?.dps ?? [])], [surfaces?.pillars])
   const isPillar = useCallback((point: DecisionPointView) => point.source === sourceOfPage && pillarDps.includes(point.dp), [pillarDps, sourceOfPage])
   const rowOfPoint = (point: DecisionPointView) => rows.find((candidate) => candidate.steps[0].point.dp === point.dp && candidate.steps[0].point.source === point.source)
+  // The row a pillar's box decides with: today's row where the pack queued
+  // it, else the point's own steps where it asks for a decision (a dose to
+  // confirm), else none.
+  const pillarRowOf = (point: DecisionPointView): QueueRow | undefined => {
+    const queued = rowOfPoint(point)
+    if (queued) return queued
+    if (point.actions.length === 0 || !DECISION_STATES.has(point.state)) return undefined
+    const steps = pointSteps(point, decisions, now)
+    const current = steps.find((step) => !step.decision)
+    return { key: visitDecisionKey(point), steps, ...(current ? { current } : {}), safety: point.state === 'safety' }
+  }
   const followDps = surfaces?.pillars?.followedBy?.dps ?? []
   const followPoints = followDps
     .map((dp) => model.points.find((point) => point.dp === dp && point.source === sourceOfPage))
@@ -320,6 +331,17 @@ export function VisitDecisionScreen({
     if (decisionOf(point)) return { headline: false, why: false }
     return point.headline ? { headline: true, why: false } : { headline: false, why: true }
   }
+  // The step whose buttons — or recorded decision — the line a card opens
+  // under already draws: that row's current step, else its last. The card
+  // leaves it out (clinician feedback 2026-09-30: 「光開始MRA按鈕就出現兩次」).
+  const stepAboveCard = (point: DecisionPointView): string | undefined => {
+    const key = visitDecisionKey(point)
+    if (!leadCardKeys.has(key)) return undefined
+    const row = isPillar(point)
+      ? pillarRowOf(point)
+      : rows.find((candidate) => visitDecisionKey((candidate.current ?? candidate.steps[candidate.steps.length - 1]).point) === key)
+    return row ? (row.current ?? row.steps[row.steps.length - 1]).key : undefined
+  }
   // A point another row decides (DP-08／DP-09 by DP-07's DOAC choice) opens
   // on that step — its record, or its choices once 改 has cleared it — and
   // not on its own 「等上一步」, which the step has overtaken (#196 review).
@@ -335,7 +357,7 @@ export function VisitDecisionScreen({
       point={openPoint}
       shownAbove={openDeciding ? { headline: true, why: true } : shownAbove(openPoint)}
       steps={openDeciding ? [openDeciding.step] : pointSteps(openPoint, decisions, now)}
-      {...(openDeciding ? { decidedWith: openDeciding.owner } : {})}
+      {...(openDeciding ? { decidedWith: openDeciding.owner } : { controlsAbove: stepAboveCard(openPoint) })}
       isEnglish={isEnglish}
       sourceOfPage={sourceOfPage}
       modules={modules}
@@ -362,15 +384,11 @@ export function VisitDecisionScreen({
   const basisOf = (point: DecisionPointView) => decisionBasis(point, modules, headedKeys, (date) => displayDate(date, now))
   const decideRow = onRecordDecision ? (step: QueueStep, action: VisitAction) => record(step.key, step.point, action, 'queue') : undefined
   const clearRow = onClearDecision ? (step: QueueStep) => clear(step.key) : undefined
-  // A pillar box decides in place: today's row where the pack queued it, else
-  // the point's own steps where it asks for a decision (a dose to confirm),
-  // else it just says where the pillar stands.
+  // A pillar box decides in place (see `pillarRowOf`), else it just says
+  // where the pillar stands.
   const pillarBox = (point: DecisionPointView) => {
     const queued = rowOfPoint(point)
-    const steps = queued ? undefined : pointSteps(point, decisions, now)
-    const row: QueueRow | undefined = queued ?? (point.actions.length > 0 && DECISION_STATES.has(point.state) && steps
-      ? { key: visitDecisionKey(point), steps, ...(steps.find((step) => !step.decision) ? { current: steps.find((step) => !step.decision)! } : {}), safety: point.state === 'safety' }
-      : undefined)
+    const row = pillarRowOf(point)
     return row ? (
       <QueueRowBox
         key={point.dp}
