@@ -442,7 +442,9 @@ describe.each([
         expect(dp06.querySelector('[data-book-box="DP-06"]')).toHaveTextContent('先查誘因')
         expect(dp06.querySelector('[data-book-question-group="為什麼現在？誘因"]')).toBeInTheDocument()
         fireEvent.click(within(dp06.querySelector<HTMLElement>('[data-book-question-group="為什麼現在？誘因"]')!).getAllByRole('button', { name: '有' })[3]!)
-        expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT] ?? {})['trigger-infection']).toBe('yes')
+        // Read as a plain record: the trigger ids are the pack's, newer than some consumers' types.
+        const stored = visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT] ?? {}) as Readonly<Record<string, string | undefined>>
+        expect(stored['trigger-infection']).toBe('yes')
       } finally {
         jest.useRealTimers()
       }
