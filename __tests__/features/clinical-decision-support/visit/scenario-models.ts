@@ -35,6 +35,35 @@ import type {
 /** The visit date every scenario was written against. */
 export const SCENARIO_NOW = new Date('2026-09-27T09:00:00+08:00')
 
+/** Every term HF DP-06 reads from the clinic examination: the four signs and hypoperfusion. */
+export const DP06_EXAM_TERMS = ['orthopnea', 'paroxysmal-nocturnal-dyspnea', 'jvp', 'rales', 'pitting-edema', 'hypoperfusion'] as const
+
+/**
+ * The examination in the room on the scenario's day, as the clinic-vitals
+ * store holds it: every DP-06 term looked for, those in `found` present.
+ */
+export function examToday(found: readonly string[] = []): ClinicVitals {
+  const modifiedAt = SCENARIO_NOW.toISOString()
+  return {
+    entries: {},
+    signAnswers: Object.fromEntries(DP06_EXAM_TERMS.map((term) => [term, { value: found.includes(term) ? 'present' : 'absent', modifiedAt }])),
+  }
+}
+
+/**
+ * Runs `body` on the scenario's day: DP-06 reads today's examination only, and
+ * an answer the stores stamp with the real clock would read as another day's.
+ */
+export function atScenarioDay<T>(body: () => T): T {
+  jest.useFakeTimers({ doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame'] })
+  jest.setSystemTime(new Date('2026-09-27T10:00:00+08:00'))
+  try {
+    return body()
+  } finally {
+    jest.useRealTimers()
+  }
+}
+
 const BUNDLE_DIR = path.join(process.cwd(), 'app', 'dev', 'cdss-scenarios', 'bundles')
 
 export type ScenarioId =

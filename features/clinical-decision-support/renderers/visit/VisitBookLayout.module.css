@@ -758,3 +758,33 @@
 @media (pointer: coarse) { .change { min-height: 44px; } }
 .decidedCheck { margin: 0; font-size: 13px; color: var(--ink-3); }
 .chainDone { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); }
+
+/* HF DP-06 (owner request 2026-09-30, the prototype's 「現在是乾是濕？」):
+   the signs beside the 2×2 they place the patient in, the triggers under them. */
+.profileSplit { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@container (max-width: 640px) { .profileSplit { grid-template-columns: minmax(0, 1fr); } }
+.profile { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+.profileGrid { width: 100%; border-collapse: separate; border-spacing: 6px; font-size: 13px; }
+.profileGrid thead th, .profileGrid tbody th { font-weight: 400; color: var(--ink-3); text-align: center; }
+.profileGrid tbody th { text-align: left; width: 40px; }
+.profileGrid th[data-current] { color: var(--blue-ink); font-weight: 700; }
+.profileCell { padding: 10px 12px; border-radius: 8px; line-height: 1.5; border: 1px solid var(--line); background: var(--panel); color: var(--ink-4); }
+.profileCell[data-current] { border: 2px solid var(--blue); background: var(--blue-bg); color: var(--blue-ink); }
+.profileReading { margin: 0; font-size: 14px; font-weight: 700; color: var(--blue-ink); }
+.profileNote { margin: 0; font-size: 12px; color: var(--ink-4); }
+.groupBox { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 4px 16px 12px; }
+.panelMissing { margin: 0; font-size: 13px; color: var(--warn-ink); }
+/* 全螢幕／回到面板: the switch between the panel and the whole window. */
+.windowToggle {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.windowToggle:hover { background: var(--thead); }
+.windowToggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

@@ -2446,8 +2446,17 @@ export function ClinicalDecisionSupportView({
             const next = onAnswerPhenotype ? phenotypeAnswerForInput(input, phenotypeAnswer, new Date()) : undefined
             if (next) onAnswerPhenotype?.(next)
           } : undefined}
-          // A point's own questions (AF DP-08's valves) are AF answers.
-          {...(onAfAnswer ? { onPointAnswer: (answers: string, id: string, value: boolean | undefined) => { if (answers === 'af-clinical') onAfAnswer(id, value) } } : {})}
+          // A point's own questions go back to the answer set the pack names:
+          // AF DP-08's valves are AF answers, HF DP-06's triggers today's
+          // visit answers, its signs the clinic examination (each term of the
+          // row, so the congestion table and the HFpEF criteria read them too).
+          onPointAnswer={(answers: string, id: string, value: boolean | undefined, terms?: readonly string[]) => {
+            if (answers === 'af-clinical') onAfAnswer?.(id, value)
+            else if (answers === 'visit') onVisitAnswer?.(id as VisitAsk['id'], value === undefined ? null : value ? 'yes' : 'no')
+            else if (answers === 'clinic-exam' && terms?.length) {
+              onSaveClinicVitals?.({ signAnswers: Object.fromEntries(terms.map((term) => [term, value === undefined ? null : value ? 'present' : 'absent'])) })
+            }
+          }}
           modules={visitModules}
           unmappedModules={unmappedVisitModules}
           renderDetail={(recommendation) => (
