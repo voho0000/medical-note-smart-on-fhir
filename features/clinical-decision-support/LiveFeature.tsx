@@ -318,6 +318,8 @@ export default function LiveClinicalDecisionSupportFeature({
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
   // `?visit=book` opens the handbook page whatever layout this browser chose.
   const [urlBookMode] = useState(isVisitBookMode)
+  // 決策地圖 v2 opened over the whole window from the panel; a new page load opens it in the panel.
+  const [bookFullWindow, setBookFullWindow] = useState(false)
   const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
@@ -821,7 +823,10 @@ export default function LiveClinicalDecisionSupportFeature({
       {/* The pocket-handbook page. Opened by `?visit=book` it draws its own
           header over the whole window, and the disease tabs go into it; chosen
           as 決策地圖 v2 it stays in this panel, under the header above. */}
-      <VisitBookChromeContext.Provider value={!bookMode ? null : !urlBookMode ? { inline: true } : {
+      <VisitBookChromeContext.Provider value={!bookMode ? null : !urlBookMode && !bookFullWindow ? {
+        inline: true,
+        onExpand: () => setBookFullWindow(true),
+      } : {
         tabs: (
           <DiseaseSwitcher
             locale={cdssLocale}
@@ -831,6 +836,8 @@ export default function LiveClinicalDecisionSupportFeature({
             onSelect={setRequestedPackId}
           />
         ),
+        // Opened from the panel, it goes back there; opened by `?visit=book`, it leaves by its link.
+        ...(urlBookMode ? {} : { onCollapse: () => setBookFullWindow(false) }),
       }}>
       <ClinicalDecisionSupportView
         calculatorAutofill={autofill}

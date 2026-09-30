@@ -14,9 +14,9 @@
  * `measuredOn`. A weight measured today and an NYHA grade carried over from
  * August are two different statements, and a screen that dated them alike made
  * the older one look like today's examination. `measuredOn` is when the value
- * was obtained; `modifiedAt` is when this browser last recorded a change —
- * storing the same value again leaves it alone, so 「最後修改」 means what it
- * says.
+ * was obtained, and a sign's `examinedOn` the day it was looked for;
+ * `modifiedAt` is when this browser last recorded a change — storing the same
+ * value again leaves it alone, so 「最後修改」 means what it says.
  *
  * Kept per patient, encrypted under the tab-session key (see
  * `encrypted-answer-cache.service`), so a value survives a reload of this tab, never
@@ -105,6 +105,19 @@ export interface AnsweredField<T> {
   modifiedAt: string
 }
 
+/**
+ * One sign, with the day it was examined as well as the moment it changed.
+ *
+ * The two differ. Finding no oedema again the next day is a new examination
+ * with an unchanged answer: `examinedOn` moves to the new day, `modifiedAt`
+ * stays on the day the answer last changed. A rule that asks for today's
+ * examination reads the first; 「最後修改」 reads the second.
+ */
+export interface ExaminedSign extends AnsweredField<SignAnswerValue> {
+  /** The day the sign was last looked for, as YYYY-MM-DD in this browser's calendar. */
+  examinedOn: string
+}
+
 export interface ClinicVitals {
   hfFollowUp?: HfFollowUpHistory
   entries: Readonly<Partial<Record<ClinicVitalsEntryKey, MeasuredEntry>>>
@@ -113,8 +126,10 @@ export interface ClinicVitals {
   /**
    * One answer per sign, keyed by the canonical term the evidence table's rows
    * are matched on. 「有」, 「無」, 「未評估」 — or absent, which is 「沒問」.
+   * The signs held are one examination: a sign answered on a later day starts
+   * a new one (see `mergeClinicVitals`).
    */
-  signAnswers: Readonly<Record<string, AnsweredField<SignAnswerValue>>>
+  signAnswers: Readonly<Record<string, ExaminedSign>>
   /** The compensation state judged in the room, where one was judged. */
   compensationStatus?: AnsweredField<CompensationAnswerValue>
 }
@@ -145,6 +160,17 @@ export function todayIsoDate(now: Date = new Date()): string {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${now.getFullYear()}-${month}-${day}`
+}
+
+/**
+ * The browser-calendar day of an ISO timestamp, or '' when it does not parse.
+ *
+ * Not `iso.slice(0, 10)`: a timestamp is stored in UTC, and in Taipei anything
+ * before 08:00 would be dated the day before.
+ */
+export function calendarDayOf(iso: string): string {
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : todayIsoDate(at)
 }
 
 function isFinitePositive(value: unknown): value is number {
@@ -185,8 +211,20 @@ export function mergeClinicVitals(
     changed = true
   }
 
-  const signAnswers: Record<string, AnsweredField<SignAnswerValue>> = { ...base.signAnswers }
-  for (const [term, value] of Object.entries(patch.signAnswers ?? {})) {
+  const examinedOn = todayIsoDate(now)
+  const signPatch = Object.entries(patch.signAnswers ?? {})
+  const signAnswers: Record<string, ExaminedSign> = { ...base.signAnswers }
+  // The signs held are one examination. A sign answered on a later day starts
+  // the next one, and what an earlier day found goes back to 「沒問」 rather
+  // than standing beside today's answers as if it had been looked for today.
+  if (signPatch.some(([, value]) => value !== null && value !== undefined)) {
+    for (const [term, answer] of Object.entries(signAnswers)) {
+      if (answer.examinedOn >= examinedOn) continue
+      delete signAnswers[term]
+      changed = true
+    }
+  }
+  for (const [term, value] of signPatch) {
     if (value === null || value === undefined) {
       if (signAnswers[term]) {
         delete signAnswers[term]
@@ -194,8 +232,15 @@ export function mergeClinicVitals(
       }
       continue
     }
-    if (signAnswers[term]?.value === value) continue
-    signAnswers[term] = { value, modifiedAt }
+    const current = signAnswers[term]
+    if (current?.value === value && current.examinedOn === examinedOn) continue
+    // Answering the same again re-dates the examination, not the answer.
+    const previous = base.signAnswers[term]
+    signAnswers[term] = {
+      value,
+      modifiedAt: previous?.value === value ? previous.modifiedAt : modifiedAt,
+      examinedOn,
+    }
     changed = true
   }
 
@@ -328,10 +373,19 @@ function toClinicVitals(parsed: unknown): ClinicVitals {
         modifiedAt: typeof item.modifiedAt === 'string' ? item.modifiedAt : '',
       }
     }
-    const signAnswers: Record<string, AnsweredField<SignAnswerValue>> = {}
+    const signAnswers: Record<string, ExaminedSign> = {}
     for (const [term, value] of Object.entries((record.signAnswers ?? {}) as Record<string, unknown>)) {
       const answer = toAnsweredField(value, ['present', 'absent', NOT_ASSESSED] as const)
-      if (answer) signAnswers[term] = answer
+      if (!answer) continue
+      // A record kept before signs carried their own examination day was
+      // examined when it was last changed; that is the most it can say.
+      const examinedOn = (value as Record<string, unknown>).examinedOn
+      signAnswers[term] = {
+        ...answer,
+        examinedOn: typeof examinedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(examinedOn)
+          ? examinedOn
+          : calendarDayOf(answer.modifiedAt),
+      }
     }
     const nyhaClass = toAnsweredField(record.nyhaClass, ['I', 'II', 'III', 'IV', NOT_ASSESSED] as const)
     const compensationStatus = toAnsweredField(

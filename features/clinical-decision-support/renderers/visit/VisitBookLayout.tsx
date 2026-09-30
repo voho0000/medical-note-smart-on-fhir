@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useContext, useId, useState, type ReactNode } from 'react'
+import { Fragment, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Noto_Serif_TC } from 'next/font/google'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -10,6 +10,7 @@ import {
   criteriaOf,
   sourceTag,
   type DecisionBasisItem,
+  type DecisionCriteriaGroupView,
   type QueueRow,
   type QueueStep,
   type VisitPlanModel,
@@ -279,6 +280,17 @@ function criterionOf(raw: unknown): CriterionView | undefined {
   return { label, ...(typeof value === 'string' ? { value } : {}), ...(typeof met === 'boolean' ? { met } : {}) }
 }
 
+/**
+ * The criteria a row draws in its 指引怎麼說 cell: a dose rule beside the
+ * options it chooses between — DP-14's apixaban reduction, as the prototype
+ * draws it. Any other point's criteria (DP-04's triggers, a pillar's start
+ * conditions, I NEED HELP) are its 看依據, and the cell keeps the guideline's
+ * line, so the table reads as the handbook's.
+ */
+function inlineCriteriaOf(point: object | undefined): DecisionCriteriaGroupView[] {
+  return optionTableOf(point) ? criteriaOf(point) : []
+}
+
 /** Every option side by side (the DOACs at this patient's dose), read defensively like `changesOf`. */
 function optionTableOf(point: object | undefined): { title: string; rows: OptionRowView[] } | undefined {
   const raw = (point as { optionTable?: unknown } | undefined)?.optionTable
@@ -338,7 +350,7 @@ function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
 interface QuestionsView {
   title: string
   answers: string
-  rows: { id: string; label: string; answer?: boolean; record?: boolean; recordHolds?: boolean }[]
+  rows: { id: string; label: string; answer?: boolean; record?: boolean; recordHolds?: boolean; terms?: string[] }[]
   bulkNone?: boolean
   labels?: { yes: string; no: string }
   note?: string
@@ -346,19 +358,35 @@ interface QuestionsView {
 
 /** What a point asks before it decides (AF DP-08's valves), read defensively like `changesOf`. */
 function questionsOf(point: object | undefined): QuestionsView | undefined {
-  const raw = (point as { questions?: unknown } | undefined)?.questions
+  return parseQuestions((point as { questions?: unknown } | undefined)?.questions)
+}
+
+/** The further question groups a point asks (HF DP-06's 誘因), each read as `questionsOf` reads one. */
+export function questionGroupsOf(point: object | undefined): QuestionsView[] {
+  const raw = (point as { questionGroups?: unknown } | undefined)?.questionGroups
+  return Array.isArray(raw) ? raw.flatMap((group) => parseQuestions(group) ?? []) : []
+}
+
+/** The row a point's questions hold under an id, in `questions` or a further group — for its `terms`. */
+export function questionRowOf(point: object, id: string): QuestionsView['rows'][number] | undefined {
+  return [questionsOf(point), ...questionGroupsOf(point)].flatMap((group) => group?.rows ?? []).find((row) => row.id === id)
+}
+
+function parseQuestions(raw: unknown): QuestionsView | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const { title, answers, rows, bulkNone, note, labels } = raw as Record<string, unknown>
   if (typeof title !== 'string' || typeof answers !== 'string' || !Array.isArray(rows)) return undefined
   const parsed = rows.flatMap((row): QuestionsView['rows'] => {
-    const { id, label, answer, record, recordHolds } = (row ?? {}) as Record<string, unknown>
+    const { id, label, answer, record, recordHolds, terms } = (row ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof label !== 'string') return []
+    const termList = Array.isArray(terms) ? terms.filter((term): term is string => typeof term === 'string') : []
     return [{
       id,
       label,
       ...(typeof answer === 'boolean' ? { answer } : {}),
       ...(typeof record === 'boolean' ? { record } : {}),
       ...(recordHolds === true ? { recordHolds: true } : {}),
+      ...(termList.length ? { terms: termList } : {}),
     }]
   })
   if (!parsed.length) return undefined
@@ -371,6 +399,91 @@ function questionsOf(point: object | undefined): QuestionsView | undefined {
     ...(typeof yes === 'string' && typeof no === 'string' ? { labels: { yes, no } } : {}),
     ...(typeof note === 'string' ? { note } : {}),
   }
+}
+
+export interface ProfileGridView {
+  title: string
+  columns: { id: string; label: string }[]
+  rows: { id: string; label: string }[]
+  cells: { row: string; column: string; label: string; action: string }[]
+  current?: { row?: string; column?: string }
+  reading: string
+  note?: string
+}
+
+/** The two-axis profile a point places the patient in (HF DP-06's 乾濕 by 冷暖), read defensively. */
+export function profileGridOf(point: object | undefined): ProfileGridView | undefined {
+  const raw = (point as { profileGrid?: unknown } | undefined)?.profileGrid
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, columns, rows, cells, current, reading, note } = raw as Record<string, unknown>
+  const axis = (value: unknown) => (Array.isArray(value)
+    ? value.flatMap((item) => {
+      const { id, label } = (item ?? {}) as Record<string, unknown>
+      return typeof id === 'string' && typeof label === 'string' ? [{ id, label }] : []
+    })
+    : [])
+  const cellList = Array.isArray(cells)
+    ? cells.flatMap((cell) => {
+      const { row, column, label, action } = (cell ?? {}) as Record<string, unknown>
+      return typeof row === 'string' && typeof column === 'string' && typeof label === 'string' && typeof action === 'string'
+        ? [{ row, column, label, action }]
+        : []
+    })
+    : []
+  if (typeof title !== 'string' || typeof reading !== 'string' || !cellList.length) return undefined
+  const { row, column } = (current ?? {}) as Record<string, unknown>
+  return {
+    title,
+    columns: axis(columns),
+    rows: axis(rows),
+    cells: cellList,
+    ...(typeof row === 'string' || typeof column === 'string'
+      ? { current: { ...(typeof row === 'string' ? { row } : {}), ...(typeof column === 'string' ? { column } : {}) } }
+      : {}),
+    reading,
+    ...(typeof note === 'string' ? { note } : {}),
+  }
+}
+
+/**
+ * The prototype's 2×2 (乾／濕 by 暖／冷): each cell with what it means today,
+ * the one the answers settle drawn as the patient's, and what that means.
+ */
+function ProfileGrid({ grid }: { grid: ProfileGridView }) {
+  const cell = (row: string, column: string) => grid.cells.find((item) => item.row === row && item.column === column)
+  return (
+    <div className={styles.profile} data-testid="cdss-book-profile-grid">
+      <table className={styles.profileGrid} aria-label={grid.title}>
+        <thead>
+          <tr>
+            <td />
+            {grid.columns.map((column) => (
+              <th key={column.id} scope="col" data-current={grid.current?.column === column.id || undefined}>{column.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {grid.rows.map((row) => (
+            <tr key={row.id}>
+              <th scope="row" data-current={grid.current?.row === row.id || undefined}>{row.label}</th>
+              {grid.columns.map((column) => {
+                const item = cell(row.id, column.id)
+                const here = grid.current?.row === row.id && grid.current?.column === column.id
+                return (
+                  <td key={column.id} className={styles.profileCell} data-current={here || undefined} data-book-profile-cell={`${row.id}-${column.id}`}>
+                    {item ? <><b>{item.label}</b><br />{item.action}</> : null}
+                    {here ? <span className="sr-only">（本病人）</span> : null}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className={styles.profileReading} data-testid="cdss-book-profile-reading">{grid.reading}</p>
+      {grid.note ? <p className={styles.profileNote}>{grid.note}</p> : null}
+    </div>
+  )
 }
 
 interface StartDoseRowView { name: string; dose: string; role: string; when: string; proposed?: boolean }
@@ -723,6 +836,33 @@ export function VisitBookLayout({
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const [mapOpen, setMapOpen] = useState(true)
+  // Over the whole window, Esc returns to the panel, as a dialog would.
+  const onCollapse = chrome?.onCollapse
+  useEffect(() => {
+    if (!onCollapse) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) onCollapse() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCollapse])
+  // Over the whole window the page is all there is: what it covers is out of
+  // reach — Tab no longer walks into the panel and the header underneath, and
+  // a screen reader no longer reads them — until it is back in the panel.
+  const bookRef = useRef<HTMLDivElement>(null)
+  const overWindow = !chrome?.inline
+  useEffect(() => {
+    const book = bookRef.current
+    if (!overWindow || !book) return
+    const covered: Element[] = []
+    for (let node: Element = book; node.parentElement && node !== document.body; node = node.parentElement) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        // A live region (the toasts, the route announcer) still has to be heard.
+        if (sibling === node || sibling.hasAttribute('inert') || sibling.matches('script, style, template, [aria-live], next-route-announcer')) continue
+        sibling.setAttribute('inert', '')
+        covered.push(sibling)
+      }
+    }
+    return () => covered.forEach((element) => element.removeAttribute('inert'))
+  }, [overWindow])
   // A point's own questions under its row or line — in place of the page's older question folds there.
   const pointQuestions = (point: DecisionPointView, className: string) => {
     const questions = questionsOf(point)
@@ -810,6 +950,9 @@ export function VisitBookLayout({
     // Not a second time where the block already draws it.
     const table = drawn.table ? undefined : optionTableOf(shown) ?? optionTableOf(head.next) ?? optionTableOf(head)
     const startDoses = startDosesOf(shown) ?? startDosesOf(head)
+    const checklist = shown.checklist ?? head.checklist ?? []
+    // What the record lacks, where no checklist line already says it.
+    const missing = (shown.needsData ?? []).filter((need) => !checklist.some((item) => !item.present && item.label === need))
     return (
       <div className={styles.panel} data-testid="cdss-book-reasoning" data-dp={head.dp}>
         <div className={styles.panelHead}>
@@ -826,6 +969,26 @@ export function VisitBookLayout({
               ))}
             </ul>
           </div>
+        ) : null}
+        {checklist.length ? (
+          // The point's items one by one (DP-02's baseline, AF DP-05's work-up): each with what the record holds.
+          <div data-testid="cdss-book-checklist">
+            <span className={styles.panelLabel}>{isEnglish ? 'Item by item (record)' : '逐項（紀錄）'}</span>
+            <ul className={styles.critList}>
+              {checklist.map((item) => (
+                <li key={item.key} className={item.present ? undefined : styles.unknown}>
+                  <span className={`${styles.critSymbol} ${item.present ? styles.met : styles.unknown}`} aria-hidden="true">{item.present ? '✓' : '？'}</span>
+                  <span className="sr-only">{item.present ? (isEnglish ? 'on record: ' : '紀錄有：') : (isEnglish ? 'not on record: ' : '紀錄無：')}</span>
+                  {item.label}
+                  {item.value ? <>　<b>{item.value}</b></> : item.present ? null : <>　{isEnglish ? 'not in the record' : '紀錄未見'}</>}
+                  {item.date ? <> <span className={styles.date}>{item.date}</span></> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {missing.length ? (
+          <p className={styles.panelMissing} data-testid="cdss-book-needs-data">{isEnglish ? 'Missing: ' : '缺：'}{missing.join(isEnglish ? ', ' : '、')}</p>
         ) : null}
         {nextOptions.length ? (
           <div>
@@ -935,7 +1098,7 @@ export function VisitBookLayout({
     const current = row.current
     const shown = (current ?? row.steps[row.steps.length - 1]).point
     const decided = row.steps.filter((step) => step.decision)
-    const criteria = criteriaOf(shown)
+    const criteria = inlineCriteriaOf(shown)
     const basis = basisOf(shown)
     const guide = point.guideline?.points[0]
     const cite = citationOf(point)
@@ -1027,7 +1190,7 @@ export function VisitBookLayout({
     const mark = marks.get(point)!
     const absentHere = ABSENT_STATES.has(point.state)
     const basis = basisOf(point)
-    const criteria = criteriaOf(point)
+    const criteria = inlineCriteriaOf(point)
     const guide = point.guideline?.points[0]
     const cite = citationOf(point)
     const line = <>{point.headline ?? point.label}{point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}</>
@@ -1191,6 +1354,8 @@ export function VisitBookLayout({
     const score = scoreTableOf(point)
     const questions = questionsOf(point)
     const table = optionTableOf(point)
+    const grid = profileGridOf(point)
+    const groups = questionGroupsOf(point)
     const title = score?.title ?? table?.title ?? questions?.title ?? ''
     const part = section.pointLabels?.[point.dp] ?? point.label
     const answer: AnswerQuestion | undefined = onAnswerQuestion && questions
@@ -1215,7 +1380,22 @@ export function VisitBookLayout({
           {entry.kind === 'row' ? null : reasoningButton(point)}
         </div>
         {score ? <ScoreTable table={score} isEnglish={isEnglish} /> : null}
-        {questions ? <PointQuestions questions={questions} isEnglish={isEnglish} titled={!questionsLead} {...(answer ? { onAnswer: answer } : {})} /> : null}
+        {questions && grid ? (
+          <div className={styles.profileSplit}>
+            <PointQuestions questions={questions} isEnglish={isEnglish} titled={!questionsLead} {...(answer ? { onAnswer: answer } : {})} />
+            <ProfileGrid grid={grid} />
+          </div>
+        ) : questions ? <PointQuestions questions={questions} isEnglish={isEnglish} titled={!questionsLead} {...(answer ? { onAnswer: answer } : {})} /> : null}
+        {groups.map((group) => {
+          const answerGroup: AnswerQuestion | undefined = onAnswerQuestion
+            ? (id, value) => onAnswerQuestion(point, group.answers, id, value)
+            : undefined
+          return (
+            <div key={group.title} className={styles.groupBox} data-book-question-group={group.title}>
+              <PointQuestions questions={group} isEnglish={isEnglish} titled {...(answerGroup ? { onAnswer: answerGroup } : {})} />
+            </div>
+          )
+        })}
         {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
         {withDecision ? blockDecision(point, entry) : null}
       </div>
@@ -1449,7 +1629,7 @@ export function VisitBookLayout({
   const chaptersShown = numbered.filter(({ section }) => !section.plan)
 
   return (
-    <div className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
+    <div ref={bookRef} className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
       <header className={styles.head}>
         <div className={styles.headInner}>
           {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
@@ -1483,7 +1663,17 @@ export function VisitBookLayout({
                   ? MARK_WORDS.wait[isEnglish ? 'en' : 'zh']
                   : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
-          {exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
+          {/* One button either way (the shared key): pressed from the keyboard,
+              focus stays on it as the page moves between panel and window. */}
+          {chrome?.onExpand ? (
+            <button key="window-toggle" type="button" className={styles.windowToggle} onClick={chrome.onExpand} data-testid="cdss-book-expand">
+              {isEnglish ? 'Full window' : '全螢幕'}
+            </button>
+          ) : chrome?.onCollapse ? (
+            <button key="window-toggle" type="button" className={styles.windowToggle} onClick={chrome.onCollapse} data-testid="cdss-book-collapse">
+              {isEnglish ? 'Back to the panel' : '回到面板'}
+            </button>
+          ) : exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
         </div>
       </header>
 
