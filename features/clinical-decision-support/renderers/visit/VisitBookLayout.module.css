@@ -40,6 +40,7 @@
   --red: #B42318;
   --panel: #FAF8F3;
   --panel-line: #E8E3D6;
+  --box-line: #E8DFC9;
   --serif: var(--book-serif), 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
   --sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
@@ -90,6 +91,7 @@
   --red: #E0776B;
   --panel: #2A2824;
   --panel-line: #3A372F;
+  --box-line: #4A3F28;
 }
 
 /* ------------------------------- header ------------------------------- */
@@ -525,21 +527,61 @@
 .classOff { color: var(--ink-6); }
 .classAlternatives { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* The every-visit questions (DP-03): one row each, a segmented control. */
-.asks { display: flex; flex-direction: column; gap: 8px; }
-.askRow { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 12px; }
-.askLabel { font-size: 14px; font-weight: 700; }
-.askGroup {
+/* A point drawn as a block (AF 抗凝): its part of the question, what it decides on, today's box. */
+.blocks { display: flex; flex-direction: column; gap: 22px; }
+.blockPair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.block { display: flex; flex-direction: column; gap: 6px; min-width: 0; scroll-margin-top: 80px; outline: none; }
+.block:focus-visible { box-shadow: 0 0 0 2px var(--blue); border-radius: 4px; }
+.blockHead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-bottom: 2px; }
+.blockTitle { font-weight: 700; }
+.blockNote { margin: 0; font-size: 13px; color: var(--ink-3); }
+@container (max-width: 760px) {
+  .blockPair { grid-template-columns: minmax(0, 1fr); }
+}
+
+.scoreTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.scoreTable td { padding: 5px 8px; border-top: 1px solid var(--line-soft); vertical-align: baseline; }
+.scoreTable tr:not([data-met]):not(.scoreTotal) { color: var(--ink-4); }
+.scoreMark { width: 22px; }
+.scoreTable tr[data-met] .scoreMark { color: var(--green); }
+.scorePoints { text-align: right; font-variant-numeric: tabular-nums; }
+.scoreEvidence { font-size: 13px; color: var(--ink-3); }
+.scoreTable tr:not([data-met]) .scoreEvidence { color: inherit; }
+.scoreTotal td { padding: 6px 8px; border-top: 2px solid var(--ink); font-weight: 700; }
+.scoreVerdict { font-size: 13px; color: var(--green); }
+.scorePending { font-size: 13px; color: var(--warn-ink); }
+
+.bulkNone {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--btn-line);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.bulkNone:hover { background: var(--thead); }
+.bulkNone:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.bulkNone[aria-pressed='true'] { border-color: var(--blue); background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
+@media (pointer: coarse) { .bulkNone { min-height: 44px; } }
+
+.questions { display: flex; flex-direction: column; }
+.questionsHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0 4px; }
+.questionsTitle { font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.questionRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-faint); font-size: 14px; }
+.questionGroup, .askGroup {
   display: inline-flex;
+  flex-shrink: 0;
   width: fit-content;
   border: 1px solid var(--btn-line);
   border-radius: 8px;
   overflow: hidden;
   background: var(--sheet);
 }
-.askGroup > button {
-  min-height: 40px;
-  min-width: 56px;
+.questionGroup > button, .askGroup > button {
+  min-height: 44px;
+  min-width: 52px;
   padding: 0 12px;
   border: 0;
   border-right: 1px solid var(--btn-line);
@@ -548,13 +590,45 @@
   font-size: 14px;
   cursor: pointer;
 }
-.askGroup > button:last-child { border-right: 0; }
-.askGroup > button:hover { background: var(--thead); }
-.askGroup > button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-.askGroup > button[aria-pressed='true'] { background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
+.questionGroup > button:last-child, .askGroup > button:last-child { border-right: 0; }
+.questionGroup > button:hover, .askGroup > button:hover { background: var(--thead); }
+.questionGroup > button:focus-visible, .askGroup > button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.questionGroup > button[aria-pressed='true'], .askGroup > button[aria-pressed='true'] { background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
+.questionGroup > button:disabled, .askGroup > button:disabled { cursor: default; opacity: 0.6; }
+.questionsNote { margin: 6px 0 0; font-size: 13px; color: var(--ink-3); }
+
+.doseTable { width: 100%; min-width: 34rem; border-collapse: collapse; font-size: 14px; }
+.doseTable thead tr { background: var(--thead); text-align: left; }
+.doseTable th { padding: 8px 10px; text-align: left; }
+.doseTable th:first-child, .doseTable th:nth-child(2) { width: 17%; }
+.doseTable th:last-child { width: 20%; }
+.doseTable td { padding: 10px; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+.doseTable tbody tr:last-child td { border-bottom: 0; }
+.doseTable tr[data-current] { background: var(--row-act); }
+.doseCurrent { font-weight: 700; color: var(--blue-ink); }
+
+/* Today's decision under a block. */
+.box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--box-line);
+  border-radius: 10px;
+  background: var(--row-act);
+}
+.box[data-tone='safety'] { background: var(--row-safety); }
+.box > * { min-width: 0; }
+.boxQuestion { margin: 0; font-weight: 700; }
+.boxWide { flex-basis: 100%; }
+
+/* The every-visit questions (DP-03): one row each, a segmented control. */
+.asks { display: flex; flex-direction: column; gap: 8px; }
+.askRow { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 12px; }
+.askLabel { font-size: 14px; font-weight: 700; }
 .askGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
-.askGroup > button:disabled { cursor: default; opacity: 0.6; }
-@media (pointer: coarse) { .askGroup > button { min-height: 44px; } }
 .askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
 
 /* --------------------------------- plan -------------------------------- */

@@ -115,7 +115,7 @@ describe('the pocket-handbook layout', () => {
     expect(within(panel).getByTestId('cdss-book-changes-if')).toHaveTextContent('體重 >60 kg → apixaban 5 mg bid（3 項中 1 項）')
     // Every DOAC side by side at this patient's dose, the prescribed one marked.
     const table = within(panel).getByTestId('cdss-book-option-table')
-    expect(table).toHaveTextContent('各 DOAC 在這位病人（CrCl 32）')
+    expect(table).toHaveTextContent('本病人的 DOAC 劑量（CrCl 32 · 80 歲 · 58 kg · Cr 1.3）')
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows.map((row) => row.textContent)).toEqual([
       'apixaban ← 現用5 mg bid2.5 mg bid年齡 ≥80（80 歲）、體重 ≤60 kg（58 kg）',
@@ -146,12 +146,17 @@ describe('the pocket-handbook layout', () => {
     expect(within(entry('DP-15')).queryByRole('button', { name: /看依據/ })).toBeNull()
   })
 
-  it('records a chain on its row and marks it settled in the map (P3 DP-07)', () => {
+  it('records a chain in its box and marks it settled in the map (P3 DP-07)', () => {
     render(<BookPage id="p3-new-af" page="af" />)
-    const primary = () => entry('DP-07').querySelector<HTMLButtonElement>('[data-visit-primary]')!
+    // DP-07 sits beside DP-08; its decision spans the page under the pair.
+    const box = () => document.querySelector<HTMLElement>('[data-book-box="DP-07"]')!
+    const primary = () => box().querySelector<HTMLButtonElement>('[data-visit-primary]')!
+    expect(box()).toHaveTextContent('今天：CHA₂DS₂-VA 4：開始抗凝？')
     expect(primary()).toHaveTextContent('開始抗凝')
     fireEvent.click(primary())
-    expect(entry('DP-07')).toHaveTextContent('選 DOAC')
+    expect(box()).toHaveTextContent('選 DOAC')
+    // Choosing the DOAC, every agent at this patient's dose above the buttons.
+    expect(within(box()).getByTestId('cdss-book-dose-table')).toHaveTextContent('rivaroxaban20 mg qd')
     fireEvent.click(primary())
     expect(mapLine('DP-07')).toHaveAttribute('data-book-mark', 'done')
     expect(screen.getByTestId('cdss-book-end')).toHaveTextContent('apixaban 5 mg bid')
@@ -210,5 +215,55 @@ describe('the pocket-handbook layout', () => {
     fireEvent.click(within(asks).getByRole('button', { name: '穩定' }))
     expect(within(asks).getByRole('button', { name: '穩定' })).toHaveAttribute('aria-pressed', 'true')
     expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT]!)['dyspnoea-trend']).toBe('stable')
+  })
+
+  describe('the AF anticoagulation chapter as the prototype draws it (P9)', () => {
+    it('要不要: CHA₂DS₂-VA item by item beside 用哪個: the valves, and 多少: every DOAC at its dose', () => {
+      render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+      const whether = entry('DP-07')
+      expect(whether).toHaveTextContent('要不要：CHA₂DS₂-VA')
+      const score = within(whether).getByTestId('cdss-book-score')
+      expect(within(score).getAllByRole('row').map((row) => row.textContent)).toEqual([
+        '✓符合C 心衰竭1I50.32',
+        '✓符合H 高血壓1I10',
+        '✓符合A₂ 年齡 ≥75280 歲',
+        '✗紀錄無D 糖尿病1紀錄無',
+        '✗紀錄無S₂ 中風／TIA／栓塞2紀錄無',
+        '✗紀錄無V 血管疾病1紀錄無',
+        '合計4≥2 建議抗凝 · 已在用',
+      ])
+      const which = entry('DP-08')
+      expect(which).toHaveTextContent('用哪個：DOAC 前先排除')
+      expect(which).toHaveTextContent('紀錄無 Z95.2、I05 代碼；未排除，請確認。')
+      const howMuch = entry('DP-09')
+      expect(howMuch).toHaveTextContent('多少：本病人的 DOAC 劑量（CrCl 32 · 80 歲 · 58 kg · Cr 1.3）')
+      const dose = within(howMuch).getByTestId('cdss-book-dose-table')
+      expect(within(dose).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['藥', '標準', '減量條件（本病人）', '本病人劑量'])
+      expect(within(dose).getAllByRole('row')[1]).toHaveTextContent('apixaban ← 現用5 mg bid3 項中 ≥2：✓ 年齡 ≥80（80 歲） · ✓ 體重 ≤60 kg（58 kg） · ✗ Cr ≥1.5 mg/dL（1.3 mg/dL）2.5 mg bid')
+      // Today's decision under it, 看依據 beside the buttons, without the table twice.
+      expect(within(howMuch).getByText('今天：apixaban 5 → 2.5 mg bid？')).toBeInTheDocument()
+      fireEvent.click(within(howMuch).getByRole('button', { name: /看依據/ }))
+      expect(within(howMuch).getAllByTestId('cdss-book-dose-table')).toHaveLength(1)
+      expect(within(howMuch).queryByTestId('cdss-book-option-table')).toBeNull()
+    })
+
+    it('the valves are answered in place, 全部皆無 at once, and pressed again taken back', () => {
+      render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+      const which = () => entry('DP-08')
+      const answer = (id: string) => useAfAnswersStore.getState().answers[id]
+      fireEvent.click(within(which()).getByRole('button', { name: '全部皆無' }))
+      expect(answer('mechanicalValve')).toBe(false)
+      expect(answer('significantMitralStenosis')).toBe(false)
+      expect(within(which()).getByRole('button', { name: /全部皆無 · 再按復原/ })).toHaveAttribute('aria-pressed', 'true')
+      // Answered, the record's note goes.
+      expect(which()).not.toHaveTextContent('未排除')
+      fireEvent.click(within(which()).getByRole('button', { name: /全部皆無 · 再按復原/ }))
+      expect(answer('mechanicalValve')).toBeUndefined()
+      // 有 on a mechanical valve: DP-08 turns to the valve decision.
+      const valve = within(which()).getAllByRole('group')[0]!
+      fireEvent.click(within(valve).getByRole('button', { name: '有' }))
+      expect(answer('mechanicalValve')).toBe(true)
+      expect(document.querySelector('[data-book-box="DP-08"]')).toHaveTextContent('改 warfarin')
+    })
   })
 })

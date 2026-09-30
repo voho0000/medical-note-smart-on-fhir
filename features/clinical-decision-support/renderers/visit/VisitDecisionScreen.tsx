@@ -86,6 +86,11 @@ export interface VisitDecisionScreenProps {
    * optional `physicianInput`), handed back so the pack recomputes from it.
    */
   onPhysicianInput?: (input: NonNullable<VisitAction['physicianInput']>) => void
+  /**
+   * Writes an answer to a point's own questions (AF DP-08's valves) into the
+   * answer set the pack names (`af-clinical`); `undefined` withdraws it.
+   */
+  onPointAnswer?: (answers: string, id: string, value: boolean | undefined) => void
   /** The page's own input surfaces, placed on the map (see `visit-surfaces`). */
   surfaces?: VisitMapSurfaces
 }
@@ -116,6 +121,7 @@ export function VisitDecisionScreen({
   outlookContent,
   footer,
   onPhysicianInput,
+  onPointAnswer,
   surfaces,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
@@ -770,6 +776,7 @@ export function VisitDecisionScreen({
           // A class chosen in DP-01's table is the answer the diagnosis
           // question's own control wrote, handed back the same way.
           {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
+          {...(onPointAnswer ? { onAnswerQuestion: (_point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value) } : {})}
         />
         {footer}
       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useContext, useState, type ReactNode } from 'react'
+import { Fragment, useContext, useId, useState, type ReactNode } from 'react'
 import { Noto_Serif_TC } from 'next/font/google'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -104,6 +104,12 @@ export interface VisitBookLayoutProps {
    * is read-only.
    */
   onChooseClass?: (point: DecisionPointView, input: ClassInput) => void
+  /**
+   * Writes an answer to a point's questions (AF DP-08's valves) into the named
+   * answer set (`af-clinical`); `undefined` withdraws it. Without it the
+   * questions are read-only.
+   */
+  onAnswerQuestion?: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => void
 }
 
 /** A chapter as the model carries it (`VisitBookChapter`), read defensively. */
@@ -115,6 +121,8 @@ export interface BookChapterView {
   settled?: boolean
   plan?: boolean
   dps: readonly string[]
+  /** The part of the chapter's question each point answers (AF 抗凝：DP-07 「要不要」). */
+  pointLabels?: Readonly<Record<string, string>>
 }
 
 /** The model's chapters, where the pack gives them; undefined for an older pack. */
@@ -122,8 +130,11 @@ export function bookChaptersOf(model: object): BookChapterView[] | undefined {
   const raw = (model as { book?: unknown }).book
   if (!Array.isArray(raw)) return undefined
   const chapters = raw.flatMap((item): BookChapterView[] => {
-    const { id, title, short, aside, settled, plan, dps } = (item ?? {}) as Record<string, unknown>
+    const { id, title, short, aside, settled, plan, dps, pointLabels } = (item ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof title !== 'string' || !Array.isArray(dps)) return []
+    const labels = pointLabels && typeof pointLabels === 'object'
+      ? Object.fromEntries(Object.entries(pointLabels as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+      : {}
     return [{
       id,
       title,
@@ -132,6 +143,7 @@ export function bookChaptersOf(model: object): BookChapterView[] | undefined {
       ...(settled === true ? { settled: true } : {}),
       ...(plan === true ? { plan: true } : {}),
       dps: dps.filter((dp): dp is string => typeof dp === 'string'),
+      ...(Object.keys(labels).length ? { pointLabels: labels } : {}),
     }]
   })
   return chapters.length ? chapters : undefined
@@ -176,6 +188,7 @@ interface Section {
   /** The map group's block, where the section is one (no chapters from the pack). */
   block?: VisitBlock
   points: DecisionPointView[]
+  pointLabels?: Readonly<Record<string, string>>
 }
 
 /**
@@ -196,6 +209,7 @@ function sectionsOf(points: readonly DecisionPointView[], chapters: readonly Boo
         ...(chapter.aside ? { aside: chapter.aside } : {}),
         ...(chapter.settled ? { settled: true } : {}),
         ...(chapter.plan ? { plan: true } : {}),
+        ...(chapter.pointLabels ? { pointLabels: chapter.pointLabels } : {}),
         points: mine,
       }
     })
@@ -232,7 +246,22 @@ function changesOf(point: DecisionPointView): { when: string; then: string }[] {
   })
 }
 
-interface OptionRowView { name: string; standard?: string; patient: string; basis?: string; status?: string; current?: boolean }
+interface CriterionView { label: string; value?: string; met?: boolean }
+interface OptionRowView {
+  name: string
+  standard?: string
+  patient: string
+  basis?: string
+  status?: string
+  current?: boolean
+  conditions?: { rule?: string; items: CriterionView[]; note?: string }
+}
+
+function criterionOf(raw: unknown): CriterionView | undefined {
+  const { label, value, met } = (raw ?? {}) as Record<string, unknown>
+  if (typeof label !== 'string') return undefined
+  return { label, ...(typeof value === 'string' ? { value } : {}), ...(typeof met === 'boolean' ? { met } : {}) }
+}
 
 /** Every option side by side (the DOACs at this patient's dose), read defensively like `changesOf`. */
 function optionTableOf(point: object | undefined): { title: string; rows: OptionRowView[] } | undefined {
@@ -242,8 +271,10 @@ function optionTableOf(point: object | undefined): { title: string; rows: Option
   if (typeof title !== 'string' || !Array.isArray(rows)) return undefined
   const text = (value: unknown) => (typeof value === 'string' ? value : undefined)
   const parsed = rows.flatMap((row): OptionRowView[] => {
-    const { name, standard, patient, basis, status, current } = (row ?? {}) as Record<string, unknown>
+    const { name, standard, patient, basis, status, current, conditions } = (row ?? {}) as Record<string, unknown>
     if (typeof name !== 'string' || typeof patient !== 'string') return []
+    const { rule, items, note } = (conditions ?? {}) as Record<string, unknown>
+    const criteria = Array.isArray(items) ? items.flatMap((item) => criterionOf(item) ?? []) : []
     return [{
       name,
       patient,
@@ -251,9 +282,55 @@ function optionTableOf(point: object | undefined): { title: string; rows: Option
       ...(text(basis) ? { basis: text(basis) } : {}),
       ...(text(status) ? { status: text(status) } : {}),
       ...(current === true ? { current: true } : {}),
+      ...(criteria.length ? { conditions: { items: criteria, ...(text(rule) ? { rule: text(rule) } : {}), ...(text(note) ? { note: text(note) } : {}) } } : {}),
     }]
   })
   return parsed.length ? { title, rows: parsed } : undefined
+}
+
+interface ScoreTableView {
+  title: string
+  rows: { id: string; label: string; points: number; met?: boolean; evidence: string }[]
+  total?: number
+  verdict?: string
+}
+
+/** A point's score, item by item (AF DP-07's CHA₂DS₂-VA), read defensively like `changesOf`. */
+function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
+  const raw = (point as { scoreTable?: unknown } | undefined)?.scoreTable
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, rows, total, verdict } = raw as Record<string, unknown>
+  if (typeof title !== 'string' || !Array.isArray(rows)) return undefined
+  const parsed = rows.flatMap((row): ScoreTableView['rows'] => {
+    const { id, label, points, met, evidence } = (row ?? {}) as Record<string, unknown>
+    if (typeof id !== 'string' || typeof label !== 'string' || typeof points !== 'number') return []
+    return [{ id, label, points, evidence: typeof evidence === 'string' ? evidence : '', ...(typeof met === 'boolean' ? { met } : {}) }]
+  })
+  if (!parsed.length) return undefined
+  return { title, rows: parsed, ...(typeof total === 'number' ? { total } : {}), ...(typeof verdict === 'string' ? { verdict } : {}) }
+}
+
+interface QuestionsView {
+  title: string
+  answers: string
+  rows: { id: string; label: string; answer?: boolean; recordHolds?: boolean }[]
+  bulkNone?: boolean
+  note?: string
+}
+
+/** What a point asks before it decides (AF DP-08's valves), read defensively like `changesOf`. */
+function questionsOf(point: object | undefined): QuestionsView | undefined {
+  const raw = (point as { questions?: unknown } | undefined)?.questions
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, answers, rows, bulkNone, note } = raw as Record<string, unknown>
+  if (typeof title !== 'string' || typeof answers !== 'string' || !Array.isArray(rows)) return undefined
+  const parsed = rows.flatMap((row): QuestionsView['rows'] => {
+    const { id, label, answer, recordHolds } = (row ?? {}) as Record<string, unknown>
+    if (typeof id !== 'string' || typeof label !== 'string') return []
+    return [{ id, label, ...(typeof answer === 'boolean' ? { answer } : {}), ...(recordHolds === true ? { recordHolds: true } : {}) }]
+  })
+  if (!parsed.length) return undefined
+  return { title, answers, rows: parsed, ...(bulkNone === true ? { bulkNone: true } : {}), ...(typeof note === 'string' ? { note } : {}) }
 }
 
 interface StartDoseRowView { name: string; dose: string; role: string; when: string; proposed?: boolean }
@@ -422,6 +499,146 @@ function ClassificationTable({ point, isEnglish, onChoose }: { point: DecisionPo
   )
 }
 
+/** A score item by item, as the prototype's 「要不要：CHA₂DS₂-VA」 table. */
+function ScoreTable({ table, isEnglish }: { table: ScoreTableView; isEnglish: boolean }) {
+  return (
+    <table className={styles.scoreTable} aria-label={table.title} data-testid="cdss-book-score">
+      <tbody>
+        {table.rows.map((row) => (
+          <tr key={row.id} data-met={row.met === true || undefined} data-book-score-item={row.id}>
+            <td className={styles.scoreMark}>
+              <span aria-hidden="true">{row.met ? '✓' : '✗'}</span>
+              <span className="sr-only">{row.met ? (isEnglish ? 'counts' : '符合') : row.met === false ? (isEnglish ? 'does not count' : '不符合') : (isEnglish ? 'nothing on record' : '紀錄無')}</span>
+            </td>
+            <td>{row.label}</td>
+            <td className={styles.scorePoints}>{row.points}</td>
+            <td className={styles.scoreEvidence}>{row.evidence}</td>
+          </tr>
+        ))}
+        <tr className={styles.scoreTotal}>
+          <td />
+          <td>{isEnglish ? 'Total' : '合計'}</td>
+          <td className={styles.scorePoints}>{table.total ?? '—'}</td>
+          <td className={table.total === undefined ? styles.scorePending : styles.scoreVerdict}>{table.verdict}</td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
+type AnswerQuestion = (id: string, value: boolean | undefined) => void
+
+/**
+ * 「全部皆無」 over a point's questions: 無 on every row not yet answered, never
+ * over a row the record holds but cannot settle, nor one answered 有 (then it
+ * reads 「其餘皆無」); pressed again, it takes those 無 back.
+ */
+function BulkNone({ questions, isEnglish, onAnswer }: { questions: QuestionsView; isEnglish: boolean; onAnswer?: AnswerQuestion }) {
+  const open = questions.rows.filter((row) => !row.recordHolds && row.answer !== true)
+  if (!onAnswer || !open.length) return null
+  const pressed = open.every((row) => row.answer === false)
+  const anyYes = questions.rows.some((row) => row.answer === true)
+  return (
+    <button
+      type="button"
+      className={styles.bulkNone}
+      aria-pressed={pressed}
+      onClick={() => {
+        for (const row of open) {
+          if (pressed) onAnswer(row.id, undefined)
+          else if (row.answer === undefined) onAnswer(row.id, false)
+        }
+      }}
+      data-book-bulk-none=""
+    >
+      {anyYes ? (isEnglish ? 'None of the rest' : '其餘皆無') : (isEnglish ? 'None of these' : '全部皆無')}
+      {pressed ? (isEnglish ? ' · press again to undo' : ' · 再按復原') : ''}
+    </button>
+  )
+}
+
+/** A point's questions, each 有／無 as one segmented control; the chosen one pressed again withdraws it. */
+function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions: QuestionsView; isEnglish: boolean; onAnswer?: AnswerQuestion; titled: boolean }) {
+  const idBase = useId()
+  const options = [{ value: true, label: isEnglish ? 'Yes' : '有' }, { value: false, label: isEnglish ? 'No' : '無' }]
+  return (
+    <div className={styles.questions} data-testid="cdss-book-questions">
+      {titled ? (
+        <div className={styles.questionsHead}>
+          <span className={styles.questionsTitle}>{questions.title}</span>
+          {questions.bulkNone ? <BulkNone questions={questions} isEnglish={isEnglish} {...(onAnswer ? { onAnswer } : {})} /> : null}
+        </div>
+      ) : null}
+      {questions.rows.map((row) => (
+        <div key={row.id} className={styles.questionRow} data-book-question={row.id}>
+          <span id={`${idBase}-${row.id}`}>{row.label}</span>
+          <div role="group" aria-labelledby={`${idBase}-${row.id}`} className={styles.questionGroup}>
+            {options.map((option) => {
+              const selected = row.answer === option.value
+              return (
+                <button
+                  key={String(option.value)}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={!onAnswer}
+                  onClick={() => onAnswer?.(row.id, selected ? undefined : option.value)}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      {questions.note ? <p className={styles.questionsNote}>{questions.note}</p> : null}
+    </div>
+  )
+}
+
+/** Every option at this patient's dose, as the prototype's 「多少」 table: 藥｜標準｜減量條件（本病人）｜本病人劑量. */
+function DoseTable({ table, isEnglish }: { table: { title: string; rows: OptionRowView[] }; isEnglish: boolean }) {
+  const mark = (met: boolean | undefined) => (met === true ? '✓' : met === false ? '✗' : '？')
+  return (
+    <div className={styles.optScroll}>
+      <table className={styles.doseTable} aria-label={table.title} data-testid="cdss-book-dose-table">
+        <thead>
+          <tr>
+            <th scope="col">{isEnglish ? 'Agent' : '藥'}</th>
+            <th scope="col">{isEnglish ? 'Usual' : '標準'}</th>
+            <th scope="col">{isEnglish ? 'Reduction criteria (this patient)' : '減量條件（本病人）'}</th>
+            <th scope="col">{isEnglish ? 'This patient' : '本病人劑量'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row) => (
+            <tr key={row.name} data-current={row.current || undefined} data-status={row.status}>
+              <td><b>{row.name}{row.current ? (isEnglish ? ' ← prescribed' : ' ← 現用') : ''}</b></td>
+              <td>{row.standard ?? '—'}</td>
+              <td>
+                {row.conditions ? (
+                  <>
+                    {row.conditions.rule ? `${row.conditions.rule}${isEnglish ? ': ' : '：'}` : null}
+                    {row.conditions.items.map((item, index) => (
+                      <Fragment key={item.label}>
+                        {index ? ' · ' : null}
+                        <span className={item.met === true ? styles.met : item.met === false ? styles.unmet : styles.unknown}>
+                          {mark(item.met)} {item.label}{item.value ? `（${item.value}）` : ''}
+                        </span>
+                      </Fragment>
+                    ))}
+                    {row.conditions.note ? `${isEnglish ? '; ' : '；'}${row.conditions.note}` : null}
+                  </>
+                ) : row.basis ?? '—'}
+              </td>
+              <td className={row.current ? styles.doseCurrent : undefined}>{row.patient}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 /** The criteria, each with its value and the date the record line gave it. */
 function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean; dated?: boolean }) {
   const groups = criteriaOf(point)
@@ -480,6 +697,7 @@ export function VisitBookLayout({
   decided,
   summaryText,
   onChooseClass,
+  onAnswerQuestion,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const [mapOpen, setMapOpen] = useState(true)
@@ -544,7 +762,7 @@ export function VisitBookLayout({
   }
 
   /** 看依據: what the decision turns on, what would change it, the guideline, the sources. */
-  const reasoning = (head: DecisionPointView, shown: DecisionPointView) => {
+  const reasoning = (head: DecisionPointView, shown: DecisionPointView, drawn: { table?: boolean } = {}) => {
     if (openKey !== openKeyOf(head)) return null
     const changes = changesOf(shown).length ? changesOf(shown) : changesOf(head)
     const guideline = head.guideline
@@ -552,7 +770,8 @@ export function VisitBookLayout({
     const nextOptions = shown === head && head.next ? criteriaOf(head.next) : []
     // The options side by side: the step's own, else the step the row walks
     // on to (an older pack copies no table onto the step), else the row's.
-    const table = optionTableOf(shown) ?? optionTableOf(head.next) ?? optionTableOf(head)
+    // Not a second time where the block already draws it.
+    const table = drawn.table ? undefined : optionTableOf(shown) ?? optionTableOf(head.next) ?? optionTableOf(head)
     const startDoses = startDosesOf(shown) ?? startDosesOf(head)
     return (
       <div className={styles.panel} data-testid="cdss-book-reasoning" data-dp={head.dp}>
@@ -848,19 +1067,143 @@ export function VisitBookLayout({
     </div>
   )
 
+  /** Drawn as a block: a point of this page that decides on a score, asks its own questions, or lays its options out. */
+  const isBlock = (point: DecisionPointView, entry: BookEntry) => entry.kind !== 'slot' && entry.kind !== 'skip'
+    && point.source === sourceOfPage
+    && Boolean(scoreTableOf(point) || questionsOf(point) || optionTableOf(point))
+
+  /**
+   * A point as the prototype draws the AF anticoagulation chapter (owner
+   * request 2026-09-30): the part of the chapter's question it answers as its
+   * heading (「要不要：CHA₂DS₂-VA」) and what it decides on — its score item by
+   * item, the questions it asks, every option at this patient's dose. Today's
+   * decision follows in a box (`blockDecision`): under the block, or, for two
+   * blocks side by side, under the pair at full width.
+   */
+  const renderBlock = (point: DecisionPointView, entry: BookEntry, section: Section, withDecision: boolean) => {
+    const mark = marks.get(point)!
+    const score = scoreTableOf(point)
+    const questions = questionsOf(point)
+    const table = optionTableOf(point)
+    const title = score?.title ?? table?.title ?? questions?.title ?? ''
+    const part = section.pointLabels?.[point.dp] ?? point.label
+    const answer: AnswerQuestion | undefined = onAnswerQuestion && questions
+      ? (id, value) => onAnswerQuestion(point, questions.answers, id, value)
+      : undefined
+    // A block that is only its questions names them in its heading, 全部皆無 beside it.
+    const questionsLead = Boolean(questions && !score && !table)
+    return (
+      <div
+        key={`${point.source}:${point.dp}`}
+        id={bookAnchor(point)}
+        tabIndex={-1}
+        className={styles.block}
+        data-book-dp={point.dp}
+        data-book-mark={mark}
+      >
+        <div className={styles.blockHead}>
+          <span className={styles.dpTag}>{point.dp}</span>
+          <b className={styles.blockTitle}>{`${part}${isEnglish ? ': ' : '：'}${title}`}</b>
+          <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}</span>
+          {questionsLead && questions?.bulkNone ? <BulkNone questions={questions} isEnglish={isEnglish} {...(answer ? { onAnswer: answer } : {})} /> : null}
+          {entry.kind === 'row' ? null : reasoningButton(point)}
+        </div>
+        {score ? <ScoreTable table={score} isEnglish={isEnglish} /> : null}
+        {questions ? <PointQuestions questions={questions} isEnglish={isEnglish} titled={!questionsLead} {...(answer ? { onAnswer: answer } : {})} /> : null}
+        {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
+        {withDecision ? blockDecision(point, entry) : null}
+      </div>
+    )
+  }
+
+  /** A block's decision: today's box (with a later step's options), or the line it stands on; then 看依據. */
+  const blockDecision = (point: DecisionPointView, entry: BookEntry) => {
+    const mark = marks.get(point)!
+    const row = entry.kind === 'row' ? entry.row : undefined
+    const current = row?.current
+    const shown = row ? (current ?? row.steps[row.steps.length - 1]).point : point
+    const decided = row ? row.steps.filter((step) => step.decision) : []
+    // A chain's later step with its own options (the DOAC once 開始抗凝 is recorded).
+    const stepTable = row && shown !== point ? optionTableOf(shown) : undefined
+    const tone = current && (mark === 'act' || mark === 'safety') ? (row?.safety ? 'safety' : 'act') : undefined
+    const decision = row ? (
+      <div className={`${styles.box} ${styles.inner}`} data-tone={tone} data-book-box={point.dp}>
+        {current ? (
+          <>
+            <ChainDone steps={decided} />
+            {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
+            <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}{shown.headline ?? shown.label}</p>
+            <VisitDecisionControls
+              point={shown}
+              surface="queue"
+              isEnglish={isEnglish}
+              onDecide={onDecide ? (action) => onDecide(current, action, entry.kind === 'row' && entry.queued) : undefined}
+            />
+          </>
+        ) : (
+          <>
+            <ChainDone steps={decided.slice(0, -1)} />
+            <VisitDecisionControls
+              point={shown}
+              decision={row.steps[row.steps.length - 1].decision}
+              surface="queue"
+              isEnglish={isEnglish}
+              onClear={onClear ? () => onClear(row.steps[row.steps.length - 1]) : undefined}
+            />
+          </>
+        )}
+        {reasoningButton(point)}
+      </div>
+    ) : entry.kind === 'covered' ? (
+      <p className={styles.blockNote}>
+        {isEnglish ? `Decided with ${entry.by.dp} ${entry.by.label}` : `與 ${entry.by.dp} ${entry.by.label} 一起決定`}
+        {point.headline ? ` · ${point.headline}` : ''}
+      </p>
+    ) : point.state !== 'done' && point.headline ? (
+      // Settled, the table says it (「≥2 建議抗凝 · 已在用」); otherwise the point's line.
+      <p className={styles.blockNote}>{point.headline}{point.why ? ` · ${point.why}` : ''}</p>
+    ) : null
+    return (
+      <>
+        {decision}
+        {reasoning(point, shown, { table: Boolean(optionTableOf(point) || stepTable) })}
+      </>
+    )
+  }
+
   /** A section's present points, consecutive rows in one table, consecutive lines in one list. */
   const renderSection = (section: Section) => {
     const present = section.points.filter((point) => !ABSENT_STATES.has(point.state))
-    const runs: { kind: 'table' | 'lines' | 'slot'; items: { point: DecisionPointView; entry: BookEntry }[] }[] = []
+    const runs: { kind: 'table' | 'lines' | 'slot' | 'blocks'; items: { point: DecisionPointView; entry: BookEntry }[] }[] = []
     for (const point of present) {
       const entry = entryOf(point)
       if (entry.kind === 'skip') continue
-      const kind = entry.kind === 'row' ? 'table' : entry.kind === 'slot' ? 'slot' : 'lines'
+      const kind = isBlock(point, entry) ? 'blocks' : entry.kind === 'row' ? 'table' : entry.kind === 'slot' ? 'slot' : 'lines'
       const last = runs[runs.length - 1]
       if (last && last.kind === kind && kind !== 'slot') last.items.push({ point, entry })
       else runs.push({ kind, items: [{ point, entry }] })
     }
     return runs.map((run, index) => {
+      if (run.kind === 'blocks') {
+        // Two blocks without an options table side by side (要不要｜用哪個), a table full width.
+        const groups: (typeof run.items)[] = []
+        for (const item of run.items) {
+          const last = groups[groups.length - 1]
+          const half = !optionTableOf(item.point)
+          if (half && last?.length === 1 && !optionTableOf(last[0]!.point)) last.push(item)
+          else groups.push([item])
+        }
+        return (
+          <div key={`blocks-${index}`} className={styles.blocks}>
+            {groups.map((group) => (group.length === 2 ? (
+              <Fragment key={`pair-${group[0]!.point.dp}`}>
+                <div className={styles.blockPair}>{group.map(({ point, entry }) => renderBlock(point, entry, section, false))}</div>
+                {group.map(({ point, entry }) => <Fragment key={`decision-${point.dp}`}>{blockDecision(point, entry)}</Fragment>)}
+              </Fragment>
+            ) : renderBlock(group[0]!.point, group[0]!.entry, section, true)))}
+          </div>
+        )
+      }
       if (run.kind === 'slot') {
         const { point, entry } = run.items[0]
         return entry.kind === 'slot' ? <Fragment key={`slot-${index}`}>{renderSlot(point, entry.content)}</Fragment> : null
