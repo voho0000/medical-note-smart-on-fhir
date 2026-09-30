@@ -676,7 +676,7 @@ export function VisitDecisionScreen({
         ) : null}
       </>
     )
-    const entryOf = (point: DecisionPointView): BookEntry => {
+    const ownEntryOf = (point: DecisionPointView): BookEntry => {
       if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: bookAsks }
       // A point answered in its classification table (HF DP-01's phenotype); a table
       // only to read (AF DP-17's agents by LVEF) sits on the point's own line.
@@ -697,11 +697,26 @@ export function VisitDecisionScreen({
       }
       return { kind: 'line', point }
     }
+    // The prototype draws HF's DP-34 inside DP-01's table (「DP-01 · DP-34」):
+    // the HFpEF confirmation is the phenotype's other half. Its criteria, the
+    // symptoms and signs it waits on, and its box go there; the map rail's
+    // DP-34 leads there.
+    const dp01 = model.points.find((point) => point.dp === 'DP-01' && point.source === 'hf')
+    const dp34 = model.points.find((point) => point.dp === 'DP-34' && point.source === 'hf')
+    const mergesIntoDp01 = (point: DecisionPointView) => (
+      point === dp34 && sourceOfPage === 'hf' && Boolean(dp01) && !ABSENT_STATES.has(point.state) && ownEntryOf(dp01!).kind === 'slot'
+    )
+    const entryOf = (point: DecisionPointView): BookEntry => {
+      if (mergesIntoDp01(point)) return { kind: 'skip', point, anchorOf: dp01! }
+      const own = ownEntryOf(point)
+      if (point === dp01 && own.kind === 'slot' && dp34 && mergesIntoDp01(dp34)) return { ...own, merged: { point: dp34, entry: ownEntryOf(dp34) } }
+      return own
+    }
     const markOf = (point: DecisionPointView): BookMark => {
       if (ABSENT_STATES.has(point.state)) return 'absent'
       if (openStepOf(point)) return 'act'
       if (decisionOf(point)) return 'done'
-      const entry = entryOf(point)
+      const entry = ownEntryOf(point)
       if (entry.kind === 'row') {
         if (!entry.row.current) return 'done'
         if (entry.row.safety) return 'safety'

@@ -59,7 +59,11 @@ export type BookEntry =
   | { kind: 'row'; point: DecisionPointView; row: QueueRow; queued: boolean }
   | { kind: 'covered'; point: DecisionPointView; by: DecisionPointView }
   | { kind: 'line'; point: DecisionPointView }
-  | { kind: 'slot'; point: DecisionPointView; content: ReactNode }
+  /**
+   * `merged`: a point drawn inside this one's table (the prototype's 「DP-01 ·
+   * DP-34」: HF's HFpEF confirmation beside the phenotype), with its own entry.
+   */
+  | { kind: 'slot'; point: DecisionPointView; content: ReactNode; merged?: { point: DecisionPointView; entry: BookEntry } }
   | { kind: 'skip'; point: DecisionPointView; anchorOf: DecisionPointView }
 
 export interface VisitBookLayoutProps {
@@ -448,7 +452,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
  * 「新的可能要讓醫師可以點」): a button under each class it offers, and the
  * answers beside the classes (「還不確定」) under the table.
  */
-function ClassificationTable({ point, isEnglish, onChoose }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void }) {
+function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string }) {
   const table = classificationOf(point)
   if (!table) return null
   const current = table.classes.find((item) => item.current)
@@ -463,7 +467,7 @@ function ClassificationTable({ point, isEnglish, onChoose }: { point: DecisionPo
         <table className={styles.classTable} aria-label={table.title}>
           <thead>
             <tr>
-              <th scope="col"><span className={styles.dpTag}>{point.dp}</span></th>
+              <th scope="col"><span className={styles.dpTag}>{tag ?? point.dp}</span></th>
               {table.classes.map((item) => (
                 <th key={item.id} scope="col" data-current={item.current || undefined}>
                   {item.label}{item.current ? (isEnglish ? ' ← this patient' : ' ← 本病人') : ''}
@@ -761,10 +765,11 @@ export function VisitBookLayout({
       </div>
     )
   }
-  const classTable = (point: DecisionPointView) => (
+  const classTable = (point: DecisionPointView, tag?: string) => (
     <ClassificationTable
       point={point}
       isEnglish={isEnglish}
+      {...(tag ? { tag } : {})}
       {...(onChooseClass ? { onChoose: (input: ClassInput) => onChooseClass(point, input) } : {})}
     />
   )
@@ -1192,7 +1197,51 @@ export function VisitBookLayout({
     )
   }
 
-  const renderSlot = (point: DecisionPointView, content: ReactNode) => (
+  /**
+   * A point drawn inside another's table (DP-34 in DP-01's): while it is
+   * open, its name and where it stands, its criteria ✓ by ✓, the inputs it
+   * waits on, and today's box; settled, the table's tag says it is there.
+   */
+  const renderMerged = (point: DecisionPointView, entry: BookEntry) => {
+    if (point.state === 'done' && entry.kind !== 'row') return null
+    const row = entry.kind === 'row' ? entry : undefined
+    if (row && !row.row.current && point.state === 'done') return null
+    const extras = extrasOf(point)
+    return (
+      <div className={styles.merged} data-book-merged={point.dp} data-book-mark={marks.get(point)}>
+        <div className={styles.mergedHead}>
+          <span className={styles.dpTag}>{point.dp}</span>
+          <b>{point.label}</b>
+          {!row && point.headline ? (
+            <span className={styles.slotLine}>
+              {point.headline}
+              {point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}
+            </span>
+          ) : null}
+        </div>
+        {point.checklist?.length ? (
+          <table className={styles.scoreTable} aria-label={point.label} data-testid="cdss-book-merged-criteria">
+            <tbody>
+              {point.checklist.map((item) => (
+                <tr key={item.key} data-met={item.present || undefined}>
+                  <td className={styles.scoreMark}>
+                    <span aria-hidden="true">{item.present ? '✓' : '○'}</span>
+                    <span className="sr-only">{item.present ? (isEnglish ? 'met' : '成立') : (isEnglish ? 'not yet' : '未成立')}</span>
+                  </td>
+                  <td>{item.label}</td>
+                  <td className={styles.scoreEvidence}>{item.value ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+        {extras ? <div className={`${styles.signWrap} ${styles.inner}`}>{extras}</div> : null}
+        {row ? blockDecision(point, entry) : null}
+      </div>
+    )
+  }
+
+  const renderSlot = (point: DecisionPointView, content: ReactNode, merged?: { point: DecisionPointView; entry: BookEntry }) => (
     <div
       key={`${point.source}:${point.dp}`}
       id={bookAnchor(point)}
@@ -1212,7 +1261,8 @@ export function VisitBookLayout({
           </span>
         ) : null}
       </div>
-      {classTable(point)}
+      {classTable(point, merged ? `${point.dp} · ${merged.point.dp}` : undefined)}
+      {merged ? renderMerged(merged.point, merged.entry) : null}
       {content || extrasOf(point) ? (
         <div className={styles.inner}>
           {content}
@@ -1373,7 +1423,7 @@ export function VisitBookLayout({
       }
       if (run.kind === 'slot') {
         const { point, entry } = run.items[0]
-        return entry.kind === 'slot' ? <Fragment key={`slot-${index}`}>{renderSlot(point, entry.content)}</Fragment> : null
+        return entry.kind === 'slot' ? <Fragment key={`slot-${index}`}>{renderSlot(point, entry.content, entry.merged)}</Fragment> : null
       }
       if (run.kind === 'lines') {
         return (
