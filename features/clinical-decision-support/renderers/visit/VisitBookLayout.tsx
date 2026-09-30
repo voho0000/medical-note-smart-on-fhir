@@ -16,8 +16,7 @@ import {
 } from './visit-decisions'
 import { displayDate } from './VisitStatusHeader'
 import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
-import { ChainDone } from './TodayQueue'
-import { VisitDecisionControls } from './VisitDecisionControls'
+import { BookChainDone, BookDecisionControls } from './BookDecisionControls'
 import { VisitBookChromeContext } from './visit-book-chrome'
 import styles from './VisitBookLayout.module.css'
 
@@ -77,22 +76,16 @@ export interface VisitBookLayoutProps {
   openKeyOf: (point: DecisionPointView) => string
   openKey: string | null
   onToggle: (point: DecisionPointView) => void
-  /** The module cards behind a point, for the fold at the foot of 看依據. */
-  moduleCardsOf: (point: DecisionPointView) => ReactNode
   onDecide?: (step: QueueStep, action: VisitAction, queued: boolean) => void
   onClear?: (step: QueueStep) => void
   basisOf: (point: DecisionPointView) => readonly DecisionBasisItem[]
-  /** The page's inputs a point reads, drawn in view under it. */
-  extrasOf: (point: DecisionPointView) => ReactNode
   /** The sentence for where the patient stands, and the values the decisions read. */
   headline: string
   keyValues: VisitDecisionModel['keyValues']
   triggers: VisitDecisionModel['triggers']
   now: Date
-  onEditValues?: () => void
-  /** Drawn at the head of the sheet: the values editor when open, the screen-reader status. */
+  /** Drawn at the head of the sheet, unseen: the screen-reader status. */
   top?: ReactNode
-  blockFooters?: Partial<Record<VisitBlock, ReactNode>>
   plan: VisitPlanModel
   /** The sentence once everything queued is recorded. */
   decidedLine?: string
@@ -398,7 +391,6 @@ interface ClassificationView {
   rowLabel?: string
   classes: (ClassChoice & { definition: string; current?: boolean })[]
   patient?: string
-  note?: string
   alternatives: (ClassChoice & { physicianInput: ClassInput })[]
 }
 
@@ -413,7 +405,7 @@ function classInputOf(raw: unknown): ClassInput | undefined {
 function classificationOf(point: object | undefined): ClassificationView | undefined {
   const raw = (point as { classification?: unknown } | undefined)?.classification
   if (!raw || typeof raw !== 'object') return undefined
-  const { title, classes, patient, note, alternatives, rowLabel } = raw as Record<string, unknown>
+  const { title, classes, patient, alternatives, rowLabel } = raw as Record<string, unknown>
   if (typeof title !== 'string' || !Array.isArray(classes)) return undefined
   const parsed = classes.flatMap((item): ClassificationView['classes'] => {
     const { id, label, definition, current, physicianInput, chosen } = (item ?? {}) as Record<string, unknown>
@@ -440,7 +432,6 @@ function classificationOf(point: object | undefined): ClassificationView | undef
     ...(typeof rowLabel === 'string' ? { rowLabel } : {}),
     classes: parsed,
     ...(typeof patient === 'string' ? { patient } : {}),
-    ...(typeof note === 'string' ? { note } : {}),
     alternatives: others,
   }
 }
@@ -453,6 +444,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
  * answers beside the classes (「還不確定」) under the table.
  */
 function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string }) {
+  const choiceId = useId()
   const table = classificationOf(point)
   if (!table) return null
   const current = table.classes.find((item) => item.current)
@@ -488,55 +480,31 @@ function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: Decis
                   : <td colSpan={table.classes.length}>{table.patient}</td>}
               </tr>
             ) : null}
-            {choosable && table.classes.some((item) => item.physicianInput) ? (
-              <tr data-testid="cdss-book-class-choices">
-                <th scope="row">{isEnglish ? 'Your call' : '你的判斷'}</th>
-                {table.classes.map((item) => (
-                  <td key={item.id} data-current={item.current || undefined}>
-                    {item.physicianInput ? (
-                      <button
-                        type="button"
-                        className={styles.classChoose}
-                        aria-pressed={Boolean(item.chosen)}
-                        onClick={() => choose(item)}
-                        data-testid={`cdss-book-class-${item.id}`}
-                      >
-                        {item.chosen
-                          ? `✓ ${item.label}`
-                          : item.current
-                            ? (isEnglish ? `Confirm ${item.label}` : `確認 ${item.label}`)
-                            : (isEnglish ? `Choose ${item.label}` : `選 ${item.label}`)}
-                      </button>
-                    ) : (
-                      <span className={styles.classOff}>
-                        <span aria-hidden="true">—</span>
-                        <span className="sr-only">{isEnglish ? 'Not on offer' : '不可選'}</span>
-                      </span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ) : null}
           </tbody>
         </table>
       </div>
-      {choosable && table.alternatives.length > 0 ? (
-        <div className={styles.classAlternatives}>
-          {table.alternatives.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={styles.classChoose}
-              aria-pressed={Boolean(item.chosen)}
-              onClick={() => choose(item)}
-              data-testid={`cdss-book-class-${item.id}`}
-            >
-              {item.chosen ? `✓ ${item.label}` : item.label}
-            </button>
-          ))}
+      {choosable ? (
+        // The answer as every answer on the page is given (the prototype's
+        // 「喘比上次」): one segmented control, the classes it offers and the
+        // answers beside them (「還不確定」); the table itself stays as the
+        // prototype draws it, only to read.
+        <div className={styles.askRow} data-testid="cdss-book-class-choices">
+          <span id={`${choiceId}-label`} className={styles.askLabel}>{isEnglish ? 'Your call' : '你的判斷'}</span>
+          <div role="group" aria-labelledby={`${choiceId}-label`} className={styles.askGroup}>
+            {[...table.classes.filter((item) => item.physicianInput), ...table.alternatives].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={Boolean(item.chosen)}
+                onClick={() => choose(item)}
+                data-testid={`cdss-book-class-${item.id}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
-      <p className={styles.classNote}>{table.title}{table.note ? `　${table.note}` : ''}</p>
     </div>
   )
 }
@@ -730,18 +698,14 @@ export function VisitBookLayout({
   openKeyOf,
   openKey,
   onToggle,
-  moduleCardsOf,
   onDecide,
   onClear,
   basisOf,
-  extrasOf,
   headline,
   keyValues,
   triggers,
   now,
-  onEditValues,
   top,
-  blockFooters,
   plan,
   decidedLine,
   chapters,
@@ -941,19 +905,6 @@ export function VisitBookLayout({
               .join(' · ')}
           </p>
         ) : null}
-        <details className={styles.fold}>
-          <summary>{isEnglish ? 'Quotes and the full cards' : '原文與完整卡片'}</summary>
-          {guideline?.references.length ? (
-            <ol className={styles.panelPlain}>
-              {guideline.references.map((reference) => (
-                <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className={styles.quote}>
-                  {reference.source} §{reference.section} · p.{reference.page}：<span lang="en">“{reference.quote}”</span>
-                </li>
-              ))}
-            </ol>
-          ) : null}
-          <div className={styles.inner}>{moduleCardsOf(head)}</div>
-        </details>
       </div>
     )
   }
@@ -1027,23 +978,21 @@ export function VisitBookLayout({
           <div className={styles.inner}>
             {current ? (
               <>
-                <ChainDone steps={decided} />
+                <BookChainDone steps={decided} />
                 <p className={styles.question} data-visit-headline="">{shown.headline ?? shown.label}</p>
                 {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why="">{shown.why}</p> : null}
-                <VisitDecisionControls
+                <BookDecisionControls
                   point={shown}
-                  surface="queue"
                   isEnglish={isEnglish}
                   onDecide={onDecide ? (action) => onDecide(current, action, queued) : undefined}
                 />
               </>
             ) : (
               <>
-                <ChainDone steps={decided.slice(0, -1)} />
-                <VisitDecisionControls
+                <BookChainDone steps={decided.slice(0, -1)} />
+                <BookDecisionControls
                   point={shown}
                   decision={row.steps[row.steps.length - 1].decision}
-                  surface="queue"
                   isEnglish={isEnglish}
                   onClear={onClear ? () => onClear(row.steps[row.steps.length - 1]) : undefined}
                 />
@@ -1053,7 +1002,6 @@ export function VisitBookLayout({
         </div>
         {classificationOf(point) ? <div className={styles.rowExtras}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.rowExtras)}
-        {!questionsOf(point) && extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, shown)}
       </div>
     )
@@ -1108,7 +1056,6 @@ export function VisitBookLayout({
             </>
           )}
         </div>
-        {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, point)}
       </div>
     )
@@ -1124,11 +1071,10 @@ export function VisitBookLayout({
 
   const renderLine = (point: DecisionPointView, by?: DecisionPointView, row?: QueueRow) => {
     const mark = marks.get(point)!
-    const extras = extrasOf(point)
     const panel = reasoning(point, point)
     const why = !by && point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null
     // Today's triage (HF DP-24, AF DP-00) is the red-flag strip at the head of its chapter.
-    if (!by && /-triage$/.test(point.semanticId) && !extras && !panel) {
+    if (!by && /-triage$/.test(point.semanticId) && !panel) {
       return (
         <p
           key={`${point.source}:${point.dp}`}
@@ -1170,17 +1116,15 @@ export function VisitBookLayout({
           {row && step ? (
             <span className={`${styles.lineControls} ${styles.inner}`}>
               {row.current ? (
-                <VisitDecisionControls
+                <BookDecisionControls
                   point={step.point}
-                  surface="map"
                   isEnglish={isEnglish}
                   onDecide={onDecide ? (action) => onDecide(step, action, false) : undefined}
                 />
               ) : (
-                <VisitDecisionControls
+                <BookDecisionControls
                   point={step.point}
                   decision={step.decision}
-                  surface="map"
                   isEnglish={isEnglish}
                   onClear={onClear ? () => onClear(step) : undefined}
                 />
@@ -1191,7 +1135,6 @@ export function VisitBookLayout({
         </span>
         {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.lineWide)}
-        {!questionsOf(point) && extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
     )
@@ -1216,12 +1159,7 @@ export function VisitBookLayout({
         </div>
       )}
       {classTable(point, merged ? `${point.dp} · ${merged.dp}` : undefined)}
-      {content || extrasOf(point) ? (
-        <div className={styles.inner}>
-          {content}
-          {extrasOf(point)}
-        </div>
-      ) : null}
+      {content ? <div className={styles.inner}>{content}</div> : null}
     </div>
   )
 
@@ -1288,23 +1226,21 @@ export function VisitBookLayout({
       <div className={`${styles.box} ${styles.inner}`} data-tone={tone} data-book-box={point.dp}>
         {current ? (
           <>
-            <ChainDone steps={decided} />
+            <BookChainDone steps={decided} />
             {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
             <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}{shown.headline ?? shown.label}</p>
-            <VisitDecisionControls
+            <BookDecisionControls
               point={shown}
-              surface="queue"
               isEnglish={isEnglish}
               onDecide={onDecide ? (action) => onDecide(current, action, entry.kind === 'row' && entry.queued) : undefined}
             />
           </>
         ) : (
           <>
-            <ChainDone steps={decided.slice(0, -1)} />
-            <VisitDecisionControls
+            <BookChainDone steps={decided.slice(0, -1)} />
+            <BookDecisionControls
               point={shown}
               decision={row.steps[row.steps.length - 1].decision}
-              surface="queue"
               isEnglish={isEnglish}
               onClear={onClear ? () => onClear(row.steps[row.steps.length - 1]) : undefined}
             />
@@ -1495,17 +1431,11 @@ export function VisitBookLayout({
             </p>
           )
         })}
-        {section.block && blockFooters?.[section.block] && numbered.filter((item) => item.section.block === section.block).at(-1)?.section === section
-          ? <div className={styles.inner}>{blockFooters[section.block]}</div>
-          : null}
       </section>
     )
   }
 
   const chaptersShown = numbered.filter(({ section }) => !section.plan)
-  // With the pack's chapters, the columns' footers (the outlook models, the
-  // timeline) follow the chapters, before the plan.
-  const footers = chapters?.length ? BLOCK_ORDER.flatMap((block) => (blockFooters?.[block] ? [blockFooters[block]] : [])) : []
 
   return (
     <div className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
@@ -1529,9 +1459,6 @@ export function VisitBookLayout({
                   ))}
                 </Fragment>
               ))}
-              {onEditValues ? (
-                <button type="button" className={styles.headEdit} onClick={onEditValues}>{isEnglish ? 'Add or correct' : '補填／修改'}</button>
-              ) : null}
             </span>
           </div>
           <button type="button" className={pending.length ? styles.pending : styles.pendingDone} onClick={() => scrollTo(PLAN_ANCHOR)} data-testid="cdss-book-pending">
@@ -1613,7 +1540,6 @@ export function VisitBookLayout({
             </p>
           ) : null}
           {chaptersShown.map(renderChapter)}
-          {footers.length ? <div className={`${styles.footers} ${styles.inner}`}>{footers.map((footer, index) => <Fragment key={index}>{footer}</Fragment>)}</div> : null}
 
           <section id={PLAN_ANCHOR} tabIndex={-1} className={styles.plan} aria-labelledby={`${PLAN_ANCHOR}-title`} data-testid="cdss-book-end">
             <div className={styles.planHead}>
@@ -1654,10 +1580,6 @@ export function VisitBookLayout({
               </p>
             ) : null}
             {decidedLine ? <p className={styles.question} data-testid="cdss-visit-decided-line">{decidedLine}</p> : null}
-            <details className={styles.fold} data-testid="cdss-visit-summary">
-              <summary>{isEnglish ? 'The text it copies' : '複製的病歷文字'}</summary>
-              <p className={styles.summaryText} data-testid="cdss-visit-summary-text">{summaryText}</p>
-            </details>
           </section>
 
           {citations.length ? (

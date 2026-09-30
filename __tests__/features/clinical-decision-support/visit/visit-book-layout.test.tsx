@@ -127,9 +127,38 @@ describe.each([
     const phenotype = within(entry('DP-01')).getByTestId('cdss-book-classification')
     expect(within(phenotype).getByRole('columnheader', { name: 'HFpEF ← 本病人' })).toBeInTheDocument()
     expect(phenotype).toHaveTextContent('LVEF 60%（04-01） · NT-proBNP 1100（09-20） · I50.32')
-    expect(phenotype).toHaveTextContent('ESC 2026 取消 HFmrEF')
+    // Only the table, as the Artifact: no answer row inside it, no note under it.
+    expect(phenotype).not.toHaveTextContent('ESC 2026 取消 HFmrEF')
+    expect(within(phenotype).queryByRole('row', { name: /你的判斷/ })).toBeNull()
     // Today's triage is the red-flag strip at the head of its chapter.
     expect(entry('DP-24').tagName).toBe('P')
+  })
+
+  // Owner request 2026-09-30: 「都照著 CDSS 小麻式版面原型，不要使用任何原本的外觀」.
+  it.each(['hf', 'af'] as const)('draws nothing of the other layouts\' look (P9, %s page), before and after deciding and opening 看依據', (page) => {
+    render(<BookPage id="p9-hfpef-af-dose" page={page} />)
+    const book = () => screen.getByTestId('cdss-visit-book')
+    const noOriginal = () => {
+      // No shadcn button, no fold card, no module card, no footer, no values editor, no question group.
+      expect(book().querySelectorAll('[data-slot="button"]')).toHaveLength(0)
+      expect(book().querySelectorAll('details')).toHaveLength(0)
+      expect(book().querySelectorAll('[data-testid^="cdss-visit-detail-module-"], [data-testid^="cdss-visit-outlook-module-"]')).toHaveLength(0)
+      expect(book().querySelectorAll('[data-af-question-group], [data-testid="cdss-af-question-groups"]')).toHaveLength(0)
+      for (const id of ['cdss-visit-completed-checks', 'cdss-visit-prognosis', 'cdss-visit-hf-record-foot', 'cdss-visit-af-record', 'cdss-book-asks-detail']) {
+        expect({ id, drawn: Boolean(screen.queryByTestId(id)) }).toEqual({ id, drawn: false })
+      }
+      expect(within(book()).queryByRole('button', { name: /補填／修改/ })).toBeNull()
+    }
+    noOriginal()
+    // 看依據 open, and a decision recorded, still in the page's own look.
+    const dp = page === 'hf' ? 'DP-09' : 'DP-09'
+    const why = within(entry(dp)).queryAllByRole('button', { name: /看依據/ })[0]
+    if (why) fireEvent.click(why)
+    noOriginal()
+    const primary = document.querySelector<HTMLButtonElement>(`[data-visit-primary="${dp}"]`)!
+    fireEvent.click(primary)
+    expect(document.querySelector(`[data-visit-decided]`)).not.toBeNull()
+    noOriginal()
   })
 
   it('folds the decision map to a rail and opens it again', () => {
@@ -209,13 +238,14 @@ describe.each([
       expect(screen.queryByTestId('cdss-visit-hf-diagnosis-view')).toBeNull()
       expect(document.querySelectorAll('[data-book-dp="DP-01"]')).toHaveLength(1)
       expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'act')
-      const table = within(dp01).getByTestId('cdss-book-classification')
-      expect(within(table).getByRole('button', { name: '選 HFrEF' })).toHaveAttribute('aria-pressed', 'false')
-      expect(within(table).getByRole('button', { name: '還不確定' })).toBeInTheDocument()
-      // Choosing HFpEF is the diagnosis: the table marks it, and DP-01 settles.
-      fireEvent.click(within(table).getByRole('button', { name: '選 HFpEF' }))
+      // The answer is one segmented control under the table, as the prototype's 「喘比上次」.
+      const choices = within(dp01).getByTestId('cdss-book-class-choices')
+      const group = within(choices).getByRole('group', { name: '你的判斷' })
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['HFrEF', 'HFpEF', '還不確定'])
+      expect(within(group).getByRole('button', { name: 'HFrEF' })).toHaveAttribute('aria-pressed', 'false')
+      // Choosing HFpEF is the diagnosis: pressed, and DP-01 settles.
+      fireEvent.click(within(group).getByRole('button', { name: 'HFpEF' }))
       const chosen = within(entry('DP-01')).getByTestId('cdss-book-class-hfpEF')
-      expect(chosen).toHaveTextContent('✓ HFpEF')
       expect(chosen).toHaveAttribute('aria-pressed', 'true')
       expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'done')
     })
@@ -225,12 +255,12 @@ describe.each([
       fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '還不確定' }))
       expect(within(entry('DP-01')).getByTestId('cdss-book-class-unsure')).toHaveAttribute('aria-pressed', 'true')
       expect(mapLine('DP-01')).not.toHaveAttribute('data-book-mark', 'done')
-      fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '選 HFrEF' }))
+      fireEvent.click(within(entry('DP-01')).getByRole('button', { name: 'HFrEF' }))
       expect(within(entry('DP-01')).getByTestId('cdss-book-class-hfrEF')).toHaveAttribute('aria-pressed', 'true')
       // With a diagnosis the pack's question no longer offers 還不確定; the
       // other phenotype stays, so a mistaken choice can be taken back.
       expect(within(entry('DP-01')).queryByTestId('cdss-book-class-unsure')).toBeNull()
-      expect(within(entry('DP-01')).getByRole('button', { name: '選 HFpEF' })).toBeInTheDocument()
+      expect(within(entry('DP-01')).getByRole('button', { name: 'HFpEF' })).toBeInTheDocument()
     })
 
     it('DP-34 is DP-01\'s table, as the prototype 「DP-01 · DP-34」: no row, no questions of its own; the table\'s answer settles both (P1)', () => {
@@ -253,12 +283,11 @@ describe.each([
       expect(table().querySelector('th')).toHaveTextContent('DP-01 · DP-34')
     })
 
-    it('at a first visit with an LVEF of 28%: 確認 HFrEF, and HFpEF not on offer (P2)', () => {
+    it('at a first visit with an LVEF of 28%: HFrEF on offer, HFpEF not (P2)', () => {
       render(<BookPage id="p2-new-hfref" page="hf" />)
-      const table = within(entry('DP-01')).getByTestId('cdss-book-classification')
-      expect(within(table).getByRole('button', { name: '確認 HFrEF' })).toBeInTheDocument()
-      expect(within(table).queryByTestId('cdss-book-class-hfpEF')).toBeNull()
-      expect(within(table).getByText('不可選')).toBeInTheDocument()
+      const group = within(within(entry('DP-01')).getByTestId('cdss-book-class-choices')).getByRole('group', { name: '你的判斷' })
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['HFrEF'])
+      expect(within(entry('DP-01')).queryByTestId('cdss-book-class-hfpEF')).toBeNull()
     })
   })
 

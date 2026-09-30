@@ -737,17 +737,6 @@ export function VisitDecisionScreen({
         ...(check ? { check: `${check.text}${checkIntervalSuffix(check, isEnglish)}` } : {}),
       }]
     }).filter((item, index, all) => all.findIndex((other) => other.key === item.key) === index)
-    // The cards behind a point, at the foot of its 看依據.
-    const moduleCardsOf = (point: DecisionPointView) => point.moduleIds.flatMap((id) => {
-      const recommendation = modules.get(id)
-      if (!recommendation) return []
-      return [(
-        <section key={id} className="space-y-1.5 pt-2" aria-label={recommendation.moduleName ?? recommendation.title} data-testid={`cdss-visit-detail-module-${id}`}>
-          <p className="text-xs font-semibold text-foreground">{recommendation.moduleName ?? recommendation.title}</p>
-          <div className="-mx-2" data-testid={`cdss-visit-detail-module-body-${id}`}>{renderDetail(recommendation)}</div>
-        </section>
-      )]
-    })
     return (
       <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
         <VisitBookLayout
@@ -760,36 +749,18 @@ export function VisitDecisionScreen({
           openKeyOf={visitDecisionKey}
           openKey={openPoint ? openKey : null}
           onToggle={toggleOpen}
-          moduleCardsOf={moduleCardsOf}
           {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
           {...(onClearDecision ? { onClear: (step: QueueStep) => clear(step.key) } : {})}
           basisOf={basisOf}
-          extrasOf={(point) => surfaces?.pointExtras?.(point, { once: true }) ?? null}
           headline={status.text}
           keyValues={model.keyValues}
           triggers={model.triggers}
           now={now}
-          {...(surfaces?.editValues ? { onEditValues: surfaces.editValues } : {})}
-          top={(
-            <>
-              <VisitStatusLine model={model} sentence={status.text} />
-              {surfaces?.statusPanel ?? null}
-            </>
-          )}
-          blockFooters={{
-            ...surfaces?.columnFooters,
-            outlook: (
-              <>
-                {surfaces?.columnFooters?.outlook}
-                {outlookModules.map((item) => (
-                  <MapFold key={item.id} label={item.moduleName ?? item.title} size="sm" bodyClassName="px-2.5 pb-2.5 pt-2" testId={`cdss-visit-outlook-module-${item.id}`}>
-                    {renderDetail(item)}
-                  </MapFold>
-                ))}
-                {outlookContent}
-              </>
-            ),
-          }}
+          // Only the screen-reader status: the page draws nothing of the
+          // other layouts' surfaces — the values editor, the column footers,
+          // the outlook cards, the module cards (owner request 2026-09-30:
+          // 「都照著 CDSS 小麻式版面原型，不要使用任何原本的外觀」).
+          top={<VisitStatusLine model={model} sentence={status.text} />}
           plan={plan}
           {...(status.decided ? { decidedLine: status.text } : {})}
           {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
@@ -800,7 +771,6 @@ export function VisitDecisionScreen({
           {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
           {...(onPointAnswer ? { onAnswerQuestion: (_point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value) } : {})}
         />
-        {footer}
       </div>
     )
   }
