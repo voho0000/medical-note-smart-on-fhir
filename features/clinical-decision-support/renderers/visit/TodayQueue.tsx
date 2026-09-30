@@ -169,7 +169,7 @@ function RowLink({ point, isEnglish, detailOpen, onOpenDetail }: {
   )
 }
 
-function ChainDone({ steps }: { steps: readonly QueueStep[] }) {
+export function ChainDone({ steps }: { steps: readonly QueueStep[] }) {
   return (
     <>
       {steps.map((step) => (
@@ -299,7 +299,7 @@ export function QueueRowBox({
  * that no criterion already shows. A criterion's value that the record line
  * also carries takes its date from there, and is said once.
  */
-function DecisionEvidence({ point, basis, isEnglish }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean }) {
+export function DecisionEvidence({ point, basis, isEnglish }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean }) {
   const groups = criteriaOf(point)
   const shown = new Set<DecisionBasisItem>()
   const dated = groups.map((group) => ({

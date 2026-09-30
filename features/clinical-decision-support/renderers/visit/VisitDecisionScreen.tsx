@@ -9,6 +9,7 @@ import type {
 } from '../../stores/physician-decisions.store'
 import { useCdssDecisionTimingStore } from '../../stores/cdss-decision-timing.store'
 import {
+  ABSENT_STATES,
   BLOCK_ORDER,
   DECISION_STATES,
   buildQueueRows,
@@ -36,6 +37,7 @@ import type {
   VisitDecisionModel,
 } from '../../types'
 import { DecisionMapColumns } from './DecisionMapColumns'
+import { VisitBookLayout, type BookEntry, type BookMark } from './VisitBookLayout'
 import { DecisionPointDetail } from './DecisionPointDetail'
 import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
 import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
@@ -117,6 +119,9 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
+  // The pocket-handbook layout, an experiment opened with `?visit=book`
+  // (owner request 2026-09-30); the map stays the page's layout.
+  const [book] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('visit') === 'book')
   // Whether the page drew the patient undiagnosed, and whether the diagnosis
   // then came to stand on it: the diagnosis keeps its place at the head of 01
   // rather than moving under the clinician (clinician feedback 2026-09-27:
@@ -615,6 +620,165 @@ export function VisitDecisionScreen({
     DECISION_STATES.has(point.state) && !decisionOf(point) && !queuedDps.has(point.dp)
   )).length
   const status = visitStatusSentence(model, rows, stillToConfirm, isEnglish)
+
+  if (book) {
+    const samePoint = (a: DecisionPointView, b: DecisionPointView) => a.dp === b.dp && a.source === b.source
+    const headRowOf = (point: DecisionPointView) => rows.find((row) => samePoint(row.steps[0].point, point))
+    // A row that walks on to other points (an older pack's DP-07 → DP-08)
+    // stands for them too.
+    const coveringRowOf = (point: DecisionPointView) => rows.find((row) => row.steps.some((step, index) => (
+      index > 0 && samePoint(step.point, point) && !samePoint(step.point, row.steps[0].point)
+    )))
+    const askedInBlock = diagnosisView?.answeredBy?.dps ?? []
+    const diagnosisHome = diagnosisContent
+      ? model.points.find((point) => point.source === sourceOfPage && askedInBlock.includes(point.dp) && !ABSENT_STATES.has(point.state))
+      : undefined
+    const entryOf = (point: DecisionPointView): BookEntry => {
+      if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: followUpLead }
+      if (diagnosisHome && point.source === sourceOfPage && askedInBlock.includes(point.dp) && !ABSENT_STATES.has(point.state)) {
+        if (samePoint(point, diagnosisHome)) {
+          return {
+            kind: 'slot',
+            point,
+            content: diagnosisFirst ? diagnosisContent : (
+              <details
+                open={diagnosisFoldOpen ?? diagnosisPending}
+                onToggle={(event) => {
+                  const open = event.currentTarget.open
+                  if (open !== (diagnosisFoldOpen ?? diagnosisPending)) setDiagnosisFoldOpen(open)
+                }}
+                className="group/fold rounded-md border border-border bg-background"
+              >
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2.5 text-sm font-medium text-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0 flex-1">{point.headline ?? (isEnglish ? 'Diagnosis and phenotype' : '診斷與分型')}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/fold:rotate-180" aria-hidden="true" />
+                </summary>
+                <div className="border-t border-border p-2">{diagnosisContent}</div>
+              </details>
+            ),
+          }
+        }
+        return { kind: 'skip', point, anchorOf: diagnosisHome }
+      }
+      const head = headRowOf(point)
+      if (head) return { kind: 'row', point, row: head, queued: true }
+      const covering = coveringRowOf(point)
+      if (covering) return { kind: 'covered', point, by: covering.steps[0].point }
+      const decidedBy = decidedElsewhere(point)
+      if (decidedBy) return { kind: 'covered', point, by: decidedBy.owner }
+      // A point with buttons the pack did not queue (a dose to confirm, 用藥
+      // 核對's 已核對) decides on its own row.
+      if (point.actions.length > 0) {
+        const steps = pointSteps(point, decisions, now)
+        const current = steps.find((step) => !step.decision)
+        return { kind: 'row', point, row: { key: visitDecisionKey(point), steps, ...(current ? { current } : {}), safety: point.state === 'safety' }, queued: false }
+      }
+      return { kind: 'line', point }
+    }
+    const markOf = (point: DecisionPointView): BookMark => {
+      if (ABSENT_STATES.has(point.state)) return 'absent'
+      if (openStepOf(point)) return 'act'
+      if (decisionOf(point)) return 'done'
+      const entry = entryOf(point)
+      if (entry.kind === 'row') {
+        if (!entry.row.current) return 'done'
+        if (entry.row.safety) return 'safety'
+        if (entry.queued || DECISION_STATES.has(point.state)) return 'act'
+        return point.state === 'done' ? 'done' : 'info'
+      }
+      if (entry.kind === 'slot' && point.dp === 'DP-03') return unansweredAsks.length ? 'ask' : 'done'
+      if (point.state === 'safety') return 'safety'
+      if (point.state === 'ask') return 'ask'
+      if (point.state === 'done') return 'done'
+      return 'info'
+    }
+    // Worth opening: what the decision turns on (criteria), a chain of steps,
+    // or several options to weigh. A reminder is read where it stands.
+    const isComplex = (point: DecisionPointView) => (DECISION_STATES.has(point.state) || Boolean(openStepOf(point))) && Boolean(
+      point.criteria?.length || point.next || (point.chain?.length ?? 0) > 1 || point.actions.length >= 3,
+    )
+    const bookShownKey = (point: DecisionPointView) => {
+      const entry = entryOf(point)
+      if (entry.kind !== 'row') return undefined
+      return (entry.row.current ?? entry.row.steps[entry.row.steps.length - 1]).key
+    }
+    const bookDetail = openPoint ? (
+      <DecisionPointDetail
+        key={visitDecisionKey(openPoint)}
+        point={openPoint}
+        shownAbove={{ headline: true, why: true }}
+        steps={openDeciding ? [openDeciding.step] : pointSteps(openPoint, decisions, now)}
+        {...(openDeciding ? { decidedWith: openDeciding.owner } : bookShownKey(openPoint) ? { controlsAbove: bookShownKey(openPoint) } : {})}
+        isEnglish={isEnglish}
+        sourceOfPage={sourceOfPage}
+        modules={modules}
+        renderDetail={renderDetail}
+        onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'map') : undefined}
+        onClear={onClearDecision ? (step) => clear(step.key) : undefined}
+        onClose={() => setOpenKey(null)}
+      />
+    ) : null
+    return (
+      <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
+        <VisitBookLayout
+          points={model.points}
+          isEnglish={isEnglish}
+          sourceOfPage={sourceOfPage}
+          entryOf={entryOf}
+          markOf={markOf}
+          isComplex={isComplex}
+          openKeyOf={visitDecisionKey}
+          openKey={openPoint ? openKey : null}
+          onToggle={toggleOpen}
+          detail={bookDetail}
+          {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
+          {...(onClearDecision ? { onClear: (step: QueueStep) => clear(step.key) } : {})}
+          basisOf={basisOf}
+          extrasOf={(point) => surfaces?.pointExtras?.(point, { once: true }) ?? null}
+          top={(
+            <>
+              <VisitStatusLine model={model} sentence={status.text} />
+              <VisitValues
+                model={model}
+                isEnglish={isEnglish}
+                now={now}
+                {...(surfaces?.editValues ? { onEditValues: surfaces.editValues } : {})}
+                {...(surfaces?.editValue ? { onEditValue: surfaces.editValue } : {})}
+                {...(surfaces?.statusLine?.valueAddons ? { valueAddons: surfaces.statusLine.valueAddons } : {})}
+                {...(surfaces?.statusLine?.extras ? { extras: surfaces.statusLine.extras } : {})}
+              />
+              {surfaces?.statusPanel ?? null}
+              <VisitTriggers model={model} isEnglish={isEnglish} />
+            </>
+          )}
+          blockFooters={{
+            ...surfaces?.columnFooters,
+            outlook: (
+              <>
+                {surfaces?.columnFooters?.outlook}
+                {outlookModules.map((item) => (
+                  <MapFold key={item.id} label={item.moduleName ?? item.title} size="sm" bodyClassName="px-2.5 pb-2.5 pt-2" testId={`cdss-visit-outlook-module-${item.id}`}>
+                    {renderDetail(item)}
+                  </MapFold>
+                ))}
+                {outlookContent}
+              </>
+            ),
+          }}
+          end={(
+            <section className="space-y-2 border-t-2 border-foreground/80 pt-3" aria-label={isEnglish ? "Today's plan" : '今天的計畫'} data-testid="cdss-book-end">
+              <VisitPlan plan={plan} isEnglish={isEnglish} />
+              {status.decided ? (
+                <p className="px-0.5 text-sm font-medium text-foreground" data-testid="cdss-visit-decided-line">{status.text}</p>
+              ) : null}
+              <VisitSummary text={summaryText} isEnglish={isEnglish} />
+            </section>
+          )}
+        />
+        {footer}
+      </div>
+    )
+  }
 
   return (
     <div

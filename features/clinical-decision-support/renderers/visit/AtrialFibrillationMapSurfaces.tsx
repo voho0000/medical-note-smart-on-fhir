@@ -156,9 +156,12 @@ export function AtrialFibrillationMapSurfaces({
     // DP-01 asks the diagnosis itself, as a row of 診斷決定: the view needs
     // no content of its own.
     diagnosis: { content: null, dps: DIAGNOSIS_VIEW_DPS },
-    pointExtras: (point) => {
+    pointExtras: (point, options) => {
       const here = homes.filter((home) => home.dp && isPagePoint(point, 'af', [home.dp])).map((home) => home.group)
-      const strategyHere = strategyDp !== undefined && isPagePoint(point, 'af', STRATEGY_DPS)
+      // One card opens at a time on the map, so each strategy point's card
+      // carries the choice; a page that shows every point at once shows it
+      // under the first of them only.
+      const strategyHere = strategyDp !== undefined && isPagePoint(point, 'af', options?.once ? [strategyDp] : STRATEGY_DPS)
       if (here.length === 0 && !strategyHere) return undefined
       return (
         <>
