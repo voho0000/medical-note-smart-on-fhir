@@ -148,4 +148,73 @@ describe('pairRawRows', () => {
     const history: LabDataReportRawRow = { ref: 1, source: 's03', dates: { assaY_DATE: { day: -400 } }, fields: { assaY_NAME: 'HbA1c' }, results: { assaY_VALUE: 6.8 }, withheld: {} }
     expect([...pairRawRows(rows, [history]).convertedByRaw]).toEqual([[1, 1]])
   })
+
+  it('lets the exact name win over a canonical match (two eGFR formulas, one value)', () => {
+    // A hospital's "Estimated GFR" and its CKD-EPI row carry the same value on
+    // one day; each raw row must land on the converted row that bears its name.
+    const withKey = (row: LabDataReportRow, testKey: string, column: string) => ({ ...row, app: { ...row.app, testKey, column } })
+    const rows = [
+      withKey(converted(1, 0, 'Estimated GFR', q(88), ['69405-9', '09015C']), 'EGFR(M)', 'eGFR'),
+      withKey(converted(2, 0, '腎絲球過濾率(新) ;(eGFR-CKD-EPI)', q(88), ['62238-1', '09015C']), 'EGFR(EPI)', 'eGFR (CKD-EPI)'),
+    ]
+    const pairing = pairRawRows(rows, [
+      raw(1, [0], { order_code: '09015C', assay_item_name: '腎絲球過濾率(新) ;(eGFR-CKD-EPI)' }, '88'),
+      raw(2, [0], { order_code: '09015C', assay_item_name: 'Estimated GFR' }, '88'),
+    ])
+    expect([...pairing.convertedByRaw].sort()).toEqual([[1, 2], [2, 1]])
+  })
+
+  it('matches a history row by the source name the conversion kept as a code', () => {
+    const rows = [converted(1, -30, 'Creatinine', q(1.1), ['2160-0', '09015C', 'Renal_Scr'])]
+    const history: LabDataReportRawRow = { ref: 1, source: 's03', dates: { assaY_DATE: { day: -30 } }, fields: { assaY_NAME: 'Renal_Scr' }, results: { assaY_VALUE: 1.1 }, withheld: {} }
+    const pairing = pairRawRows(rows, [history])
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1]])
+  })
+
+  it('shows the second 健保日檔／月檔 copy as merged, not dropped — unless its value differs', () => {
+    const rows = [converted(1, 0, '三酸甘油脂 / Triglyceride', q(150), ['09004C'])]
+    const pairing = pairRawRows(rows, [
+      raw(1, [0], { order_code: '09004C', assay_item_name: 'Triglyceride', data_mark: '健保日檔;' }, '150'),
+      raw(2, [0], { order_code: '09004C', assay_item_name: '三酸甘油脂', data_mark: '健保月檔;' }, '150'),
+      raw(3, [0], { order_code: '09004C', assay_item_name: '三酸甘油脂', data_mark: '健保月檔;' }, '162'),
+    ])
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1]])
+    expect([...pairing.mergedInto]).toEqual([[2, 1]])
+    expect(pairing.unmatchedRaw).toEqual([3])
+  })
+
+  it('pairs the one row left under a shared order code, flagged as code only', () => {
+    // SMEAR and CULTURE share 13026C; CULTURE pairs by name, SMEAR is what is left.
+    const rows = [converted(1, 0, 'Acid-fast Stain', { kind: 'string', value: 'Negative', length: 8 }, ['11545-1', '13026C']), converted(2, 0, 'Mycobacterial Culture', { kind: 'string', value: 'No growth', length: 9 }, ['13026C'])]
+    const pairing = pairRawRows(rows, [
+      raw(1, [0], { order_code: '13026C', assay_item_name: 'SMEAR' }, 'Negative'),
+      raw(2, [0], { order_code: '13026C', assay_item_name: 'Culture' }, 'No growth'),
+    ])
+    expect([...pairing.convertedByRaw].sort()).toEqual([[1, 1], [2, 2]])
+    expect([...pairing.codeOnly]).toEqual([1])
+    expect(pairing.valueDiffers.size).toBe(0)
+  })
+
+  it('does not eliminate when two tests are still left under the code', () => {
+    const rows = [converted(1, 0, 'Stain A', q(1), ['13026C']), converted(2, 0, 'Stain B', q(2), ['13026C'])]
+    const pairing = pairRawRows(rows, [raw(1, [0], { order_code: '13026C', assay_item_name: 'X' }, '1'), raw(2, [0], { order_code: '13026C', assay_item_name: 'Y' }, '2')])
+    expect(pairing.convertedByRaw.size).toBe(0)
+  })
+
+  it('learns a history name from this report\'s own rows, to find the row it was folded into', () => {
+    // The bridge keeps "Renal_Scr" as a code on the history rows it converts
+    // (column CREA); a later history row it folded into an S02 row shows up as
+    // a merged copy of that S02 creatinine, not as dropped.
+    const crea = (ref: number, day: number, value: number, codes: string[]) => ({ ...converted(ref, day, 'Creatinine', q(value), codes), app: { categoryId: 'chem', decidedBy: 'loinc' as const, testKey: 'CREA', column: 'CREA' } })
+    const rows = [crea(1, -300, 1.0, ['2160-0', '09015C', 'Renal_Scr']), crea(2, 0, 1.1, ['2160-0', '09015C'])]
+    const history = (ref: number, day: number, value: number): LabDataReportRawRow => ({ ref, source: 's03', dates: { assaY_DATE: { day } }, fields: { assaY_NAME: 'Renal_Scr' }, results: { assaY_VALUE: value }, withheld: {} })
+    const pairing = pairRawRows(rows, [
+      raw(1, [0], { order_code: '09015C', assay_item_name: 'Creatinine' }, '1.1'),
+      history(2, -300, 1.0),
+      history(3, 0, 1.1),
+    ])
+    expect([...pairing.convertedByRaw].sort()).toEqual([[1, 2], [2, 1]])
+    expect([...pairing.mergedInto]).toEqual([[3, 2]])
+    expect(pairing.unmatchedRaw).toEqual([])
+  })
 })

@@ -7,15 +7,20 @@
 // that explains them.
 //
 // It must never hide a conversion error by pairing the wrong rows, so:
-// - the test is decided by its name first — through the same canonical key
-//   the cumulative report uses ("HGB", "Hb 血色素" → HB; "SEG",
-//   "Neutrophil 嗜中性多核球" → NEU); an order code shared by several
-//   tests (08011C covers WBC, RBC, PLT …) only pairs when it is the one row
-//   carrying that code on that day, on both sides;
+// - the test is decided by its name first, strongest match wins: the same
+//   name (incl. a history row's name kept as a coding code), then the same
+//   canonical key the cumulative report uses ("HGB", "Hb 血色素" → HB;
+//   "SEG", "Neutrophil 嗜中性多核球" → NEU) or that this report's own rows
+//   give a history name ("Renal_Scr" → CREA), then a whole-word containment;
+//   an order code shared by several tests (08011C covers WBC, RBC, PLT …)
+//   only pairs when it is the one row carrying that code on that day, on
+//   both sides — or the one left after the others paired by name (flagged);
 // - a result is its comparator, its numbers and its qualitative text
 //   together ("<0.5" ≠ "0.5", "Reactive(0.18)" ≠ "Nonreactive(0.18)");
 // - a pair whose values differ is made only when it is the single candidate
-//   left, and is flagged.
+//   left, and is flagged;
+// - a second 健保日檔／月檔 copy of a paired result with the same value is
+//   shown as merged into that row, not as dropped.
 import { canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 import type { LabDataReportRawRow, LabDataReportRow } from '../types'
 
@@ -27,6 +32,14 @@ export interface RawPairing {
   /** Raw refs paired on day and test although the values differ — itself a
    *  sign of a conversion error (unit, decimal, comparator, wording). */
   valueDiffers: Set<number>
+  /** Raw refs paired only because a day and order code left exactly one
+   *  raw row and one converted row (their names did not match). */
+  codeOnly: Set<number>
+  /** raw ref → converted ref it was merged into: a second copy of a result
+   *  already paired, with the same value — a 健保日檔／月檔 copy, or a
+   *  history (S03) row the bridge folded into the S02 row. */
+  mergedInto: Map<number, number>
+  /** Raw rows with no converted row and no merge that explains them. */
   unmatchedRaw: number[]
   /** Converted IMUE0060 rows with no raw row. */
   unmatchedConverted: number[]
@@ -37,6 +50,9 @@ export interface RawPairing {
 
 const normalize = (text: string | undefined) =>
   (text ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '')
+/** Like normalize, but single spaces stay: they are word boundaries. */
+const normalizeSpaced = (text: string | undefined) =>
+  (text ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
 
 // ── Results ──────────────────────────────────────────────────────────────
 
@@ -114,22 +130,38 @@ const sameResult = (a: ResultKey, b: ResultKey) =>
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
-/** A name as written and as the app's canonical analyte key. */
-function nameKeys(name: string | undefined): string[] {
-  if (!name?.trim()) return []
-  return [normalize(name), normalize(canonicalTestKeyFromString(name))].filter(Boolean)
+/** How strongly a raw row's name names a converted row's test.
+ *  Exact: the same name — the converted text or one of its " / "-joined
+ *  parts (a merged daily + monthly row), a coding display, or a coding code
+ *  (history rows keep their source name there: "Renal_Scr").
+ *  Canonical: the same canonical analyte key (the cumulative report's own).
+ *  Contains: one name contains the other as a whole word. */
+const NameTier = { None: 0, Contains: 1, Canonical: 2, Exact: 3 } as const
+type NameTier = (typeof NameTier)[keyof typeof NameTier]
+
+const canonicalKey = (name: string | undefined) =>
+  name?.trim() ? normalize(canonicalTestKeyFromString(name)) : ''
+
+function rawName(row: LabDataReportRawRow): string | undefined {
+  return row.fields.assay_item_name ?? row.fields.assaY_NAME
 }
 
-function rawNames(row: LabDataReportRawRow): string[] {
-  return nameKeys(row.fields.assay_item_name ?? row.fields.assaY_NAME)
-}
-
-function convertedNames(row: LabDataReportRow): string[] {
+function exactNames(row: LabDataReportRow): string[] {
+  const text = row.code.text ?? ''
   return [
-    ...nameKeys(row.code.text),
+    text,
+    ...text.split(/\s+\/\s+/),
+    ...row.code.codings.flatMap((coding) => [coding.display, coding.code]),
+  ].map(normalize).filter(Boolean)
+}
+
+function canonicalNames(row: LabDataReportRow): string[] {
+  const text = row.code.text ?? ''
+  return [
+    canonicalKey(text),
+    ...text.split(/\s+\/\s+/).map(canonicalKey),
     normalize(row.app.testKey),
     normalize(row.app.column),
-    ...row.code.codings.map((coding) => normalize(coding.display)),
   ].filter(Boolean)
 }
 
@@ -145,11 +177,48 @@ function containsWord(hay: string, needle: string): boolean {
   return false
 }
 
-function sameName(raw: LabDataReportRawRow, converted: LabDataReportRow): boolean {
-  const names = rawNames(raw)
-  if (names.length === 0) return false
-  const others = convertedNames(converted)
-  return others.some((other) => names.some((name) => other === name || containsWord(other, name) || containsWord(name, other)))
+/**
+ * Source names this report itself explains: a converted row that carries a
+ * name as a coding code ("Renal_Scr" on a history row) and sits in one
+ * column (CREA) says that name is that analyte — so the same name on a raw
+ * row that the bridge folded into another row still finds its column. Only
+ * a code that points at a single column counts.
+ */
+function learnNames(converted: readonly LabDataReportRow[]): Map<string, string> {
+  const keys = new Map<string, Set<string>>()
+  for (const row of converted) {
+    const key = normalize(row.app.testKey)
+    if (!key) continue
+    for (const coding of row.code.codings) {
+      const code = normalize(coding.code)
+      if (!code) continue
+      keys.set(code, (keys.get(code) ?? new Set()).add(key))
+    }
+  }
+  const learned = new Map<string, string>()
+  for (const [code, found] of keys) if (found.size === 1) learned.set(code, [...found][0])
+  return learned
+}
+
+function nameTier(raw: LabDataReportRawRow, converted: LabDataReportRow, learned: Map<string, string>): NameTier {
+  const name = rawName(raw)
+  const plain = normalize(name)
+  if (!plain) return NameTier.None
+  const exact = exactNames(converted)
+  if (exact.includes(plain)) return NameTier.Exact
+  const canonical = [canonicalKey(name), learned.get(plain)].filter((key): key is string => !!key)
+  const others = canonicalNames(converted)
+  if (canonical.some((key) => others.includes(key))) return NameTier.Canonical
+  // Whole-word containment, with spaces kept as boundaries ("a/A O2" in
+  // "a/A O2 ratio", "Testosterone" in "…(Testosterone (EIA/LIA))").
+  const spaced = normalizeSpaced(name)
+  const spacedOthers = [
+    converted.code.text,
+    ...converted.code.codings.map((coding) => coding.display),
+    converted.app.column,
+  ].map(normalizeSpaced).filter(Boolean)
+  if (spacedOthers.some((other) => containsWord(other, spaced) || containsWord(spaced, other))) return NameTier.Contains
+  return NameTier.None
 }
 
 const orderCodeOf = (raw: LabDataReportRawRow) => raw.fields.order_code?.trim() || undefined
@@ -171,6 +240,9 @@ export function pairRawRows(converted: readonly LabDataReportRow[], raw: readonl
   const convertedByRaw = new Map<number, number>()
   const rawByConverted = new Map<number, number>()
   const valueDiffers = new Set<number>()
+  const codeOnly = new Set<number>()
+  const learned = learnNames(converted)
+  const mergedInto = new Map<number, number>()
 
   const byDay = new Map<number, LabDataReportRow[]>()
   for (const row of converted) {
@@ -186,21 +258,36 @@ export function pairRawRows(converted: readonly LabDataReportRow[], raw: readonl
     for (const day of rawDays(row)) rawPerDayCode.set(`${day}|${code}`, (rawPerDayCode.get(`${day}|${code}`) ?? 0) + 1)
   }
 
+  /** Converted rows on this day that are this raw row's test, at the
+   *  strongest name tier any of them reaches — taken or not, so a raw row
+   *  whose exact match is already paired never settles for a weaker one. */
+  const namedOnDay = (rawRow: LabDataReportRawRow, day: number): LabDataReportRow[] => {
+    const tiers = (byDay.get(day) ?? []).map((row) => ({ row, tier: nameTier(rawRow, row, learned) }))
+    const best = Math.max(NameTier.None, ...tiers.map((entry) => entry.tier)) as NameTier
+    return best === NameTier.None ? [] : tiers.filter((entry) => entry.tier === best).map((entry) => entry.row)
+  }
+
   /** Still-free converted rows on this day that are this raw row's test. */
   const candidates = (rawRow: LabDataReportRawRow, day: number): LabDataReportRow[] => {
-    const sameDay = byDay.get(day) ?? []
-    const named = sameDay.filter((row) => sameName(rawRow, row))
+    const named = namedOnDay(rawRow, day)
     if (named.length > 0) return named.filter((row) => !rawByConverted.has(row.ref))
     const code = orderCodeOf(rawRow)
     if (!code || rawPerDayCode.get(`${day}|${code}`) !== 1) return []
-    const coded = sameDay.filter((row) => hasCode(row, code))
+    const coded = (byDay.get(day) ?? []).filter((row) => hasCode(row, code))
     return coded.length === 1 && !rawByConverted.has(coded[0].ref) ? coded : []
   }
 
-  const pair = (rawRow: LabDataReportRawRow, row: LabDataReportRow, differs: boolean) => {
+  const pair = (rawRow: LabDataReportRawRow, row: LabDataReportRow, flags: { differs?: boolean; codeOnly?: boolean } = {}) => {
     convertedByRaw.set(rawRow.ref, row.ref)
     rawByConverted.set(row.ref, rawRow.ref)
-    if (differs) valueDiffers.add(rawRow.ref)
+    if (flags.differs) valueDiffers.add(rawRow.ref)
+    if (flags.codeOnly) codeOnly.add(rawRow.ref)
+  }
+
+  const resultsAgree = (rawRow: LabDataReportRawRow, row: LabDataReportRow) => {
+    const rawKey = rawResultKey(rawRow, row)
+    const convertedKey = convertedResultKey(row)
+    return !rawKey || !convertedKey || sameResult(rawKey, convertedKey)
   }
 
   // Equal results first, so that a row with no attached value never takes
@@ -213,7 +300,7 @@ export function pairRawRows(converted: readonly LabDataReportRow[], raw: readonl
         const found = candidates(rawRow, day)
         if (pass === 'differs') {
           if (found.length === 1) {
-            pair(rawRow, found[0], true)
+            pair(rawRow, found[0], { differs: true })
             break
           }
           continue
@@ -225,9 +312,41 @@ export function pairRawRows(converted: readonly LabDataReportRow[], raw: readonl
           return !rawKey || !convertedKey
         })
         if (match) {
-          pair(rawRow, match, false)
+          pair(rawRow, match)
           break
         }
+      }
+    }
+  }
+
+  // Elimination: when a day and order code leave exactly one free raw row
+  // and one free converted row (the others shared the code but were paired
+  // by name), they are each other's — flagged as paired by code only.
+  for (const rawRow of raw) {
+    if (convertedByRaw.has(rawRow.ref)) continue
+    const code = orderCodeOf(rawRow)
+    if (!code) continue
+    for (const day of rawDays(rawRow)) {
+      const freeRaw = raw.filter((row) => !convertedByRaw.has(row.ref) && orderCodeOf(row) === code && rawDays(row).includes(day))
+      const freeConverted = (byDay.get(day) ?? []).filter((row) => !rawByConverted.has(row.ref) && hasCode(row, code))
+      if (freeRaw.length === 1 && freeConverted.length === 1) {
+        pair(rawRow, freeConverted[0], { codeOnly: true, differs: !resultsAgree(rawRow, freeConverted[0]) })
+        break
+      }
+    }
+  }
+
+  // Merged copies: the bridge turns a 健保日檔 and a 健保月檔 copy of one
+  // result into a single row ("三酸甘油脂 / Triglyceride"). A raw row whose
+  // test was already paired on that day with the same result is that second
+  // copy, not a dropped row. A different result stays unpaired.
+  for (const rawRow of raw) {
+    if (convertedByRaw.has(rawRow.ref)) continue
+    for (const day of rawDays(rawRow)) {
+      const host = namedOnDay(rawRow, day).find((row) => rawByConverted.has(row.ref) && resultsAgree(rawRow, row))
+      if (host) {
+        mergedInto.set(rawRow.ref, host.ref)
+        break
       }
     }
   }
@@ -236,7 +355,9 @@ export function pairRawRows(converted: readonly LabDataReportRow[], raw: readonl
     convertedByRaw,
     rawByConverted,
     valueDiffers,
-    unmatchedRaw: raw.filter((row) => !convertedByRaw.has(row.ref)).map((row) => row.ref),
+    codeOnly,
+    mergedInto,
+    unmatchedRaw: raw.filter((row) => !convertedByRaw.has(row.ref) && !mergedInto.has(row.ref)).map((row) => row.ref),
     unmatchedConverted: converted
       .filter((row) => !rawByConverted.has(row.ref) && fromLabSource(row))
       .map((row) => row.ref),
