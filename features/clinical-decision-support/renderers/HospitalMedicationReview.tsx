@@ -17,8 +17,8 @@ export function HospitalMedicationReview({ evidence, locale }: {
         {english ? `Confirm current use of ${pending.length} hospital prescription(s)` : `${pending.length} 筆院內處方，目前使用待確認`}
       </h3>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {english ? 'Resolved ingredients are available to CDSS. A prescription alone does not confirm actual use; review the list before interpreting medication guidance.'
-          : '已確認的成分已提供給 CDSS。開立紀錄無法確認實際服藥，請先核對用藥清單，再解讀相關用藥指引。'}
+        {english ? 'Safety checks include possible prescription exposure. A prescription alone does not confirm actual use; reconcile the list before starting or increasing medication.'
+          : '安全判讀納入處方的可能用藥暴露。開立紀錄無法確認實際服藥，開始或加量前請先核對用藥清單。'}
       </p>
       <details className="mt-2">
         <summary className="min-h-11 cursor-pointer content-center text-sm text-primary focus-visible:outline-2 focus-visible:outline-ring">

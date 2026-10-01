@@ -29,9 +29,39 @@ export interface HospitalMedicationEvidence {
 export type HospitalAwareCdssProfile = CdssPatientProfile & {
   hospitalMedicationEvidence?: readonly HospitalMedicationEvidence[]
   hospitalMedicationPolicyVersion?: string
+  /** Classes with an unconfirmed prescription: eligible for safety exposure checks. */
+  hospitalMedicationPossibleExposureClasses?: readonly CdssMedicationClassId[]
 }
 
-export const HOSPITAL_MEDICATION_POLICY_VERSION = 'vgh-cdss-medications-20261001-v1'
+export const HOSPITAL_MEDICATION_POLICY_VERSION = 'vgh-cdss-medications-20261001-v2'
+
+/** Native exposure facts used outside medication class contexts, including AF. */
+export const HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS = [
+  'currentNsaid', 'currentPotentialHfWorseningMedication',
+  'currentHyperkalemiaRiskMedication', 'currentPotentialNephrotoxin',
+  'currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant',
+  'currentAntiplatelet', 'medicationListOverview',
+] as const
+
+export function isPendingHospitalMedication(item: HospitalMedicationEvidence): boolean {
+  return item.useState === 'active-order-unconfirmed'
+    || item.useState === 'historical-record-current-status-unknown'
+}
+
+/** The native pack's exposure checks require a positive class state. This
+ * evaluation-only projection keeps possible exposures visible to those checks;
+ * the returned result is reconciled before rendering. The source profile still
+ * distinguishes unconfirmed use, and therapeutic decisions cannot start/titrate
+ * a drug from this projection alone. It carries no raw medication resources. */
+export function createHospitalMedicationEvaluationProfile(profile: HospitalAwareCdssProfile): CdssPatientProfile {
+  if (!profile.hospitalMedicationPossibleExposureClasses?.length) return profile
+  const medicationClassContexts = { ...profile.medicationClassContexts }
+  for (const classId of profile.hospitalMedicationPossibleExposureClasses) {
+    const context = medicationClassContexts[classId]
+    if (context) medicationClassContexts[classId] = { ...context, state: 'confirmed-current' }
+  }
+  return { ...profile, medicationClassContexts }
+}
 
 const EXCLUDED = new Set(['cancelled', 'entered-in-error'])
 const NOT_CURRENT = new Set(['stopped', 'completed', 'not-taken'])
@@ -91,6 +121,7 @@ export function createHospitalAwareCdssPatientProfile(
   const now = input.now ?? new Date()
   const evidence: HospitalMedicationEvidence[] = []
   const internalStatuses = new Map<string, string | undefined>()
+  const internalUseStates = new Map<string, HospitalMedicationUseState>()
   const medications = input.medications.map((source, index): HostMedication => {
     const name = resolveHospitalMedicationName(source.medicationCodeableConcept)
     if (!name) return source
@@ -113,6 +144,7 @@ export function createHospitalAwareCdssPatientProfile(
       // before exposing the profile; this is never an imported FHIR status.
       const internalStatus = `draft:mediprisma-hospital:${index}`
       internalStatuses.set(internalStatus, source.status?.trim().toLowerCase() || undefined)
+      internalUseStates.set(internalStatus, useState)
       normalized.status = internalStatus
     }
     const classIds = [...new Set(classifyCurrentMedications([normalized], now).classified.map((item) => item.classId))]
@@ -137,6 +169,16 @@ export function createHospitalAwareCdssPatientProfile(
       undatedPrescriptions: context.undatedPrescriptions?.map(restoreTimelineStatus),
     }
   }
+  // Dedicated native medication contexts (for example Forxiga coverage) also
+  // carry a status. Restore it and keep their actual use explicitly unconfirmed.
+  const medicationContexts = profile.medicationContexts && Object.fromEntries(
+    Object.entries(profile.medicationContexts).map(([key, context]) => {
+      const state = internalUseStates.get(context.status ?? '')
+      return [key, { ...restoreTimelineStatus(context),
+        ...(state ? { useState: state === 'not-current' ? 'not_current' as const : 'active_order_unconfirmed' as const } : {}),
+      }]
+    }),
+  )
   const byId = new Map(evidence.map((item) => [`${item.source.resourceType}:${item.source.resourceId}`, item]))
   // The class matcher read derived ingredient evidence; citations continue to
   // carry the original resource identity, coding, date, and status.
@@ -164,6 +206,10 @@ export function createHospitalAwareCdssPatientProfile(
   }
   const uncertain = evidence.filter((item) => item.useState === 'active-order-unconfirmed'
     || item.useState === 'historical-record-current-status-unknown')
+  const confirmedHypoglycemiaClass = ['insulin', 'sulfonylurea'].some((classId) => {
+    const state = contexts[classId as CdssMedicationClassId]?.state
+    return state === 'confirmed-current' || state === 'on-hold'
+  })
   for (const classId of new Set(uncertain.flatMap((item) => item.classIds))) {
     const context = contexts[classId]
     if (!context || context.state === 'confirmed-current' || context.state === 'on-hold') continue
@@ -176,9 +222,10 @@ export function createHospitalAwareCdssPatientProfile(
         ? 'active-order-unconfirmed' : 'historical-record-current-status-unknown',
       medicationNames: names,
     }
-    // Harmful-exposure facts are intentionally absent until use is confirmed.
-    // A separate evidence fact keeps the ingredient visible for reconciliation.
+    // Keep the use-state fact separate from the native possible-exposure facts.
+    // A prescription cannot establish actual use, nor a negative safety finding.
     const factKey = context.factKey.startsWith('hfHarmful') ? `hospitalMedicationClass:${classId}` : context.factKey
+    if (factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass) continue
     facts[factKey] = {
       zh: `院內處方：${names.join('、')}；目前使用待確認`,
       en: `Hospital prescription: ${names.join(', ')}; current use needs confirmation`,
@@ -193,7 +240,8 @@ export function createHospitalAwareCdssPatientProfile(
   if (unresolved.length) for (const [classId, context] of Object.entries(contexts)) {
     if (!context || context.state !== 'not-found') continue
     contexts[classId as CdssMedicationClassId] = { ...context, state: 'uncertain' }
-    if (!context.factKey.startsWith('hfHarmful')) facts[context.factKey] = {
+    if (!context.factKey.startsWith('hfHarmful')
+      && !(context.factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass)) facts[context.factKey] = {
       zh: '院內藥物成分辨識不完整，目前用藥需核對',
       en: 'Hospital ingredient mapping is incomplete; reconcile current medications',
       sources: unresolved.map((item) => item.source),
@@ -207,6 +255,40 @@ export function createHospitalAwareCdssPatientProfile(
     en: 'Hospital ingredient mapping is incomplete; insulin or sulfonylurea use cannot be determined',
     sources: unresolved.map((item) => item.source),
   }
-  return { ...profile, facts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
-    hospitalMedicationPolicyVersion: HOSPITAL_MEDICATION_POLICY_VERSION }
+  // Do not erase prescriptions from direct exposure derivations (AF regimens,
+  // NSAIDs, potassium/renal risks, antiplatelets, and the medication inventory).
+  // Ended/cancelled hospital records stay excluded. Only unconfirmed records
+  // enter this second native pass as possible exposure, never as actual use.
+  const pendingById = new Set(uncertain.filter((item) => {
+    const status = item.source.status?.trim().toLowerCase() ?? ''
+    return status === 'active' || status === 'unknown' || status === ''
+  }).map((item) => `${item.source.resourceType}:${item.source.resourceId}`))
+  const exposureProfile = uncertain.length ? createFhirCdssPatientProfile({ ...input, now,
+    medications: medications.map((item) => pendingById.has(`${item._sourceResourceType ?? 'MedicationRequest'}:${item.id}`)
+      ? { ...item, status: 'active' } : item),
+  }) : profile
+  const restoreSource = (source: CdssFactSource): CdssFactSource =>
+    byId.get(`${source.resourceType}:${source.resourceId}`)?.source ?? source
+  const exposureKeys = [...HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS,
+    ...Object.keys(exposureProfile.facts).filter((key) => key.startsWith('hfHarmful'))]
+  for (const key of exposureKeys) {
+    const fact = exposureProfile.facts[key]
+    if (!fact) continue
+    const pendingSources = fact.sources?.filter((source) => pendingById.has(`${source.resourceType}:${source.resourceId}`)) ?? []
+    facts[key] = { ...fact, sources: fact.sources?.map(restoreSource),
+      ...(pendingSources.length ? {
+        zh: `用藥暴露紀錄（院內使用待確認）：${fact.zh}`,
+        en: `Medication exposure record (hospital use unconfirmed): ${fact.en}`,
+      } : {}),
+    }
+  }
+  const possibleExposureClasses = [...new Set(uncertain.flatMap((item) => item.classIds))]
+    .filter((classId) => exposureProfile.medicationClassContexts?.[classId]?.state === 'confirmed-current'
+      && contexts[classId]?.state !== 'confirmed-current' && contexts[classId]?.state !== 'on-hold')
+  const afMedicationRegimens = exposureProfile.afMedicationRegimens?.map((regimen) => ({
+    ...regimen, sources: regimen.sources.map(restoreSource),
+  }))
+  return { ...profile, facts, medicationContexts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
+    hospitalMedicationPolicyVersion: HOSPITAL_MEDICATION_POLICY_VERSION,
+    hospitalMedicationPossibleExposureClasses: possibleExposureClasses, afMedicationRegimens }
 }

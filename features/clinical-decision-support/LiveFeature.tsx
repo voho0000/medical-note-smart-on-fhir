@@ -14,7 +14,7 @@ import { usePatient } from '@/src/application/hooks/patient/use-patient-query.ho
 import { hfFollowUpHistory } from './utils/hf-follow-up'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { createHospitalAwareCdssPatientProfile } from './utils/hospital-medication-profile'
-import { applyHospitalMedicationReview } from './utils/hospital-medication-review'
+import { buildHospitalAwareCdssResult } from './utils/hospital-medication-review'
 import { HospitalMedicationReview } from './renderers/HospitalMedicationReview'
 import {
   getApplicableClinicalGuidelinePacks,
@@ -540,14 +540,14 @@ export default function LiveClinicalDecisionSupportFeature({
   const result = useMemo(() => {
     if (!profile) return null
     return selectedPack.applies(profile)
-      ? applyHospitalMedicationReview(selectedPack.build({ profile, locale: cdssLocale }), profile, cdssLocale)
+      ? buildHospitalAwareCdssResult(selectedPack, profile, cdssLocale)
       : null
   }, [cdssLocale, profile, selectedPack])
 
   const englishResult = useMemo(() => {
     if (cdssLocale === 'en') return result
     return profile && selectedPack.applies(profile)
-      ? applyHospitalMedicationReview(selectedPack.build({ profile, locale: 'en' }), profile, 'en') : null
+      ? buildHospitalAwareCdssResult(selectedPack, profile, 'en') : null
   }, [cdssLocale, profile, result, selectedPack])
 
   // The layout this browser chose, or — when it never chose — the pack's own
@@ -572,7 +572,7 @@ export default function LiveClinicalDecisionSupportFeature({
     return companionPacks.flatMap((pack) => {
       try {
         return pack.applies(profile)
-          ? [applyHospitalMedicationReview(pack.build({ profile, locale: cdssLocale }), profile, cdssLocale)] : []
+          ? [buildHospitalAwareCdssResult(pack, profile, cdssLocale)] : []
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {
           console.error(`[cdss] companion ${pack.id} could not be built`, error)
@@ -590,7 +590,7 @@ export default function LiveClinicalDecisionSupportFeature({
     return companionResults.flatMap((companion) => {
       const pack = companionPacks.find((candidate) => candidate.id === companion.packId)
       try {
-        return pack ? [applyHospitalMedicationReview(pack.build({ profile, locale: 'en' }), profile, 'en')] : []
+        return pack ? [buildHospitalAwareCdssResult(pack, profile, 'en')] : []
       } catch {
         return []
       }

@@ -1,73 +1,88 @@
 # Hospital ingredients in CDSS
 
-The live CDSS feature passes hospital medication records through
-`utils/hospital-medication-profile.ts` before the released FHIR adapter. The
-same exact recorded-name catalogue used in the medication pane supplies an
-ingredient-only `HostMedication.drugTerminology` input. No official-master
-source/snapshot, NHI drug code, ATC code, product identity, strength-to-dose
-conversion, or grouping is manufactured. Existing official NHI terminology
-takes priority. Unresolved or contradictory aliases remain unresolved.
+The live feature uses `utils/hospital-medication-profile.ts` to supply the same
+exact recorded-name catalogue as the medication pane. It supplies only derived
+ingredient evidence: no NHI/ATC code, official-master snapshot, product identity,
+strength-to-dose conversion, or fill grouping is manufactured. Official NHI
+terminology takes priority. Unresolved or contradictory aliases stay unresolved.
 
-This is a CDSS-only copy: imported FHIR, the medication list, and its original
-status and dosage remain intact. Each derived fact cites the original resource
-type/id, date, coding, and status. Mapping origin, catalogue version, and the
-verified alias reference are retained. The extra profile evidence contains
-minimal fact citations, never duplicate raw resources. Integration does not
-send, log, or persist a new
-patient-data payload automatically.
+Imported FHIR, original status and dosage remain intact. Derived facts and AF
+regimens cite the original resource type/id, coding, date and status. Catalogue
+version, mapping origin and verified alias reference remain available. The profile
+contains minimal citations and class IDs, never duplicate raw resources. No new
+patient-data transmission, logging or automatic persistence is introduced.
 
 ## Use-state policy
 
-The policy is scoped to the VGH generic/product coding systems, including
-unresolved names; it does not change national-cloud prescription interpretation.
+The policy is limited to VGH generic/product coding systems, including unresolved
+names. It preserves national-cloud interpretation.
 
-| Hospital source record | CDSS interpretation |
-| --- | --- |
-| Active MedicationStatement, not future-dated | Confirmed current use |
-| Active/unknown/missing-status MedicationRequest | Order recorded; actual use unconfirmed |
-| Above record with expired dispensing validity | Historical order; actual use unconfirmed |
-| On hold | On hold |
-| Stopped, completed, not taken | Not current |
-| Cancelled or entered in error | Excluded from class findings and reconciliation |
-| Future active statement | Unconfirmed; cannot establish current use |
+| Hospital source record | Use-state interpretation | Exposure checks |
+| --- | --- | --- |
+| Active, nonfuture MedicationStatement | Confirmed current use | Native checks |
+| Active/unknown/missing-status MedicationRequest | Actual use unconfirmed | Possible exposure retained |
+| Above record with expired dispensing validity | Historical order; actual use unconfirmed | Possible exposure retained |
+| Draft / intended | Actual use unconfirmed | Excluded from current/possible exposure |
+| On hold | On hold | Native held-record handling |
+| Stopped, completed, not taken | Not current | Excluded from current/possible exposure |
+| Cancelled, entered in error | Excluded | Excluded |
+| Future active statement | Unconfirmed | Reconcile source; cannot confirm actual use |
 
-FHIR `dispenseRequest.validityPeriod` describes when a prescription may be
-dispensed, not when the patient takes it. Neither that window nor a recent
-expected supply promotes an EHR order to confirmed use. See the
-[FHIR R4 definition](https://hl7.org/fhir/R4/medicationrequest-definitions.html#MedicationRequest.dispenseRequest.validityPeriod).
+FHIR `dispenseRequest.validityPeriod` defines when dispensing is permitted, not
+when the patient takes the drug. An in-date window or recent expected supply
+cannot confirm actual use. See the [FHIR R4 definition](https://hl7.org/fhir/R4/medicationrequest-definitions.html#MedicationRequest.dispenseRequest.validityPeriod).
 
-The released cloud adapter treats active orders and recently completed supplies
-as taken. Unconfirmed and ended EHR records therefore use a non-current status
-on the internal copy only. The host restores emitted citation and prescribing-timeline statuses and
-adds explicit class uncertainty, rather than exporting that internal status.
-A confirmed same-class national-cloud prescription or medication statement
-continues to establish current use.
+The therapy/use-state pass suppresses the cloud adapter's automatic promotion of
+hospital active orders and recently completed supplies. Internal noncurrent
+markers are restored in every emitted citation and prescribing timeline, including
+identical names/dates. A confirmed same-class NHI record or MedicationStatement
+still establishes current use. Confirmed insulin/SU evidence is preserved when the
+other class has a pending hospital order; their shared fact must not be overwritten.
 
-## Care-pack compatibility
+## Possible exposure and treatment decisions
 
-The current care packs also assume the cloud's two-state model. At evaluation
-time `utils/hospital-medication-review.ts` preserves unknown source evidence in
-affected medication decisions and evidence-table rows. Such decisions require
-reconciliation rather than declaring therapy absent or exposure confirmed.
-Known actionable safety findings keep their status and priority when a second
-drug is unconfirmed. The adapted result is the one rendered and used by companion care-pack views;
-Chinese and English evaluations use the same policy. A pending module also
-retires its derived start/titrate visit decision, so the decision map reads the
-reconciliation status rather than an action calculated from unconfirmed use. No route, care-pack, or
-clinical surface is hidden or disabled.
+An unconfirmed order must not disappear from safety derivations. A second native
+FHIR pass retains possible exposure from pending hospital records; it excludes
+ended/cancelled records. Only medication exposure facts and AF regimens are used:
+`currentNsaid`, `currentPotentialHfWorseningMedication`, potassium/renal risks,
+DOAC/VKA/OAC, antiplatelets, the medication overview, and HF harmful-drug evidence.
+Pending facts are labelled as unconfirmed hospital exposure, and all sources retain
+the original status. Other diagnosis or therapy facts are not copied from that pass.
 
-An unresolved ingredient in an active/unconfirmed hospital record also prevents
-negative class findings: otherwise unmatched classes become uncertain, while
-known confirmed-current and held classes remain intact.
+`buildHospitalAwareCdssResult` is the single pack-evaluation seam for selected packs,
+English output and companions. Its evaluation-only profile treats the native
+classifier's recognized pending classes as possible exposure, so safety checks
+that require a positive class state (notably MRA hyperkalemia) remain evaluable.
+The source profile and reconciliation panel keep actual use explicitly unconfirmed.
+Physician-entered observations, answers and overrides are applied to this live
+profile, rather than reading a stale prebuilt safety result. No clinical threshold,
+interaction or dose rule is reimplemented in the host.
 
-A shared reconciliation panel names the pending source records and ingredient
-provenance across CDSS layouts. Confirming actual use currently requires a
-source MedicationStatement/current-medication update; this change does not
-invent a new clinician-confirmation control or assume a historical prescription
-was stopped. Ingredients outside existing care-pack classes are retained as
-evidence but do not acquire new clinical rules.
+The result adapter preserves native actionable/review safety status, priority,
+instructions, positive evidence and physician overrides. Possible NSAID exposure,
+MRA hyperkalemia and AF drug interactions therefore remain visible. Unconfirmed
+prescriptions cannot yield a negative OAC finding. Start/titrate decisions become
+reconciliation requests; their derived visit actions are retired. Safety modules
+keep their warnings but do not offer prescribe/dose-adjust visit actions based only
+on unconfirmed use. Chinese and English use the same policy.
 
-Validation uses fictional records: ingredient classification, source provenance,
-unchanged dosage units, historical active orders, validity windows, negative
-statuses, same-class confirmed evidence, unknown aliases, live feature wiring,
-real care-pack output, and browser import/re-import and responsive checks.
+## Incomplete inventory scope
+
+One active/unconfirmed hospital ingredient outside the exact-name catalogue makes
+otherwise `not-found` classes `uncertain`; confirmed-current and held classes stay
+intact. Negative medication evidence rows also become unknown, including AF's OAC
+row (which has no class context). This deliberately broad completeness policy can
+make many medication modules request reconciliation from a single unresolved
+record. Native positive exposure evidence still supports safety warnings even when
+the display catalogue cannot normalize that name. Unknown ingredients do not imply
+no exposure, nor a complete interaction screen.
+
+The shared panel lists pending records, dates and ingredient provenance across
+layouts. Actual use confirmation requires a source MedicationStatement/current-
+medication update. No new confirmation control, automatic stop inference, clinical
+rule or route/care-pack visibility gate is introduced.
+
+Validation uses fictional AF apixaban orders, severe MRA hyperkalemia, interactions,
+NSAID/potassium/renal/antiplatelet exposure facts, unknown ingredients, ended records,
+shared insulin/SU evidence, live physician potassium edits, source provenance,
+national-cloud equivalence, live wiring, browser imports and responsive checks.

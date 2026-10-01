@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { createFhirCdssPatientProfile, type FhirCdssProfileInput } from '@voho0000/personalized-care-fhir'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
-import { applyHospitalMedicationReview } from '@/features/clinical-decision-support/utils/hospital-medication-review'
+import { applyHospitalMedicationReview, buildHospitalAwareCdssResult } from '@/features/clinical-decision-support/utils/hospital-medication-review'
 import { HospitalMedicationReview } from '@/features/clinical-decision-support/renderers/HospitalMedicationReview'
 import { getDefaultClinicalGuidelinePack } from '@/features/clinical-decision-support/guideline-packs/registry'
 import type { CdssRecommendation, CdssResult } from '@/features/clinical-decision-support/types'
@@ -51,8 +51,8 @@ describe('hospital medications entering CDSS', () => {
   it('does not promote an active hospital order or a recent supply to confirmed use', () => {
     const profile = build([hospital()])
     expect(profile.medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('active-order-unconfirmed')
-    expect(profile.facts.hfHarmfulNsaid).toBeUndefined()
-    expect(profile.facts.currentNsaid).toBeUndefined()
+    expect(profile.facts.hfHarmfulNsaid.zh).toContain('院內使用待確認')
+    expect(profile.facts.currentNsaid.zh).toContain('院內使用待確認')
     expect(profile.facts['hospitalMedicationClass:nsaid-or-cox2-inhibitor'].zh).toContain('目前使用待確認')
   })
 
@@ -61,7 +61,7 @@ describe('hospital medications entering CDSS', () => {
       validityPeriod: { start: '2024-06-14', end: '2024-07-14' },
     } })])
     expect(profile.medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('historical-record-current-status-unknown')
-    expect(profile.facts.currentNsaid).toBeUndefined()
+    expect(profile.facts.currentNsaid.zh).toContain('院內使用待確認')
     expect(profile.facts['hospitalMedication:MedicationRequest:fictional-meitifen'].sources?.[0].status).toBe('active')
   })
 
@@ -73,7 +73,7 @@ describe('hospital medications entering CDSS', () => {
     expect(context?.undatedPrescriptions?.[0].status).toBe('unknown')
     expect(JSON.stringify(profile)).not.toContain('"status":"draft"')
     expect(context?.state).toBe('active-order-unconfirmed')
-    expect(profile.facts.hfHarmfulNsaid).toBeUndefined()
+    expect(profile.facts.hfHarmfulNsaid.zh).toContain('院內使用待確認')
   })
 
   it('does not treat an in-date dispensing validity period as proof of taking', () => {
@@ -102,7 +102,7 @@ describe('hospital medications entering CDSS', () => {
     expect(build([official])).toEqual(createFhirCdssPatientProfile({ ...input, medications: [official] }))
     const mixed = build([official, hospital()])
     expect(mixed.medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('confirmed-current')
-    expect(mixed.facts.hfHarmfulNsaid.sources?.map((source) => source.resourceId)).toEqual([official.id])
+    expect(mixed.facts.hfHarmfulNsaid.sources?.map((source) => source.resourceId)).toEqual([official.id, 'fictional-meitifen'])
   })
 
   it('gives official ingredient terminology priority and retains an unknown alias without inventing codes', () => {
@@ -116,19 +116,19 @@ describe('hospital medications entering CDSS', () => {
     expect(profile.hospitalMedicationEvidence?.[0].source.coding).toEqual(unknown.medicationCodeableConcept?.coding)
   })
 
-  it('marks a harmful-medication row unknown in real pack output and keeps its source citation', () => {
+  it('keeps a possible harmful exposure actionable in real pack output with unconfirmed-use provenance', () => {
     const profile = createHospitalAwareCdssPatientProfile({ ...input, medications: [hospital()],
       conditions: [{ id: 'fictional-hf', clinicalStatus: 'active', code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I50.22' }] } }],
       observations: [{ id: 'fictional-lvef', status: 'final', effectiveDateTime: '2026-09-30',
         code: { coding: [{ system: 'http://loinc.org', code: '10230-1' }] }, valueQuantity: { value: 32, unit: '%' } }],
     })
-    const result = applyHospitalMedicationReview(getDefaultClinicalGuidelinePack().build({ profile, locale: 'zh-TW' }), profile, 'zh-TW')
+    const result = buildHospitalAwareCdssResult(getDefaultClinicalGuidelinePack(), profile, 'zh-TW')
     const modules = [...result.recommendations, ...(result.automatedChecks ?? []).flatMap((check) => check.recommendation ? [check.recommendation] : [])]
     const safetyModule = modules.find((item) => item.evidenceTables?.some((table) => table.concept === 'hf-harmful-medication'))
     expect(safetyModule).toBeDefined()
-    expect(safetyModule?.status).toBe('needs-data')
+    expect(safetyModule?.status).toBe('actionable')
     const row = safetyModule?.evidenceTables?.flatMap((table) => table.items).find((item) => item.id === 'hf-harm:nsaid')
-    expect(row).toMatchObject({ direction: 'unknown', defaultEnabled: false, value: '目前使用待確認：Diclofenac sodium' })
+    expect(row).toMatchObject({ direction: 'supports', defaultEnabled: true, value: expect.stringContaining('目前使用待確認：Diclofenac sodium') })
     expect(row?.sources?.[0]).toMatchObject({ resourceId: 'fictional-meitifen', status: 'active' })
   })
 
@@ -147,7 +147,7 @@ describe('hospital medications entering CDSS', () => {
     expect(reviewed.automatedChecks?.[0].recommendation?.status).toBe('needs-data')
     expect(reviewed.recommendations[0].visitDecision).toBeUndefined()
     expect(reviewed.automatedChecks?.[0].recommendation?.visitDecision).toBeUndefined()
-    expect(reviewed.recommendations[0].nextActions[0]).toContain('current use is unconfirmed')
+    expect(reviewed.recommendations[0].nextActions[0]).toContain('before starting or increasing medication')
   })
 
   it('preserves a known actionable safety alert when another ingredient is unresolved', () => {
@@ -157,7 +157,7 @@ describe('hospital medications entering CDSS', () => {
     ], conditions: [{ id: 'hf', clinicalStatus: 'active', code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I50.22' }] } }],
     observations: [{ id: 'lvef', status: 'final', effectiveDateTime: '2026-09-30', code: { coding: [{ system: 'http://loinc.org', code: '10230-1' }] }, valueQuantity: { value: 32, unit: '%' } }],
     })
-    const result = applyHospitalMedicationReview(getDefaultClinicalGuidelinePack().build({ profile, locale: 'zh-TW' }), profile, 'zh-TW')
+    const result = buildHospitalAwareCdssResult(getDefaultClinicalGuidelinePack(), profile, 'zh-TW')
     const alert = result.recommendations.find((item) => item.id === 'heart-failure-medication-safety')
     expect(alert).toMatchObject({ status: 'actionable', priority: 'high' })
     const rows = alert?.evidenceTables?.flatMap((table) => table.items)
