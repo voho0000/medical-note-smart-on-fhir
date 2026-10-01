@@ -48,6 +48,9 @@ const CASES = [
   { name: 'P9 AF page (English)', scenario: 'p9-hfpef-af-dose', locale: 'en', ready: '[data-testid="cdss-book-score"]', af: true },
   { name: 'P6 DP-03 answers (English)', scenario: 'p6-hyperkalaemia', locale: 'en', ready: '[data-book-ask]' },
   { name: 'P1 你的判斷 row (繁中)', scenario: 'p1-suspected-hfpef', locale: 'zh-TW', ready: '[data-testid="cdss-book-class-choices"]' },
+  // The four pillar starts and their longest names — 「ARNI (ACE inhibitor/ARB
+  // when ARNI is not feasible)」 (#201 review, at 320 px on the first map).
+  { name: 'P2 pillar starts (English)', scenario: 'p2-new-hfref', locale: 'en', ready: '[data-visit-primary]' },
 ] as const
 
 for (const width of [320, 390]) {
