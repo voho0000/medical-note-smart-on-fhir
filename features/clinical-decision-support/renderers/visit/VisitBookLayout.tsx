@@ -1184,7 +1184,7 @@ export function VisitBookLayout({
           <div className={styles.inner}>
             {current ? (
               <>
-                <BookChainDone steps={decided} />
+                <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
                 <p className={styles.question} data-visit-headline="">{shown.headline ?? shown.label}</p>
                 {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why="">{shown.why}</p> : null}
                 <BookDecisionControls
@@ -1196,7 +1196,7 @@ export function VisitBookLayout({
               </>
             ) : (
               <>
-                <BookChainDone steps={decided.slice(0, -1)} />
+                <BookChainDone steps={decided.slice(0, -1)} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
                 <BookDecisionControls
                   point={shown}
                   decision={row.steps[row.steps.length - 1].decision}
@@ -1451,7 +1451,7 @@ export function VisitBookLayout({
       <div className={`${styles.box} ${styles.inner}`} data-tone={tone} data-book-box={point.dp}>
         {current ? (
           <>
-            <BookChainDone steps={decided} />
+            <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
             <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}{shown.headline ?? shown.label}</p>
             <BookDecisionControls
@@ -1463,7 +1463,7 @@ export function VisitBookLayout({
           </>
         ) : (
           <>
-            <BookChainDone steps={decided.slice(0, -1)} />
+            <BookChainDone steps={decided.slice(0, -1)} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             <BookDecisionControls
               point={shown}
               decision={row.steps[row.steps.length - 1].decision}

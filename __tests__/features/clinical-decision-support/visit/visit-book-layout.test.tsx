@@ -4,7 +4,7 @@
  * reasoning of a point to weigh under 看依據 — and the same decisions as the map.
  */
 import { useMemo, useState } from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
@@ -247,6 +247,58 @@ describe.each([
     fireEvent.click(primary())
     expect(mapLine('DP-07')).toHaveAttribute('data-book-mark', 'done')
     expect(screen.getByTestId('cdss-book-end')).toHaveTextContent('apixaban 5 mg bid')
+  })
+
+  // Owner request 2026-10-01: 「第一步旁邊也加『改』」 — 開始抗凝 pressed by
+  // mistake was only undone by 恢復本頁預設, which clears the whole page.
+  describe('a chain\'s first step can be taken back on its own line (P3 DP-07)', () => {
+    const box = () => document.querySelector<HTMLElement>('[data-book-box="DP-07"]')!
+    const primary = () => box().querySelector<HTMLButtonElement>('[data-visit-primary]')!
+    const decisions = () => Object.values(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {}).map((decision) => decision.actionLabel)
+
+    it('before the DOAC is chosen: 改 beside 開始抗凝 asks 要不要 again, focus on its recommendation', async () => {
+      render(<BookPage id="p3-new-af" page="af" />)
+      fireEvent.click(primary())
+      expect(box()).toHaveTextContent('選 DOAC')
+      fireEvent.click(within(box()).getByRole('button', { name: '改 DP-07：開始抗凝' }))
+      expect(decisions()).toEqual([])
+      expect(box()).toHaveTextContent('今天：CHA₂DS₂-VA 4：開始抗凝？')
+      expect(primary()).toHaveTextContent('開始抗凝')
+      expect(box().querySelector('[data-visit-chain-done]')).toBeNull()
+      expect(mapLine('DP-07')).toHaveAttribute('data-book-mark', 'act')
+      // The line with 改 is gone; focus goes on to the question it reopened.
+      await waitFor(() => expect(primary()).toHaveFocus())
+    })
+
+    it('after the DOAC: 改 beside 開始抗凝 takes the DOAC back with it, and 暫緩 can be recorded instead', () => {
+      render(<BookPage id="p3-new-af" page="af" />)
+      fireEvent.click(primary())
+      fireEvent.click(primary())
+      expect(decisions()).toEqual(['開始抗凝', 'apixaban 5 mg bid'])
+      // Two 改 now: the DOAC's, and the first step's on its own line.
+      expect(within(box()).getByRole('button', { name: '改 DP-07 的決定' })).toBeInTheDocument()
+      fireEvent.click(within(box()).getByRole('button', { name: '改 DP-07：開始抗凝' }))
+      // The DOAC followed from 開始抗凝: it goes too, rather than standing alone.
+      expect(decisions()).toEqual([])
+      expect(screen.getByTestId('cdss-book-end')).not.toHaveTextContent('apixaban 5 mg bid')
+      fireEvent.click(within(box()).getByRole('button', { name: '其他' }))
+      fireEvent.click(within(box()).getByRole('button', { name: '暫緩' }))
+      expect(decisions()).toEqual(['暫緩'])
+      expect(within(box()).getByTestId('cdss-visit-decided')).toHaveTextContent('暫緩')
+      expect(within(box()).queryByTestId('cdss-book-dose-table')).toBeNull()
+    })
+
+    it('the DOAC\'s own 改 still takes back the DOAC alone, focus on the DOACs', async () => {
+      render(<BookPage id="p3-new-af" page="af" />)
+      fireEvent.click(primary())
+      fireEvent.click(primary())
+      fireEvent.click(within(box()).getByRole('button', { name: '改 DP-07 的決定' }))
+      expect(decisions()).toEqual(['開始抗凝'])
+      expect(within(box()).getByRole('button', { name: '改 DP-07：開始抗凝' })).toBeInTheDocument()
+      expect(within(box()).getByTestId('cdss-book-dose-table')).toBeInTheDocument()
+      await waitFor(() => expect(primary()).toHaveFocus())
+      expect(primary()).toHaveTextContent('apixaban 5 mg bid')
+    })
   })
 
   describe('DP-01 is answered in its phenotype table, once (owner request 2026-09-30)', () => {
