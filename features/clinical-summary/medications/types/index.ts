@@ -8,6 +8,7 @@ import type {
   DosageInstruction,
 } from '@/src/shared/types/fhir.types'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
+import type { HospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
 
 export type {
   CodeableConcept,
@@ -75,6 +76,8 @@ export interface MedicationRow {
   category?: string
   /** Official, date-effective drug-master data added by the App. */
   drugTerminology?: MedicationEntity['drugTerminology']
+  /** Display-only hospital names; never an exact NHI product identity. */
+  hospitalMedicationName?: HospitalMedicationName
   // ── Refill-history aggregate (derived across all MedicationRequests for
   //    this drug). Lets a single row surface compliance / adherence info
   //    without forcing the user to expand the per-drug accordion in the
