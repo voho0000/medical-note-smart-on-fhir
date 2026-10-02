@@ -9,6 +9,11 @@
 //
 // The preview table and the JSON view render the SAME payload object that is
 // posted (see buildLabDataReport), so what is shown is what is sent.
+//
+// On `?site=vghtpe` the form also asks where the report goes: 團隊和機構
+// (default), 僅機構, or 僅連線測試, which sends no patient data at all. The
+// institution is the hospital's own Gateway; until a build names one, it is
+// never contacted.
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { AlertCircle, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 import {
@@ -51,7 +56,13 @@ import { rawCaptureOrigin } from "../utils/raw-capture-client"
 import { assembleRawLabSource, type RawLabExtract } from "../utils/raw-lab-rows"
 import { importedBundleId, readRawLabRows, type RawLabRead } from "../utils/read-raw-lab-rows"
 import { sendLabDataReportInBackground } from "../utils/send-in-background"
-import type { LabDataReportSubmitResult } from "../utils/submit-lab-data-report"
+import {
+  resolveInstitutionReportUrl,
+  testLabDataReportConnection,
+  type LabDataReportConnectionResult,
+  type LabDataReportDestination,
+  type LabDataReportSubmitResult,
+} from "../utils/submit-lab-data-report"
 import {
   LAB_DATA_REPORT_MAX_DESCRIPTION,
   LAB_DATA_REPORT_MAX_ROWS,
@@ -90,6 +101,16 @@ type RawState =
   | { status: 'ready'; extract: RawLabExtract; expiresAt: number; producerVersion?: string }
   | { status: 'failed'; code: LabDataReportRawError }
 
+/** 送給, asked on `?site=vghtpe` only; elsewhere a report goes to the team. */
+type Delivery = 'team-and-institution' | 'institution' | 'connection-test'
+const DELIVERIES: readonly Delivery[] = ['team-and-institution', 'institution', 'connection-test']
+const CONNECTION_DESTINATIONS: readonly LabDataReportDestination[] = ['team', 'institution']
+
+type ConnectionState =
+  | { status: 'idle' }
+  | { status: 'testing' }
+  | { status: 'done'; results: Record<LabDataReportDestination, LabDataReportConnectionResult> }
+
 const PRIVACY_POLICY_URL = "https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
 /** The preview table stops here; the JSON view always holds every row. */
 const PREVIEW_TABLE_ROWS = 300
@@ -110,6 +131,18 @@ function errorMessage(result: Exclude<LabDataReportSubmitResult, { ok: true }>, 
     case 429: return errors.rateLimited
     case 400: return result.reason?.startsWith('description-identifier') ? errors.identifier : errors.rejected
     default: return errors.generic
+  }
+}
+
+function connectionError(result: Exclude<LabDataReportConnectionResult, { ok: true }>, strings: Strings): string {
+  const errors = strings.connectionErrors ?? {}
+  switch (result.status) {
+    case 'unconfigured': return errors.unconfigured
+    case 'timeout': return errors.timeout
+    case 'network': return errors.network
+    case 401:
+    case 403: return errors.auth
+    default: return fill(errors.status ?? '{status}', { status: result.status })
   }
 }
 
@@ -166,6 +199,9 @@ export function LabDataReportDialog({
    *  dialog must then no longer abort its raw read. */
   const handedOffRef = useRef(false)
   const sendRef = useRef<HTMLButtonElement>(null)
+  const [delivery, setDelivery] = useState<Delivery>('team-and-institution')
+  const [connection, setConnection] = useState<ConnectionState>({ status: 'idle' })
+  const connectionRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -175,6 +211,7 @@ export function LabDataReportDialog({
     return () => {
       cancelled = true
       if (!handedOffRef.current) rawReadRef.current?.controller.abort()
+      connectionRef.current?.abort()
     }
   }, [])
 
@@ -185,6 +222,20 @@ export function LabDataReportDialog({
     language: locale,
     nameMode: nameMode === 'original' ? 'original' : 'standardized',
   }), [appVersion, collected, launchSource, locale, nameMode])
+
+  // 送給 is asked only on the 北榮 route, the one institution with a Gateway
+  // of its own; everywhere else a report goes to the team, as before.
+  const deliveryOffered = context.site === 'vghtpe'
+  const institutionReady = useMemo(() => resolveInstitutionReportUrl() !== null, [])
+  const mode: Delivery | 'team' = deliveryOffered ? delivery : 'team'
+  const testingConnection = mode === 'connection-test'
+  const destinations = useMemo<LabDataReportDestination[]>(() => {
+    if (mode === 'institution') return ['institution']
+    if (mode === 'team-and-institution' && institutionReady) return ['team', 'institution']
+    return ['team']
+  }, [institutionReady, mode])
+  const institutionSkipped = mode === 'team-and-institution' && !institutionReady
+  const institutionBlocked = mode === 'institution' && !institutionReady
 
   // Raw rows are offered only for a 雲端病歷 patient on a page the extension
   // serves, with the imported Bundle.id to pair the capture with. Nothing is
@@ -212,10 +263,15 @@ export function LabDataReportDialog({
   const [openSeen, setOpenSeen] = useState(open)
   if (openSeen !== open) {
     setOpenSeen(open)
-    if (!open) setRaw({ status: 'idle' })
+    if (!open) {
+      setRaw({ status: 'idle' })
+      setConnection({ status: 'idle' })
+    }
   }
   useEffect(() => {
-    if (!open && !handedOffRef.current) rawReadRef.current?.controller.abort()
+    if (open) return
+    if (!handedOffRef.current) rawReadRef.current?.controller.abort()
+    connectionRef.current?.abort()
   }, [open])
   useEffect(() => {
     if (raw.status !== 'ready') return
@@ -271,9 +327,34 @@ export function LabDataReportDialog({
 
   const rowCount = payload.rows.length
   const descriptionIssues = useMemo(() => findDescriptionIdentifiers(description), [description])
-  const canSend = rowCount > 0 && descriptionIssues.length === 0
+  const canSend = rowCount > 0 && descriptionIssues.length === 0 && !institutionBlocked
+  const summary = includeValues
+    ? mode === 'institution' ? strings.summaryWithValuesInstitution
+      : destinations.includes('institution') ? strings.summaryWithValuesBoth
+        : strings.summaryWithValues
+    : mode === 'institution' ? strings.summaryWithoutValuesInstitution
+      : destinations.includes('institution') ? strings.summaryWithoutValuesBoth
+        : strings.summaryWithoutValues
+  const confirmDestination = mode === 'institution' ? strings.confirmToInstitution
+    : destinations.length > 1 ? strings.confirmToBoth
+      : institutionSkipped ? strings.confirmInstitutionSkipped
+        : undefined
 
   const handleOpenChange = (next: boolean) => onOpenChange(next)
+
+  // 僅連線測試 sends `{"connectionTest": true}` to each destination and
+  // nothing else; one that is not set up is not contacted at all.
+  const runConnectionTest = async () => {
+    connectionRef.current?.abort()
+    const controller = new AbortController()
+    connectionRef.current = controller
+    setConnection({ status: 'testing' })
+    const [team, institution] = await Promise.all(
+      CONNECTION_DESTINATIONS.map((destination) => testLabDataReportConnection(destination, { signal: controller.signal })),
+    )
+    if (controller.signal.aborted) return
+    setConnection({ status: 'done', results: { team, institution } })
+  }
 
   const requestSend = () => {
     if (!canSend) return
@@ -304,6 +385,8 @@ export function LabDataReportDialog({
     void sendLabDataReportInBackground({
       base: payload,
       ...(rawRead && { raw: { read: rawRead, dayZero: built.dayZero, includeValues } }),
+      destinations,
+      institutionSkipped,
     }, {
       sending: strings.backgroundSending,
       readingRaw: strings.backgroundReadingRaw,
@@ -312,6 +395,12 @@ export function LabDataReportDialog({
       copyId: strings.copyId,
       retry: strings.retry,
       failure: (result) => errorMessage(result, strings),
+      institutionReceived: strings.institutionReceived,
+      institutionSkipped: strings.institutionSkipped,
+      inDestination: (destination, text) => fill(strings.inDestination ?? '{destination}: {text}', {
+        destination: strings.destinations?.[destination] ?? destination,
+        text,
+      }),
     })
     onOpenChange(false)
   }
@@ -354,6 +443,37 @@ export function LabDataReportDialog({
           </DialogHeader>
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+              {deliveryOffered && (
+                <fieldset>
+                  <legend className="mb-1 text-xs font-medium text-muted-foreground">{strings.deliveryLegend}</legend>
+                  <div className="flex flex-wrap gap-x-4">
+                    {DELIVERIES.map((option) => (
+                      <label
+                        key={option}
+                        className="flex min-h-8 cursor-pointer items-center gap-2 text-sm max-md:min-h-11"
+                      >
+                        <input
+                          type="radio"
+                          name={`${ids}-delivery`}
+                          value={option}
+                          checked={delivery === option}
+                          onChange={() => setDelivery(option)}
+                          className="h-4 w-4 shrink-0 accent-primary"
+                        />
+                        {strings.deliveryOptions?.[option] ?? option}
+                      </label>
+                    ))}
+                  </div>
+                  {!institutionReady && !testingConnection && (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{strings.institutionUnavailable}</p>
+                  )}
+                </fieldset>
+              )}
+
+              {testingConnection ? (
+                <ConnectionTest connection={connection} strings={strings} />
+              ) : (
+              <>
               {reportablePanels.length > 0 && (
                 <fieldset>
                   <legend className="mb-1.5 text-xs font-medium text-muted-foreground">{strings.panelLegend}</legend>
@@ -450,7 +570,7 @@ export function LabDataReportDialog({
 
               <div className="space-y-1 rounded-md bg-muted/40 px-3 py-2">
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {fill(includeValues ? strings.summaryWithValues : strings.summaryWithoutValues, { count: rowCount })}
+                  {fill(summary ?? '{count}', { count: rowCount })}
                   {wantsRaw && ` ${strings.summaryRaw}`}
                 </p>
                 <div className="flex flex-wrap gap-x-4">
@@ -466,6 +586,7 @@ export function LabDataReportDialog({
                 {detailsOpen && (
                   <div id={detailsId} className="space-y-1 pt-1 text-xs leading-relaxed text-muted-foreground">
                     <p>{strings.disclosure}</p>
+                    {deliveryOffered && institutionReady && <p>{strings.disclosureInstitution}</p>}
                     <p>{strings.includeValuesHint}</p>
                     {rawOffered && <p>{strings.includeRawHint}</p>}
                     <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className={linkButton}>
@@ -512,22 +633,36 @@ export function LabDataReportDialog({
                   )}
                 </section>
               )}
+              </>
+              )}
             </div>
 
           <DialogFooter className="shrink-0 gap-2 border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-md:flex-col-reverse sm:justify-end">
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} className="max-md:h-11 max-md:w-full">
               {strings.cancel}
             </Button>
-            <Button
-              ref={sendRef}
-              type="button"
-              onClick={requestSend}
-              disabled={rowCount === 0}
-              aria-disabled={!canSend || undefined}
-              className="max-md:h-11 max-md:w-full"
-            >
-              {fill(strings.send ?? '{count}', { count: rowCount })}
-            </Button>
+            {testingConnection ? (
+              <Button
+                ref={sendRef}
+                type="button"
+                onClick={() => { void runConnectionTest() }}
+                disabled={connection.status === 'testing'}
+                className="max-md:h-11 max-md:w-full"
+              >
+                {strings.testConnection}
+              </Button>
+            ) : (
+              <Button
+                ref={sendRef}
+                type="button"
+                onClick={requestSend}
+                disabled={rowCount === 0 || institutionBlocked}
+                aria-disabled={!canSend || undefined}
+                className="max-md:h-11 max-md:w-full"
+              >
+                {fill(strings.send ?? '{count}', { count: rowCount })}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -538,6 +673,7 @@ export function LabDataReportDialog({
             <AlertDialogTitle>{strings.confirmTitle}</AlertDialogTitle>
             <AlertDialogDescription>
               {fill(includeValues ? strings.confirmWithValues : strings.confirmWithoutValues, { count: rowCount })}
+              {confirmDestination && <span className="mt-1 block">{confirmDestination}</span>}
               {wantsRaw && raw.status === 'reading' && (
                 <span className="mt-1 flex items-center gap-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -567,6 +703,66 @@ export function LabDataReportDialog({
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+function ConnectionTest({ connection, strings }: { connection: ConnectionState; strings: Strings }) {
+  const names = strings.destinations ?? {}
+  return (
+    <section aria-label={strings.deliveryOptions?.['connection-test']} className="space-y-2">
+      <p className="text-xs leading-relaxed text-muted-foreground">{strings.connectionHint}</p>
+      {connection.status !== 'idle' && (
+        <ul role="status" className="space-y-1 text-sm">
+          {CONNECTION_DESTINATIONS.map((destination) => (
+            <li key={destination} className="flex flex-wrap items-center gap-x-2">
+              <span className="font-medium">{names[destination] ?? destination}</span>
+              <ConnectionOutcome
+                destination={destination}
+                result={connection.status === 'done' ? connection.results[destination] : undefined}
+                strings={strings}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function ConnectionOutcome({
+  destination,
+  result,
+  strings,
+}: {
+  destination: LabDataReportDestination
+  result?: LabDataReportConnectionResult
+  strings: Strings
+}) {
+  if (!result) {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        {strings.connectionTesting}
+      </span>
+    )
+  }
+  if (result.ok) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        {strings.connectionOk}
+      </span>
+    )
+  }
+  // An institution with no Gateway set up was not contacted: not a failure.
+  if (destination === 'institution' && result.status === 'unconfigured') {
+    return <span className="text-muted-foreground">{strings.connectionSkipped}</span>
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-destructive">
+      <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      {fill(strings.connectionFailed ?? '{reason}', { reason: connectionError(result, strings) })}
+    </span>
   )
 }
 
