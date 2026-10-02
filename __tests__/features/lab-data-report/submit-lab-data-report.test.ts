@@ -141,6 +141,18 @@ describe('sending to a destination', () => {
       .toEqual({ ok: false, status: 200, reason: undefined })
   })
 
+  it('turns an answer of the wrong shape into a failure, never a throw', async () => {
+    const gateway = { destination: 'institution' as const, url: 'https://gateway.example.test/r' }
+    for (const body of [null, [], 'stored', 7, { success: true, reportId: 7 }, { success: 'true', reportId: 'GW-1' }]) {
+      respond(200, body)
+      await expect(submitLabDataReport(payload, gateway)).resolves.toEqual(expect.objectContaining({ ok: false, status: 200 }))
+      await expect(testLabDataReportConnection('institution', { url: gateway.url })).resolves.toEqual(expect.objectContaining({ ok: false, status: 200 }))
+    }
+    // A reason that is not text is dropped: the failure message reads it as text.
+    respond(400, { success: false, reason: 42 })
+    expect(await submitLabDataReport(payload, gateway)).toEqual({ ok: false, status: 400 })
+  })
+
   it('reports an unreachable destination as a network failure', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
     expect(await testLabDataReportConnection('institution', { url: 'https://gateway.example.test/r' }))

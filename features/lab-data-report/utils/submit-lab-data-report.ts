@@ -113,6 +113,23 @@ type Posted =
   | { response: Response; result: LabDataReportResponse }
   | { ok: false; status: 'timeout' | 'network' }
 
+/**
+ * The answer as far as it has the expected shape. Another receiver (the
+ * Gateway) may answer anything — `null`, an array, a number for a reason —
+ * and that must come back as a failed send, never as a throw that leaves
+ * the toast or the connection test spinning.
+ */
+function readAnswer(value: unknown): LabDataReportResponse {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { success: false }
+  const answer = value as Record<string, unknown>
+  return {
+    success: answer.success === true,
+    ...(typeof answer.reportId === 'string' && answer.reportId && { reportId: answer.reportId }),
+    ...(answer.connectionTest === true && { connectionTest: true }),
+    ...(typeof answer.reason === 'string' && { reason: answer.reason }),
+  }
+}
+
 async function post(
   destination: LabDataReportDestination,
   url: string,
@@ -144,7 +161,7 @@ async function post(
         cache: 'no-store' as const,
       }),
     })
-    const result = await response.json().catch(() => ({})) as LabDataReportResponse
+    const result = readAnswer(await response.json().catch(() => null))
     return { response, result }
   } catch {
     return { ok: false, status: timedOut ? 'timeout' : 'network' }

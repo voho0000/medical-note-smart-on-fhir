@@ -585,8 +585,9 @@ export function LabDataReportDialog({
                 </div>
                 {detailsOpen && (
                   <div id={detailsId} className="space-y-1 pt-1 text-xs leading-relaxed text-muted-foreground">
-                    <p>{strings.disclosure}</p>
-                    {deliveryOffered && institutionReady && <p>{strings.disclosureInstitution}</p>}
+                    {/* 僅機構 never reaches the team: its own text, not the team's. */}
+                    <p>{mode === 'institution' ? strings.disclosureInstitutionOnly : strings.disclosure}</p>
+                    {mode !== 'institution' && destinations.includes('institution') && <p>{strings.disclosureInstitution}</p>}
                     <p>{strings.includeValuesHint}</p>
                     {rawOffered && <p>{strings.includeRawHint}</p>}
                     <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className={linkButton}>

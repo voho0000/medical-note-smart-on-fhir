@@ -111,6 +111,13 @@ describe('LabDataReportDialog — 送給 on ?site=vghtpe', () => {
       fireEvent.click(screen.getByRole('radio', { name: '僅機構' }))
       expect(screen.getByRole('button', { name: '送出 1 筆' })).toBeDisabled()
     })
+
+    it('discloses the team alone while 團隊和機構 goes to the team alone', async () => {
+      await renderDialog()
+      fireEvent.click(screen.getByRole('button', { name: '詳細說明' }))
+      expect(screen.getByText(/傳給醫析開發團隊。/)).toBeInTheDocument()
+      expect(screen.queryByText(/院內收件端，由院方保存與管理/)).not.toBeInTheDocument()
+    })
   })
 
   describe('once the hospital Gateway is set up', () => {
@@ -137,6 +144,20 @@ describe('LabDataReportDialog — 送給 on ?site=vghtpe', () => {
       expect(screen.getByText(/只會把這位病人累積報告的全部 1 筆檢驗（格式與數值）送到院內收件端，開發團隊收不到/)).toBeInTheDocument()
       await sendAndConfirm('只送院內收件端。')
       expect(destinationsSent()).toEqual(['institution'])
+    })
+
+    it('words the full disclosure for where the report goes', async () => {
+      await renderDialog()
+      fireEvent.click(screen.getByRole('button', { name: '詳細說明' }))
+      // 團隊和機構: the team's text, and which copy its 90 days are about.
+      expect(screen.getByText(/傳給醫析開發團隊。/)).toBeInTheDocument()
+      expect(screen.getByText(/指的是開發團隊那一份/)).toBeInTheDocument()
+
+      // 僅機構: nothing that says the team gets it, reads it or deletes it.
+      fireEvent.click(screen.getByRole('radio', { name: '僅機構' }))
+      expect(screen.getByText(/只送到院內收件端，醫析開發團隊收不到/)).toBeInTheDocument()
+      expect(screen.queryByText(/只有開發團隊可讀取/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/傳給醫析開發團隊/)).not.toBeInTheDocument()
     })
   })
 
