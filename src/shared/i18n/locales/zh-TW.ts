@@ -438,6 +438,26 @@ export const zhTW = {
     problemsLegend: '= 待核對；點來源可展開原始紀錄',
     problemsShowAll: '顯示全部 {count} 項',
     problemBasisLabel: '依據:',
+    // 影像與病理重點 — 每份影像／病理報告挑出的原文句子
+    reportsTitle: '影像與病理重點',
+    reportsSubtitle: 'AI 只從原文挑句，未改寫',
+    reportsKindLabels: {
+      pathology: '病理',
+      pet: 'PET',
+      ct: 'CT',
+      mri: 'MRI',
+      echo: '心臟超音波',
+      us: '超音波',
+      ecg: '心電圖',
+      xray: 'X 光',
+      other: '其他',
+    },
+    reportsShowMore: '顯示其餘 {count} 份',
+    reportsShowLess: '收合',
+    reportsConclusionTag: '結論段',
+    reportsOpeningTag: '原文開頭',
+    reportsDroppedQuotes: '{count} 句與原文不符，已略過',
+    reportsFallbackCount: '{count} 份僅列結論段或開頭',
     // 民眾版覆蓋 — 定位是「幫你看懂自己的健康存摺」。
     patient: {
       title: '我的健康摘要',

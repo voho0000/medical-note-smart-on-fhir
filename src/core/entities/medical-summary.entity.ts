@@ -59,6 +59,16 @@ const clampedText = (max: number) =>
   z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
 const optionalClampedText = (max: number) =>
   z.string().transform((s) => (s.length > max ? s.slice(0, max) : s)).optional()
+/** A free-text list field some models emit as a JSON array of strings
+ * (Qwen 3.6 writes problems.medications as ["A", "B"]). Both shapes carry the
+ * same content; join instead of rejecting the whole card. */
+const optionalClampedTextOrList = (max: number) =>
+  z.union([z.string(), z.array(z.string())])
+    .transform((value) => {
+      const text = Array.isArray(value) ? value.map((item) => item.trim()).filter(Boolean).join('、') : value
+      return text.length > max ? text.slice(0, max) : text
+    })
+    .optional()
 const clampedRequiredKeys = (max: number) =>
   z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, max))
 
@@ -134,7 +144,7 @@ export const SummaryProblemSchema = z.object({
   /** Catalog key of the latest encounter at that organization. The APP reads
    *  its date — the model never writes a date for this row. */
   managedByRef: z.string().optional(),
-  medications: optionalClampedText(160),
+  medications: optionalClampedTextOrList(160),
   flag: z.boolean().optional(),
   sources: clampedRequiredKeys(6),
   documentEvidence: optionalDocumentEvidence(),
@@ -152,6 +162,30 @@ export const SummaryMedicationEducationSchema = z.object({
   documentEvidence: optionalDocumentEvidence(),
 })
 
+// 影像與病理重點: the model only PICKS sentences from a listed report (by its
+// catalog key). The app verifies every quote character-for-character against
+// the report text before anything is shown, and writes the title, date,
+// organization and modality itself. Lenient by construction: a malformed
+// entry is skipped rather than costing the other reports their quotes, and a
+// bare string is read as a one-quote list.
+export const ReportPickSchema = z.object({
+  ref: z.string().min(1),
+  quotes: z.union([z.string(), z.array(z.unknown())])
+    .optional()
+    .transform((value) => (Array.isArray(value) ? value : value === undefined ? [] : [value])
+      .filter((quote): quote is string => typeof quote === 'string' && quote.trim().length > 0)
+      .slice(0, 5)),
+})
+export type ReportPick = z.infer<typeof ReportPickSchema>
+const reportPicks = () => z.array(z.unknown()).transform((entries) => entries
+  .flatMap((entry) => {
+    const parsed = ReportPickSchema.safeParse(entry)
+    return parsed.success ? [parsed.data] : []
+  })
+  // 30 reports in the digest by default; anything past a generous bound is a
+  // looping reply, not more reports.
+  .slice(0, 60))
+
 export const MedicalSummaryAiResultSchema = z.object({
   headline: clampedText(240),
   mustKnow: z.array(SummaryMustKnowSchema).default([]).transform((a) => a.slice(0, 8)),
@@ -163,8 +197,17 @@ export const MedicalSummaryAiResultSchema = z.object({
   // the model to scale its picks to the case and the UI folds/scrolls any
   // count, so 50 exists purely to stop a degenerate (looping) reply.
   recent: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
+  // Requested on its own lane (never in the one-shot schema), so it is
+  // optional here: demo snapshots and legacy objects simply have none.
+  reports: reportPicks().optional(),
 })
-export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
+export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema> & {
+  /** App-only carry-over: quotes the finalizer already dropped for the
+   *  retained `reports` module. A retry of ANOTHER card rebuilds the draft from
+   *  the verified result, which no longer holds the dropped strings, so the
+   *  count rides along here instead. Never model output. */
+  reportsDroppedQuoteCount?: number
+}
 
 // The fixed summary is generated as independently validated modules. Keeping
 // these ids in the domain layer lets generation, cache, orchestration, and UI
@@ -174,9 +217,21 @@ export const MEDICAL_SUMMARY_MODULE_IDS = [
   'overview',
   'focus',
   'problems',
+  'reports',
   'recent',
 ] as const
 export type MedicalSummaryModuleId = (typeof MEDICAL_SUMMARY_MODULE_IDS)[number]
+
+/** The modules written from the clinical context. `reports` is not one of
+ *  them: it is asked for on its own lane over the report digest (medical
+ *  audience only) and never joins the narrative batch prompt. */
+export const MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS = [
+  'overview',
+  'focus',
+  'problems',
+  'recent',
+] as const satisfies readonly MedicalSummaryModuleId[]
+export type MedicalSummaryNarrativeModuleId = (typeof MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS)[number]
 
 export const MedicalSummaryOverviewModuleSchema = z.object({
   headline: clampedText(240),
@@ -193,11 +248,16 @@ export const MedicalSummaryRecentModuleSchema = z.object({
   recent: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
 })
 
+export const MedicalSummaryReportsModuleSchema = z.object({
+  reports: reportPicks().default([]),
+})
+
 export interface MedicalSummaryModuleResultMap {
   overview: z.infer<typeof MedicalSummaryOverviewModuleSchema>
   focus: z.infer<typeof MedicalSummaryFocusModuleSchema>
   problems: z.infer<typeof MedicalSummaryProblemsModuleSchema>
   recent: z.infer<typeof MedicalSummaryRecentModuleSchema>
+  reports: z.infer<typeof MedicalSummaryReportsModuleSchema>
 }
 
 export type MedicalSummaryModuleResult<T extends MedicalSummaryModuleId = MedicalSummaryModuleId> =
@@ -363,11 +423,56 @@ export interface MedicalSummaryResult {
   droppedRecentCount: number
   /** Problems dropped at finalize because 最可能的就診主因 already covers them. */
   droppedProblemCount: number
+  /** 影像與病理重點 — one row per imaging/pathology report in the AI scope.
+   *  Everything but the excerpts is app-written from the bundle, and every
+   *  excerpt is either a model-picked sentence the app verified verbatim
+   *  against the report or a deterministic cut of the report itself. Present
+   *  for the medical audience whenever the scoped data was available at
+   *  finalize, including when the `reports` module failed or never ran. */
+  reportHighlights?: ReportHighlights
   /** App-derived allergy row for 開藥前必看 — never the model's. An empty list
    *  means the bundle carries no AllergyIntolerance resource, which the UI must
    *  render as "the cloud record holds no allergy data", NOT as "no allergy".
    *  Optional only so a cached pre-redesign result still parses. */
   allergyRecords?: SummaryAllergyRecord[]
+}
+
+/** pathology · pet · ct · mri · echo · us · ecg · xray · other */
+export type ReportHighlightKind = import('@/src/core/utils/report-narrative.utils').ReportModalityKind
+
+/** Where a row's excerpts came from: model-picked sentences that passed the
+ *  verbatim check, or the app's deterministic fallback. */
+export type ReportExcerptSource = 'ai' | 'conclusion' | 'opening'
+
+export interface ReportHighlight {
+  /** Catalog key (L#) of the report. */
+  key: string
+  resourceType: string
+  resourceId: string
+  /** Modality class, read from the report's order name by the app. */
+  kind: ReportHighlightKind
+  /** Catalog display of the report — never the model's. */
+  title: string
+  date?: string
+  organization?: string
+  /** 1–3 verbatim passages of the report text, in its original language. */
+  excerpts: string[]
+  excerptSource: ReportExcerptSource
+  /** A deterministic fallback stopped mid-sentence at its length cap; the UI
+   *  marks the cut. Never set on verified model quotes. */
+  excerptTruncated?: boolean
+}
+
+export interface ReportHighlights {
+  /** Newest first, across every modality. */
+  items: ReportHighlight[]
+  /** Reports in the digest, including the ones past the request cap. */
+  totalReports: number
+  /** Rows whose excerpts are verified model picks. */
+  aiSummarized: number
+  /** Model quotes that failed the verbatim check (or named no listed report)
+   *  and were never shown. The counter the guard is judged on. */
+  droppedQuoteCount: number
 }
 
 /** One AllergyIntolerance from the bundle, resolved to its catalog key so the

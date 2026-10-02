@@ -720,15 +720,17 @@ describe('modular summary generation contract', () => {
     }
   })
 
-  it('builds one batch from the five registered cards with Safety last', () => {
-    const cards = registeredMedicalSummaryCards(promptInput)
-    expect(cards.map((card) => card.id)).toEqual([
-      'overview', 'focus', 'problems', 'recent', 'safety',
+  it('builds one batch from the five narrative cards with Safety last; reports runs on its own lane', () => {
+    const registered = registeredMedicalSummaryCards(promptInput)
+    expect(registered.map((card) => card.id)).toEqual([
+      'overview', 'focus', 'problems', 'recent', 'safety', 'reports',
     ])
+    const cards = registered.filter((card) => card.id !== 'reports')
     const content = useCase.buildRegisteredCardBatchMessages(
       promptInput,
       cards.map((card) => card.buildBatchInstruction(promptInput)),
     )[0].content
+    expect(content).not.toContain('<<<MEDIPRISMA_MODULE:reports>>>')
     expect(content).toContain('Generate all 5 registered cards')
     expect(content.indexOf('<<<MEDIPRISMA_MODULE:overview>>>'))
       .toBeLessThan(content.indexOf('<<<MEDIPRISMA_MODULE:safety>>>'))
@@ -740,8 +742,15 @@ describe('modular summary generation contract', () => {
       harnessProfile: 'local-small',
     })
     expect(cards.map((card) => card.id)).toEqual([
-      'overview', 'problems', 'focus', 'recent', 'safety',
+      'overview', 'problems', 'focus', 'recent', 'safety', 'reports',
     ])
+  })
+
+  it('never asks the patient audience for 影像與病理重點', () => {
+    const cards = registeredMedicalSummaryCards({ ...promptInput, audience: 'patient' })
+    expect(cards.map((card) => card.id)).not.toContain('reports')
+    expect(registeredMedicalSummaryCards({ ...promptInput, harnessProfile: 'local-small', audience: 'patient' })
+      .map((card) => card.id)).toEqual(['overview', 'problems', 'focus', 'recent', 'safety'])
   })
 
   it('supports removing a card without adding an orchestration branch', () => {
@@ -1296,3 +1305,13 @@ describe('local zh-TW prose guards', () => {
   })
 })
 
+
+describe('problems module tolerates a medication list array', () => {
+  it('joins problems.medications when a model sends an array instead of a string', () => {
+    const parsed = new GenerateMedicalSummaryUseCase().parseModuleResult(
+      'problems',
+      '{"problems": [{"label": "慢性腎臟病", "basis": "檢驗", "kind": "lab", "medications": ["Drug A 10mg", "Drug B 80mg"], "sources": ["O1"]}]}',
+    )
+    expect(parsed?.problems[0].medications).toBe('Drug A 10mg、Drug B 80mg')
+  })
+})

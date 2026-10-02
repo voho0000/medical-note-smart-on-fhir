@@ -23,6 +23,36 @@ export function usesCompactSummaryHarness(contextLimit: number | undefined): boo
   return contextLimit < FRONTIER_HARNESS_MIN_CONTEXT_TOKENS
 }
 
+/**
+ * Latency budget, in tokens, for the clinical context of the full-context
+ * request (focus / problems / recent / safety) on a compact-harness model.
+ * It is independent of the window: a 262K on-prem window holds a multi-year
+ * chart, but the hospital GPU reads a prompt at roughly 10.7 s per 5K tokens
+ * and 23.8 s per 13K (docs/FHIR-context-stability-optimization.txt), i.e.
+ * ~1.6 s per further 1K. At 24K of clinical context that is already ~40-45 s
+ * of prefill once the instructions and source list are added, before the
+ * model writes the first card — and the 2026-10-01 live run sent ~430K
+ * characters, minutes of prefill, and was rejected outright. Above this the
+ * request is narrowed through the same tiers as a window fit, and the summary
+ * says so. Only the full-context request is bounded by it: the overview
+ * snapshot and the report digest already have their own fixed caps.
+ */
+export const LOCAL_MODEL_FULL_CONTEXT_TOKEN_BUDGET = 24_000
+
+/** The full-context latency budget for one run, or undefined when the model
+ *  is frontier-class and only its window bounds the request. */
+/** The latency budget applies to self-hosted (OpenAI-compatible custom)
+ *  endpoints only: a cloud model with a small window (GPT nano, Haiku) still
+ *  reads a long prompt in seconds, so trimming it would only lose data. */
+export function medicalSummaryContextTokenBudget(
+  contextLimit: number | undefined,
+  options: { selfHosted: boolean },
+): number | undefined {
+  return options.selfHosted && usesCompactSummaryHarness(contextLimit)
+    ? LOCAL_MODEL_FULL_CONTEXT_TOKEN_BUDGET
+    : undefined
+}
+
 export function medicalSummaryHarnessProfile(
   contextLimit: number | undefined,
 ): MedicalSummaryHarnessProfile {

@@ -134,6 +134,7 @@ export const DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY: Readonly<Record<string, string>> 
   O20: 'demo-observation-28',
   O23: 'demo-observation-37',
   P1: 'demo-procedure-1',
+  P2: 'demo-procedure-2',
 }
 
 /** Re-key only citation fields; narrative/evidence text remains untouched. */

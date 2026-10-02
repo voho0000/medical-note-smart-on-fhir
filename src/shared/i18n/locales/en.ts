@@ -438,6 +438,26 @@ export const en = {
     problemsLegend: '= to verify; open a source to read the original record',
     problemsShowAll: 'Show all {count}',
     problemBasisLabel: 'basis: ',
+    // 影像與病理重點 — verbatim sentences picked from each imaging/pathology report
+    reportsTitle: 'Imaging & pathology highlights',
+    reportsSubtitle: 'Sentences picked verbatim from each report; never rewritten',
+    reportsKindLabels: {
+      pathology: 'Pathology',
+      pet: 'PET',
+      ct: 'CT',
+      mri: 'MRI',
+      echo: 'Echo',
+      us: 'Ultrasound',
+      ecg: 'ECG',
+      xray: 'X-ray',
+      other: 'Other',
+    },
+    reportsShowMore: 'Show {count} more',
+    reportsShowLess: 'Show less',
+    reportsConclusionTag: 'Conclusion section',
+    reportsOpeningTag: 'Report opening',
+    reportsDroppedQuotes: '{count} sentence(s) did not match the report and were skipped',
+    reportsFallbackCount: '{count} report(s) show only the conclusion section or opening',
     // Patient-audience overrides — "understand your own NHI records".
     patient: {
       title: 'My health summary',

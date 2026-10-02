@@ -166,7 +166,9 @@ test('the overview lane publishes its section while the full lane is still strea
     hiddenReasoning: options.hiddenReasoning,
   }))
   expect(optionsByLane.find((lane) => lane.fast)?.hiddenReasoning).toBe('off')
-  expect(optionsByLane.find((lane) => !lane.fast)?.hiddenReasoning).toBeUndefined()
+  // Local models: the full lane runs without hidden reasoning too (it wrote no
+  // card within the watchdog with thinking on).
+  expect(optionsByLane.find((lane) => !lane.fast)?.hiddenReasoning).toBe('off')
 })
 
 test('a failed overview lane is still repairable by the single-module retry path', async () => {

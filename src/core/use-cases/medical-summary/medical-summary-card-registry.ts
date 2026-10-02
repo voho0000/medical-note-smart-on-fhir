@@ -5,7 +5,10 @@ import type {
   MedicalSummaryModuleResult,
   SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
-import { MEDICAL_SUMMARY_MODULE_IDS } from '@/src/core/entities/medical-summary.entity'
+import {
+  MEDICAL_SUMMARY_MODULE_IDS,
+  MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS,
+} from '@/src/core/entities/medical-summary.entity'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import {
   generateMedicalSummaryUseCase,
@@ -104,12 +107,25 @@ const LOCAL_CARD_ORDER: readonly MedicalSummaryCardId[] = [
   'focus',
   'recent',
   'safety',
+  // Its own lane over the report digest; listed last because it never shares
+  // a request with the cards above.
+  'reports',
 ]
 
 const FRONTIER_CARD_ORDER: readonly MedicalSummaryCardId[] = [
-  ...MEDICAL_SUMMARY_MODULE_IDS,
+  ...MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS,
   'safety',
+  'reports',
 ]
+
+/** Cards a given audience is ever asked for. 影像與病理重點 is clinician-facing:
+ *  the patient version never requests it. */
+function cardServesAudience(
+  cardId: MedicalSummaryCardId,
+  audience: GenerateMedicalSummaryInput['audience'],
+): boolean {
+  return cardId !== 'reports' || audience !== 'patient'
+}
 
 export function registeredMedicalSummaryCards(
   input: GenerateMedicalSummaryInput,
@@ -120,6 +136,7 @@ export function registeredMedicalSummaryCards(
     : FRONTIER_CARD_ORDER
   const enabled = enabledCardIds ? new Set(enabledCardIds) : null
   return order
+    .filter((cardId) => cardServesAudience(cardId, input.audience))
     .filter((cardId) => !enabled || enabled.has(cardId))
     .map((cardId) => MEDICAL_SUMMARY_CARD_REGISTRY[cardId])
 }

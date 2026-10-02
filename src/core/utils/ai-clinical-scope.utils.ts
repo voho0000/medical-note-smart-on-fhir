@@ -19,7 +19,8 @@ import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
 import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
-import { floorStartDay, prescribingAnalyteKey, reportModalityClass } from '@/src/core/utils/first-visit-floors'
+import { floorStartDay, prescribingAnalyteKey } from '@/src/core/utils/first-visit-floors'
+import { AI_REPORT_GROUPS, reportModalityClass } from '@/src/core/utils/report-narrative.utils'
 
 const LAB_FALLBACK_SAMPLING_DAYS = 3
 const NHI_VIEWER_REQUEST_EXTENSION_URL =
@@ -295,7 +296,6 @@ export function scopeClinicalDataForAi(
   // surface at all (the scope kept only the lab and imaging groups), yet a
   // biopsy result is the one report an oncology second opinion cannot do
   // without. Same window and same latest-per-name rule as imaging.
-  const AI_REPORT_GROUPS = new Set(['imaging', 'pathology'])
   let imagingReports = selection.imagingReports
     ? (input.diagnosticReports ?? []).filter((report) =>
         reportStatusOk(report)

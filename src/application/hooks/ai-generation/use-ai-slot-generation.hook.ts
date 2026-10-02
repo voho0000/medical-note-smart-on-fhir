@@ -36,7 +36,7 @@ import {
   removeEncryptedCache,
   saveEncryptedCache,
 } from '@/src/infrastructure/cache/encrypted-session-cache'
-import { getModelDefinition, gateModelForKeys } from '@/src/shared/constants/ai-models.constants'
+import { getModelDefinition, gateModelForKeys, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { DEMO_PATIENT_ID } from '@/src/infrastructure/demo/demo-ai-snapshots'
 import {
@@ -95,10 +95,25 @@ export interface AiSlotRunContext {
   modelName: string
   /** Exact result slot that owns this request and its AbortController. */
   operationKey: string
+  /** Aborted when this run is stopped (cancel, Bundle change). Requests in
+   *  flight already abort through `operationKey`; this lets a producer stop
+   *  WAITING between requests (a retry delay) instead of starting a new one
+   *  after the stop. */
+  signal?: AbortSignal
   /** Full context window, including the dynamic custom-endpoint setting. */
   contextLimit: number
   /** Transient model-aware reduction applied to this request, if any. */
   contextAdaptation: ClinicalContextAdaptation | null
+  /** Set only when the slot's latency budget (not the window) narrowed
+   *  `clinicalContext`. `clinicalData`/`catalog` above then stay the saved
+   *  scope — what bounded side requests and the finalised result read — and
+   *  this is the narrower record set `clinicalContext` was built from, with a
+   *  catalog that reuses `catalog`'s keys. Undefined: `clinicalContext` was
+   *  built from `clinicalData`/`catalog` themselves. */
+  clinicalContextScope?: {
+    clinicalData: ClinicalAiDataInput | null
+    catalog: SummarySourceCatalogEntry[]
+  }
 }
 
 export interface AiSlotDemoContext {
@@ -155,6 +170,12 @@ export interface AiSlotGenerationConfig<T> {
    *  retained result is presentation-only while that target slot is empty or
    *  its encrypted cache is still being restored. */
   retainResultOnModelChange?: boolean
+  /** Optional latency budget, in tokens, for the clinical context this slot
+   *  sends, given the resolved model's window. When it returns a number the
+   *  fitting target becomes min(window-derived target, budget); undefined
+   *  keeps the window-only fit. A binding budget is reported as a
+   *  `local-latency` adaptation. */
+  contextTokenBudget?: (contextLimit: number, model: { selfHosted: boolean }) => number | undefined
   /** Keep an unavailable selected model visible and block generation instead
    *  of silently substituting the feature default. Opt in only where the UI
    *  provides a clear recovery path. */
@@ -227,6 +248,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     resultModelId,
     readRunMetrics,
     retainResultOnModelChange = false,
+    contextTokenBudget,
   } = config
 
   const ai = useUnifiedAi()
@@ -297,6 +319,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     () => providerClinicalContextSafetyFraction(resolvedModelName),
     [resolvedModelName],
   )
+  const resolvedContextTokenBudget = contextTokenBudget?.(resolvedContextLimit, {
+    selfHosted: isCustomOpenAiModelId(resolvedModelId),
+  })
   const {
     patientId,
     piiLiterals = [],
@@ -304,11 +329,12 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     clinicalContext,
     inputSignature,
     sourceScopeSignature = '',
-    clinicalData: scopedClinicalData,
+    clinicalData: fittedClinicalData,
     patient,
     clinicalNowMs,
-    catalog,
+    catalog: fittedCatalog,
     contextAdaptation,
+    latencyBudgetScope,
     // Usage analytics only: the size of the whole loaded chart, from the hook
     // that already holds it.
     patientCounts,
@@ -316,6 +342,19 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     resolvedContextLimit,
     'insights',
     clinicalContextSafetyFraction,
+    { tokenBudget: resolvedContextTokenBudget },
+  )
+  // A latency budget narrows only the clinical-context request. Everything
+  // else this slot exposes — the source list results are finalised and shown
+  // against, the data bounded side requests are built from — stays the saved
+  // scope, because the window would have held it.
+  const scopedClinicalData = latencyBudgetScope?.savedClinicalData ?? fittedClinicalData
+  const catalog = latencyBudgetScope?.savedCatalog ?? fittedCatalog
+  const clinicalContextScope = useMemo(
+    () => (latencyBudgetScope
+      ? { clinicalData: fittedClinicalData, catalog: latencyBudgetScope.contextCatalog }
+      : undefined),
+    [latencyBudgetScope, fittedClinicalData],
   )
 
   // A cache/result slot is reusable only for the exact selected clinical
@@ -381,6 +420,16 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     : ''
   const scopeSlotSuffix = slotKey ? `::ctx-${inputSignature}` : ''
   const cancellationEpochsRef = useRef<Map<string, number>>(new Map())
+  // One controller per in-flight run, owned by its slot key. Aborted by
+  // cancel() and by the Bundle-change teardown, alongside stopAi().
+  const runAbortControllersRef = useRef<Map<AbortController, string>>(new Map())
+  const abortRuns = useCallback((targetSlotKey?: string) => {
+    for (const [controller, ownerKey] of runAbortControllersRef.current) {
+      if (targetSlotKey !== undefined && ownerKey !== targetSlotKey) continue
+      controller.abort()
+      runAbortControllersRef.current.delete(controller)
+    }
+  }, [])
   const autoTriggeredRef = useRef<string | null>(null)
   // An automatic Medcloud launch has its own credential-gated, message-id-scoped
   // runner. Suppress saved background auto-run preferences on this route so a
@@ -512,6 +561,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     if (requireDataReadyToGenerate && !dataReady) return
     if (store.getState().running[slotKey]) return
     const cancellationEpoch = cancellationEpochsRef.current.get(slotKey) ?? 0
+    const fedClinicalData = clinicalContextScope?.clinicalData ?? scopedClinicalData
+    const runAbort = new AbortController()
+    runAbortControllersRef.current.set(runAbort, slotKey)
     const generatedResult = await runGenerationJob({
       store,
       key: slotKey,
@@ -531,9 +583,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           // had already cut a huge chart down".
           counts: patientCounts,
           // The other half of that pair: what Data Selection and the fitting
-          // tiers actually left to send.
-          fedCounts: scopedClinicalData
-            ? countContextResources(scopedClinicalData)
+          // tiers actually left to send (the narrowed records, when a
+          // latency budget applied).
+          fedCounts: fedClinicalData
+            ? countContextResources(fedClinicalData)
             : undefined,
         }
         : undefined,
@@ -559,7 +612,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           operationKey: slotKey,
           contextLimit: resolvedContextLimit,
           contextAdaptation,
+          ...(clinicalContextScope ? { clinicalContextScope } : {}),
+          signal: runAbort.signal,
         }),
+    }).finally(() => {
+      runAbortControllersRef.current.delete(runAbort)
     })
     if (
       allowResultRetention &&
@@ -573,7 +630,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs])
+  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs, clinicalContextScope])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -587,8 +644,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     // automatic summary batch, stopping the batch must prevent that delayed
     // half from starting afterwards.
     if (autoRunIdentity) autoTriggeredRef.current = autoRunIdentity
+    abortRuns(targetSlotKey || undefined)
     stopAi(targetSlotKey || undefined)
-  }, [autoRunIdentity, slotKey, stopAi])
+  }, [abortRuns, autoRunIdentity, slotKey, stopAi])
 
   const restoreSlot = useCallback((targetSlotKey: string, previousResult: T | undefined) => {
     const state = store.getState()
@@ -655,6 +713,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
   useEffect(() => {
     const begin = () => {
+      abortRuns()
       stopAi()
       setBundleTransitionActive(true)
     }
@@ -665,7 +724,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
       window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
     }
-  }, [stopAi])
+  }, [abortRuns, stopAi])
   // Demo bundle: seed the pre-generated snapshot instead of burning an AI call
   // on data whose answer is a constant. It belongs to the feature's canonical
   // default model. With another model selected it may fill an otherwise blank

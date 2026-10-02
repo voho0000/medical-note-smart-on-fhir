@@ -13,9 +13,11 @@ import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils
 import { scopeClinicalDataForNhiLipidAi } from '@/src/core/utils/nhi-lipid-ai-scope.utils'
 import {
   buildClinicalContextFitCandidate,
+  catalogSubsetForFittedScope,
   clinicalContextTokenTarget,
   fitClinicalContextTextToTokenBudget,
   nextClinicalContextFitTier,
+  resolveClinicalContextTarget,
   type ClinicalContextAdaptation,
   type ClinicalContextFitTier,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
@@ -95,6 +97,24 @@ export function clinicalAiSourceSignature(
   ].join('\u0000'))
 }
 
+/**
+ * Present only when a caller's latency budget — not the model's window —
+ * narrowed `clinicalContext`. The request text is then smaller than the saved
+ * Data Selection scope although the window would have held it, so consumers
+ * that bound their own requests (a fixed-size snapshot, a chunked digest) and
+ * the source list a result is finalised against keep reading the saved scope.
+ */
+export interface LatencyBudgetScope {
+  /** The saved Data Selection scope, before any model fitting. */
+  savedClinicalData: ClinicalAiDataInput
+  /** Source catalog of `savedClinicalData`. */
+  savedCatalog: SummarySourceCatalogEntry[]
+  /** The records `clinicalContext` was built from, keyed with `savedCatalog`'s
+   *  keys (never renumbered), so a citation from the narrowed request resolves
+   *  against the saved catalog. */
+  contextCatalog: SummarySourceCatalogEntry[]
+}
+
 interface FitState {
   key: string | object
   tier: ClinicalContextFitTier
@@ -112,7 +132,13 @@ export function useClinicalAiInput(
   requestedContextLimit?: number,
   consumer: DataConsumer = 'insights',
   requestedTargetFraction = 1,
-  options: { includeSources?: boolean } = {},
+  options: {
+    includeSources?: boolean
+    /** Latency budget in tokens. When tighter than the window-derived target
+     *  it becomes the fitting target, and the adaptation reports
+     *  `local-latency`. Undefined keeps the window-only behaviour. */
+    tokenBudget?: number
+  } = {},
 ) {
   // Scope controls need the same fitting policy, not a generation-ready source
   // catalog or persistent signature. Preview-only callers expose neither.
@@ -143,7 +169,8 @@ export function useClinicalAiInput(
   const requestedInput = useMemo(() => ({
     patientScope, clinicalData: consumerClinicalData, profile: requestedProfile,
     contextLimit: requestedContextLimit, targetFraction: requestedTargetFraction,
-  }), [patientScope, consumerClinicalData, requestedProfile, requestedContextLimit, requestedTargetFraction])
+    tokenBudget: options.tokenBudget,
+  }), [patientScope, consumerClinicalData, requestedProfile, requestedContextLimit, requestedTargetFraction, options.tokenBudget])
   const deferredInput = useDeferredValue(requestedInput)
   const input = deferredInput.patientScope === patientScope && deferredInput.clinicalData === consumerClinicalData
     ? deferredInput : requestedInput
@@ -153,6 +180,7 @@ export function useClinicalAiInput(
     profile: activeProfile,
     contextLimit,
     targetFraction,
+    tokenBudget,
   } = input
 
   const rawDataReady = !!clinicalData
@@ -250,18 +278,23 @@ export function useClinicalAiInput(
     ],
   )
 
-  const targetTokens = useMemo(
+  const { targetTokens, reason: adaptationReason } = useMemo(
     () => {
-      if (!contextLimit || contextLimit <= 0) return Number.POSITIVE_INFINITY
+      // No usable window: nothing is fitted, and a latency budget has no
+      // window to be compared against either.
+      if (!contextLimit || contextLimit <= 0) {
+        return { targetTokens: Number.POSITIVE_INFINITY, reason: 'context-window' as const }
+      }
       const normalizedFraction = Number.isFinite(targetFraction)
         ? Math.min(1, Math.max(0.01, targetFraction))
         : 1
-      return Math.max(
+      const windowTargetTokens = Math.max(
         1,
         Math.floor(clinicalContextTokenTarget(contextLimit) * normalizedFraction),
       )
+      return resolveClinicalContextTarget(windowTargetTokens, tokenBudget)
     },
-    [contextLimit, targetFraction],
+    [contextLimit, targetFraction, tokenBudget],
   )
   // Reference identity is sufficient for transient UI fitting, and avoids
   // serializing/hashing an entire million-token chart merely to open a drawer.
@@ -422,6 +455,7 @@ export function useClinicalAiInput(
       ? null
       : {
           tier: activeTier,
+          reason: adaptationReason,
           contextLimit,
           targetTokens,
           originalTokens: fitState.key === fitKey
@@ -429,6 +463,27 @@ export function useClinicalAiInput(
             : candidateTokens,
           adaptedTokens,
         }
+
+  const latencyScopeActive = includeSources &&
+    !isCalculating &&
+    adaptationReason === 'local-latency' &&
+    contextAdaptation !== null
+  const savedCatalog = useMemo(
+    () => (latencyScopeActive && baseScopedClinicalData
+      ? getSourceCatalog(baseScopedClinicalData, locale)
+      : null),
+    [latencyScopeActive, baseScopedClinicalData, locale],
+  )
+  const latencyBudgetScope = useMemo<LatencyBudgetScope | null>(
+    () => (latencyScopeActive && baseScopedClinicalData && savedCatalog
+      ? {
+          savedClinicalData: baseScopedClinicalData,
+          savedCatalog,
+          contextCatalog: catalogSubsetForFittedScope(savedCatalog, catalog),
+        }
+      : null),
+    [latencyScopeActive, baseScopedClinicalData, savedCatalog, catalog],
+  )
 
   return {
     patientId: patient?.id ?? '',
@@ -450,6 +505,7 @@ export function useClinicalAiInput(
     clinicalData: isCalculating ? null : scopedClinicalData,
     catalog: isCalculating ? [] : catalog,
     contextAdaptation,
+    latencyBudgetScope,
     contextView,
     isCalculating,
     patientCounts,

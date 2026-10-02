@@ -41,26 +41,8 @@ export function prescribingAnalyteKey(observation: unknown): string | null {
   return key && PRESCRIBING_RELEVANT_ANALYTES.has(key) ? key : null
 }
 
-/** Modality class of a report: the unit "one latest report per type" is
- *  measured in. Two resources for the same study (a bridge emits a Chinese
- *  and an English row) share a class, so the duplicate is dropped; CT and MRI
- *  do not, so neither hides the other. Higher rank wins the cap. */
-function normalizeName(value: string): string {
-  return value.toLowerCase().replace(/[\s\p{P}]+/gu, ' ').trim()
-}
-
-export function reportModalityClass(group: string, typeText: string): { cls: string; rank: number } {
-  const t = typeText.toLowerCase()
-  if (group === 'pathology' || /path|cytolog|biops|病理|切片|細胞/.test(t)) return { cls: 'pathology', rank: 7 }
-  if (/\bpet\b|正子/.test(t)) return { cls: 'pet', rank: 6 }
-  if (/\bct\b|tomograph|斷層/.test(t)) return { cls: 'ct', rank: 5 }
-  if (/\bmri?\b|magnetic|磁振/.test(t)) return { cls: 'mri', rank: 5 }
-  if (/echo|心臟超音波|心超/.test(t)) return { cls: 'echo', rank: 4 }
-  if (/ultras|sono|超音波/.test(t)) return { cls: 'us', rank: 4 }
-  if (/ecg|ekg|electrocardio|心電圖/.test(t)) return { cls: 'ecg', rank: 3 }
-  if (/x-?ray|radiograph|chest film|cxr|ｘ光|x光|胸腔檢查/.test(t)) return { cls: 'xray', rank: 1 }
-  return { cls: `${group}:${normalizeName(typeText)}`, rank: 2 }
-}
+// The report modality class lives in report-narrative.utils.ts, beside the
+// other report helpers every first-visit consumer shares.
 
 export function floorStartDay(newestDay: string | undefined, days = FIRST_VISIT_FLOOR_DAYS): string | undefined {
   if (!newestDay) return undefined

@@ -82,6 +82,17 @@ async function main() {
       if (finalized.focus.length === 0) fail(`summary[${tag}]: no focus items survived`)
       if (aud === 'medical' && finalized.mustKnow.length === 0) fail(`summary[${tag}]: no 開藥前必看 rows survived`)
       for (const issue of auditSummaryGrounding(snapshot, grounding)) fail(`summary[${tag}] grounding: ${issue}`)
+      // 影像與病理重點: the demo snapshots carry no reports module, so every row
+      // must render from the digest's deterministic fallback.
+      const highlights = finalized.reportHighlights
+      if (aud === 'medical') {
+        if (!highlights) fail(`summary[${tag}]: no 影像與病理重點 rendered`)
+        else {
+          const empty = highlights.items.filter((item: any) => item.excerpts.length === 0)
+          if (empty.length) fail(`summary[${tag}]: 影像與病理重點 rows without an excerpt: ${empty.map((item: any) => item.key).join(',')}`)
+          console.log(`✓ reports[${tag}]: ${highlights.items.length} imaging/pathology rows (${highlights.aiSummarized} AI-picked, ${highlights.items.length - highlights.aiSummarized} fallback)`)
+        }
+      } else if (highlights) fail(`summary[${tag}]: 影像與病理重點 rendered for the patient audience`)
       if (aud === 'patient') {
         const education = snapshot.medicationEducation
         const expectedCurrentEducation = [

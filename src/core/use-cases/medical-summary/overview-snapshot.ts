@@ -41,11 +41,12 @@ import {
   extractDocumentKeySections,
   fitDocumentTextToTokenBudget,
   listClinicalDocuments,
-  decodeBase64,
-  stripHtmlToText,
 } from '@/src/core/utils/clinical-documents.utils'
-import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
-import { reportModalityClass } from '@/src/core/utils/first-visit-floors'
+import {
+  reportIdentity,
+  reportModality,
+  reportNarrative,
+} from '@/src/core/utils/report-narrative.utils'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
@@ -744,32 +745,6 @@ function collectLabs(
  *  identifier when one is present (bridges emit a Chinese and an English row). */
 const REPORTS_PER_MODALITY = 3
 
-function reportIdentity(report: DiagnosticReportEntity, cls: string, date: string): string {
-  const accession = (report.identifier ?? [])
-    .map((identifier) => identifier?.value?.trim())
-    .find((value): value is string => !!value)
-  return `${cls}|${date}|${accession ?? ''}`
-}
-
-/** Pathology (and some bridge imaging) reports carry their text only as a
- *  presentedForm attachment; without decoding it the snapshot would list the
- *  report with no finding, which is worse than omitting it. */
-function reportNarrative(report: DiagnosticReportEntity): string {
-  const direct = report.conclusion
-    || (report.note ?? []).map((note) => note.text).filter(Boolean).join(' ')
-  if (direct?.trim()) return direct
-  for (const attachment of (report as { presentedForm?: Array<{ contentType?: string; data?: string }> }).presentedForm ?? []) {
-    const contentType = String(attachment?.contentType ?? '').toLowerCase()
-    if (!attachment?.data) continue
-    if (contentType && !/text|html|xml/.test(contentType)) continue
-    const decoded = stripHtmlToText(decodeBase64(attachment.data)).trim()
-    if (decoded) return decoded
-  }
-  return ''
-}
-
-
-
 function collectReports(
   input: OverviewSnapshotInput,
   entryByResourceId: Map<string, SummarySourceCatalogEntry>,
@@ -779,10 +754,8 @@ function collectReports(
     const date = isoDay(report.effectiveDateTime ?? report.issued)
     if (!date) continue
     if (!reportNarrative(report).trim()) continue
-    const group = inferGroupFromDiagnosticReport(report)
+    const { group, cls, rank } = reportModality(report)
     if (group === 'lab') continue
-    const typeText = compact(codeText(report.code) ?? group)
-    const { cls, rank } = reportModalityClass(group, typeText)
     const bucket = byClass.get(cls) ?? { rank, reports: new Map() }
     const identity = reportIdentity(report, cls, date)
     // Same study twice (bilingual rows): keep the first, they carry one finding.

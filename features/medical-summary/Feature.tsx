@@ -55,6 +55,7 @@ import { OverviewHeroCard } from "./components/OverviewHeroCard"
 import { FocusCard } from "./components/FocusCard"
 import { ProblemsCard } from "./components/ProblemsCard"
 import { RecentEventsCard } from "./components/RecentEventsCard"
+import { ReportHighlightsCard } from "./components/ReportHighlightsCard"
 import { OtherAlertsDisclosure } from "./components/OtherAlertsDisclosure"
 import { MedicationEducationCard } from "./components/MedicationEducationCard"
 import { CoverageCard } from "./components/CoverageCard"
@@ -279,6 +280,7 @@ export default function MedicalSummaryFeature() {
     focus: ms.focusTitle,
     problems: ms.problemsTitle,
     recent: ms.recentTitle,
+    reports: ms.reportsTitle,
     safety: ms.otherAlertsSectionLabel,
   }), [ms])
   const generationErrors = useMemo(() => {
@@ -310,13 +312,20 @@ export default function MedicalSummaryFeature() {
     // slot stays outside it. `safety` is one of those ids, so the two are
     // mutually exclusive anyway: consolidating needs cardErrors.safety set.
     return [
-      ...consolidateCardErrors(failedCards, ms.title),
+      // The patient version never requests 影像與病理重點, so "every card
+      // failed" counts one card fewer there.
+      ...consolidateCardErrors(
+        failedCards,
+        ms.title,
+        MEDICAL_SUMMARY_CARD_IDS.length - (isPatient ? 1 : 0),
+      ),
       ...standaloneSafetyError,
       ...genericSummaryError,
     ]
   }, [
     cardErrors,
     cardLabels,
+    isPatient,
     ms,
     safetyError,
     modelUnavailable,
@@ -490,11 +499,19 @@ export default function MedicalSummaryFeature() {
     moduleId: MedicalSummaryModuleId,
     title: string,
     content: React.ReactNode,
+    /** The section's content is app-written and complete without its module
+     *  (影像與病理重點 falls back to each report's own text), so a failed
+     *  module still shows it. The failure itself stays in the banner. */
+    options: { renderOnError?: boolean } = {},
   ) => {
     // A failed section is reported once, in the shared generation banner with
     // its retry and model-switch actions (identical errors consolidated) — a
     // per-section error box here would repeat the same failure.
-    if (cardErrors[moduleId]) return null
+    if (cardErrors[moduleId]) {
+      return options.renderOnError && content
+        ? <div key={moduleId} id={`medical-summary-section-${moduleId}`}>{content}</div>
+        : null
+    }
     if (modulePending(moduleId)) {
       return <SummarySectionPending key={moduleId} title={title} label={ms.generating} />
     }
@@ -925,6 +942,32 @@ export default function MedicalSummaryFeature() {
               />
             ) : null,
           )}
+
+          {/* 影像與病理重點 — clinician-facing. Rendered from the digest even when
+              the reports module failed or never ran (legacy cache, demo), so
+              only a run still in flight shows the placeholder. */}
+          {!isPatient ? renderSection(
+            "reports",
+            ms.reportsTitle,
+            result?.reportHighlights ? (
+              <ReportHighlightsCard
+                highlights={result.reportHighlights}
+                labels={{
+                  title: ms.reportsTitle,
+                  subtitle: ms.reportsSubtitle,
+                  kindLabels: ms.reportsKindLabels,
+                  showMore: ms.reportsShowMore,
+                  showLess: ms.reportsShowLess,
+                  conclusionTag: ms.reportsConclusionTag,
+                  openingTag: ms.reportsOpeningTag,
+                  droppedQuotes: ms.reportsDroppedQuotes,
+                  fallbackCount: ms.reportsFallbackCount,
+                }}
+                onNavigate={navigateToResource}
+              />
+            ) : null,
+            { renderOnError: true },
+          ) : null}
 
           {renderSection(
             "recent",

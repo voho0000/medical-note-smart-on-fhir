@@ -152,6 +152,7 @@ function arrange({
     retryFailedModules: summaryRetryFailedModules,
     cancel: summaryCancel,
     restoreGenerationSlot: restoreSummaryGenerationSlot,
+    reportDigestInput: null,
   })
   mockUseSafetyAlerts.mockReturnValue({
     result: safetyResult as never,

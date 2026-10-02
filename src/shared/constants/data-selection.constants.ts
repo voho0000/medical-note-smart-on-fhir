@@ -66,7 +66,12 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // Empty = include every lab panel. Narrow (e.g. 'cbc,chem') only for
   // analyte-dense patients where the full panel set overwhelms the context.
   labPanelIds: '',
-  imagingReportVersion: 'latest',
+  // All versions, not latest-per-name: NHI cloud records give every CT the
+  // same order name (33071B 電腦斷層造影) whatever the body part, so
+  // latest-per-name collapsed a year of serial studies into one report and
+  // the 影像與病理重點 section lost every comparison. Same-study duplicates
+  // are still collapsed by the report digest (modality + day + accession).
+  imagingReportVersion: 'all',
   imagingReportTimeRange: '1y',
   // Vitals / procedures / immunizations: `latest`-version filter already dedups
   // by name, so volume isn't a concern. Keep `all` so historical data for
@@ -93,6 +98,8 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
 export const IPS_DEFAULT_DATA_FILTERS: DataFilters = {
   ...DEFAULT_DATA_FILTERS,
   labDepth: '3',
+  // A portable snapshot keeps the newest report per name, as before.
+  imagingReportVersion: 'latest',
 }
 
 // ── 全部資料 (everything) — for the 全選 button ──────────────────────────────
