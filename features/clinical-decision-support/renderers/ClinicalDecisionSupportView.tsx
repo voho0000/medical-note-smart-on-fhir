@@ -2423,6 +2423,13 @@ export function ClinicalDecisionSupportView({
               onSaveClinicVitals?.({ signAnswers: Object.fromEntries(terms.map((term) => [term, value === undefined ? null : value ? 'present' : 'absent'])) })
             }
           }}
+          // Today's NYHA class, graded beside DP-03's asks, is the clinic
+          // examination's (`nyhaClass`, the physicianNyhaClass fact the pack reads).
+          onGrade={(id: string, value: string | null) => {
+            if (id === 'nyha' && (value === null || value === 'I' || value === 'II' || value === 'III' || value === 'IV')) {
+              onSaveClinicVitals?.({ nyhaClass: value })
+            }
+          }}
           modules={visitModules}
         />
       </div>

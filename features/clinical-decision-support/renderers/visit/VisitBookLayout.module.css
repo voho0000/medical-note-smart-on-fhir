@@ -661,11 +661,61 @@
 .askLabel { min-width: 0; font-size: 14px; font-weight: 700; }
 .askGroup > button[data-prefilled], .questionGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
 .askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
+/* Today's grade beside the asks (HF NYHA, owner decision 2026-10-02): each class with its meaning under it. */
+.askLabelTop { align-self: start; padding-top: 12px; }
+.gradeBody { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gradeBody .askNote { grid-column: auto; }
+.gradeGroup > button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 104px; padding: 6px 10px; line-height: 1.25; }
+.gradeGroup > button b { font-size: 15px; }
+.gradeDetail { font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.gradeGroup > button[aria-pressed='true'] .gradeDetail { color: var(--blue-ink); }
+@container (max-width: 600px) {
+  /* Four equal columns across the panel: the meanings wrap under their class. */
+  .gradeGroup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .gradeGroup > button { min-width: 0; padding: 6px 4px; }
+}
 /* A phone, or the panel at its narrowest: the label above its answers. */
 @container (max-width: 480px) {
   .askRow { grid-template-columns: minmax(0, 1fr); }
   .askNote { grid-column: 1; }
+  .askLabelTop { padding-top: 0; }
 }
+
+/* DP-06's other symptoms and signs, folded and optional (owner decision 2026-10-02). */
+.more { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.moreHead {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 2px 10px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.moreHead:hover { background: var(--thead); }
+.moreHead:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.more[data-open] .moreHead { border-bottom: 1px solid var(--line); }
+.moreCaret { flex-shrink: 0; width: 1em; color: var(--ink-4); }
+.moreText { display: flex; flex-direction: column; flex: 1 1 16rem; min-width: 0; }
+.moreBadge { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-4); }
+.moreItems { font-size: 13px; color: var(--ink-3); }
+.moreCount { margin-left: auto; font-size: 13px; color: var(--ink-2); }
+.moreBody { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 14px; }
+.moreGroups { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@container (max-width: 640px) { .moreGroups { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+.moreFoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 13px; color: var(--ink-3); }
+.questionDetail { display: block; font-size: 12px; color: var(--ink-4); }
+/* In the fold the answers stay right of their row at any width, the label wrapping
+   beside them, so nine rows read as one column rather than alternating. */
+.moreGroups .questionRow { flex-wrap: nowrap; }
+.moreGroups .questionRow > span:first-child { flex: 1 1 auto; min-width: 0; }
 
 /* --------------------------------- plan -------------------------------- */
 

@@ -383,7 +383,7 @@ function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
 interface QuestionsView {
   title: string
   answers: string
-  rows: { id: string; label: string; answer?: boolean; record?: boolean; recordHolds?: boolean; terms?: string[] }[]
+  rows: { id: string; label: string; detail?: string; answer?: boolean; record?: boolean; recordHolds?: boolean; terms?: string[] }[]
   bulkNone?: boolean
   labels?: { yes: string; no: string }
   note?: string
@@ -400,9 +400,32 @@ function questionGroupsOf(point: object | undefined): QuestionsView[] {
   return Array.isArray(raw) ? raw.flatMap((group) => parseQuestions(group) ?? []) : []
 }
 
-/** The row a point's questions hold under an id, in `questions` or a further group — for its `terms`. */
+interface MoreQuestionsView {
+  title: string
+  badge?: string
+  groups: QuestionsView[]
+  note?: string
+}
+
+/** A point's folded, optional questions (HF DP-06's other symptoms and signs), read defensively. */
+function moreQuestionsOf(point: object | undefined): MoreQuestionsView | undefined {
+  const raw = (point as { moreQuestions?: unknown } | undefined)?.moreQuestions
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, badge, groups, note } = raw as Record<string, unknown>
+  const parsed = Array.isArray(groups) ? groups.flatMap((group) => parseQuestions(group) ?? []) : []
+  if (typeof title !== 'string' || !parsed.length) return undefined
+  return {
+    title,
+    ...(typeof badge === 'string' ? { badge } : {}),
+    groups: parsed,
+    ...(typeof note === 'string' ? { note } : {}),
+  }
+}
+
+/** The row a point's questions hold under an id, in `questions`, a further group or the fold — for its `terms`. */
 export function questionRowOf(point: object, id: string): QuestionsView['rows'][number] | undefined {
-  return [questionsOf(point), ...questionGroupsOf(point)].flatMap((group) => group?.rows ?? []).find((row) => row.id === id)
+  return [questionsOf(point), ...questionGroupsOf(point), ...(moreQuestionsOf(point)?.groups ?? [])]
+    .flatMap((group) => group?.rows ?? []).find((row) => row.id === id)
 }
 
 function parseQuestions(raw: unknown): QuestionsView | undefined {
@@ -410,12 +433,13 @@ function parseQuestions(raw: unknown): QuestionsView | undefined {
   const { title, answers, rows, bulkNone, note, labels } = raw as Record<string, unknown>
   if (typeof title !== 'string' || typeof answers !== 'string' || !Array.isArray(rows)) return undefined
   const parsed = rows.flatMap((row): QuestionsView['rows'] => {
-    const { id, label, answer, record, recordHolds, terms } = (row ?? {}) as Record<string, unknown>
+    const { id, label, detail, answer, record, recordHolds, terms } = (row ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof label !== 'string') return []
     const termList = Array.isArray(terms) ? terms.filter((term): term is string => typeof term === 'string') : []
     return [{
       id,
       label,
+      ...(typeof detail === 'string' ? { detail } : {}),
       ...(typeof answer === 'boolean' ? { answer } : {}),
       ...(typeof record === 'boolean' ? { record } : {}),
       ...(recordHolds === true ? { recordHolds: true } : {}),
@@ -738,7 +762,10 @@ function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions:
       ) : null}
       {questions.rows.map((row) => (
         <div key={row.id} className={styles.questionRow} data-book-question={row.id}>
-          <span id={`${idBase}-${row.id}`}>{row.label}</span>
+          <span id={`${idBase}-${row.id}`}>
+            {row.label}
+            {row.detail ? <span className={styles.questionDetail}>{row.detail}</span> : null}
+          </span>
           <div role="group" aria-labelledby={`${idBase}-${row.id}`} className={styles.questionGroup}>
             {options.map((option) => {
               // The record's reading stands until the clinician answers; pressing it makes it theirs,
@@ -763,6 +790,74 @@ function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions:
         </div>
       ))}
       {questions.note ? <p className={styles.questionsNote}>{questions.note}</p> : null}
+    </div>
+  )
+}
+
+/**
+ * A point's folded, optional questions — HF DP-06's other symptoms and signs
+ * (owner decision 2026-10-02, the design canvas 「決策地圖 v2 · 今日評估」).
+ * Folded, the head names what is inside, or once any is answered how many and
+ * what was found; open, the groups side by side, and 「其餘皆無」 across them.
+ * A row left blank was not assessed: the fold never answers it.
+ */
+function MoreQuestions({ more, isEnglish, onAnswer }: {
+  more: MoreQuestionsView
+  isEnglish: boolean
+  onAnswer?: (group: QuestionsView, id: string, value: boolean | undefined) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const bodyId = useId()
+  const rows = more.groups.flatMap((group) => group.rows)
+  const answered = rows.filter((row) => row.answer !== undefined)
+  const found = rows.filter((row) => row.answer === true)
+  const sep = isEnglish ? ', ' : '、'
+  const count = answered.length
+    ? `${isEnglish ? `${answered.length} of ${rows.length} answered` : `已答 ${answered.length}／${rows.length}`}${
+      found.length
+        ? `${isEnglish ? ' · present: ' : '・有：'}${found.map((row) => row.label).join(sep)}`
+        : answered.length === rows.length ? (isEnglish ? ' · none' : '・皆無') : ''
+    }`
+    : (isEnglish ? 'Not answered' : '尚未填')
+  const unanswered = more.groups.flatMap((group) => group.rows.filter((row) => row.answer === undefined).map((row) => ({ group, row })))
+  return (
+    <div className={styles.more} data-book-more="" {...(open ? { 'data-open': '' } : {})}>
+      <button type="button" className={styles.moreHead} aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((value) => !value)}>
+        <span aria-hidden="true" className={styles.moreCaret}>{open ? '▾' : '▸'}</span>
+        <span className={styles.moreText}>
+          <span><b>{more.title}</b>{more.badge ? <span className={styles.moreBadge}>{more.badge}・{isEnglish ? `${rows.length} items` : `${rows.length} 項`}</span> : null}</span>
+          {open ? null : <span className={styles.moreItems}>{more.groups.map((group) => group.rows.map((row) => row.label).join(sep)).join(isEnglish ? ' · ' : '・')}</span>}
+        </span>
+        <span className={styles.moreCount}>{count}</span>
+      </button>
+      {open ? (
+        <div id={bodyId} className={styles.moreBody}>
+          <div className={styles.moreGroups}>
+            {more.groups.map((group) => (
+              <PointQuestions
+                key={group.title}
+                questions={group}
+                isEnglish={isEnglish}
+                titled
+                {...(onAnswer ? { onAnswer: (id: string, value: boolean | undefined) => onAnswer(group, id, value) } : {})}
+              />
+            ))}
+          </div>
+          <div className={styles.moreFoot}>
+            {onAnswer && unanswered.length ? (
+              <button
+                type="button"
+                className={styles.bulkNone}
+                onClick={() => { for (const { group, row } of unanswered) onAnswer(group, row.id, false) }}
+                data-book-more-none=""
+              >
+                {answered.length ? (isEnglish ? 'None of the rest' : '其餘皆無') : (isEnglish ? 'None of these' : '全部皆無')}
+              </button>
+            ) : null}
+            {more.note ? <span>{more.note}</span> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1396,6 +1491,7 @@ export function VisitBookLayout({
     const table = optionTableOf(point)
     const grid = profileGridOf(point)
     const groups = questionGroupsOf(point)
+    const more = moreQuestionsOf(point)
     const title = score?.title ?? table?.title ?? questions?.title ?? ''
     const part = section.pointLabels?.[point.dp] ?? point.label
     const answer: AnswerQuestion | undefined = onAnswerQuestion && questions
@@ -1438,6 +1534,14 @@ export function VisitBookLayout({
         })}
         {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
         {withDecision ? blockDecision(point, entry) : null}
+        {/* Optional, and changes nothing today's decision reads: after it. */}
+        {more ? (
+          <MoreQuestions
+            more={more}
+            isEnglish={isEnglish}
+            {...(onAnswerQuestion ? { onAnswer: (group: QuestionsView, id: string, value: boolean | undefined) => onAnswerQuestion(point, group.answers, id, value) } : {})}
+          />
+        ) : null}
       </div>
     )
   }

@@ -280,7 +280,8 @@ export function applyClinicVitals(
 
   const nyha = vitals.nyhaClass
   if (nyha && nyha.value !== NOT_ASSESSED) {
-    const date = calendarDayOf(nyha.modifiedAt)
+    // The day it was graded; a record from before that day was kept dates it by its last change.
+    const date = nyha.assessedOn ?? calendarDayOf(nyha.modifiedAt)
     facts.physicianNyhaClass = {
       zh: `NYHA ${nyha.value}${date ? noteZh(date) : ''}`,
       en: `NYHA ${nyha.value}${date ? noteEn(date) : ''}`,
