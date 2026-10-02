@@ -223,11 +223,28 @@ describe("useInsightGeneration provenance", () => {
   })
 
   describe("ICD code reference", () => {
+    const LOCAL_MODEL = "openai-compatible-custom:vghtpe-tvghbrain"
     const billed = "-     ICD codes on visit record (billing, not confirmed diagnoses): I10 - Essential hypertension"
-    const render = (model: string, prompt: string, context = `Visits & Treatment History:\n${billed}`) =>
+    // Real CMS 2018 GEM rows for I10: three mutually exclusive candidates.
+    const crosswalk = {
+      map: { I10: ["4010 10000", "4011 10000", "4019 10000"] },
+      names: {
+        "4010": "Malignant essential hypertension",
+        "4011": "Benign essential hypertension",
+        "4019": "Unspecified essential hypertension",
+      },
+    }
+    const render = (
+      model: string,
+      prompt: string,
+      context = `Visits & Treatment History:\n${billed}`,
+      panelIds = ["soap"],
+    ) =>
       renderHook(() => useInsightGeneration({
-        panels: [{ id: "soap", title: "SOAP", prompt, outputFormat: "markdown", languagePolicy: "interface-language" }],
-        prompts: { soap: prompt },
+        panels: panelIds.map((id) => ({
+          id, title: id, prompt, outputFormat: "markdown" as const, languagePolicy: "interface-language" as const,
+        })),
+        prompts: Object.fromEntries(panelIds.map((id) => [id, prompt])),
         context,
         piiLiterals: [],
         model,
@@ -236,28 +253,29 @@ describe("useInsightGeneration provenance", () => {
         contextAdaptation: null,
         inputSignature: "input-icd",
       }))
-
     beforeEach(() => {
       mockQuery.mockResolvedValue("generated summary")
-      mockLoadIcdCrosswalk.mockResolvedValue({ map: { I10: ["4019"] }, names: { "4019": "Unspecified essential hypertension" } })
+      mockLoadIcdCrosswalk.mockResolvedValue(crosswalk)
     })
 
     it("adds the translated billed codes for a local model and an ICD-9 template", async () => {
-      const { result } = render("openai-compatible-custom:vghtpe-tvghbrain", "A: ICD-9 block and ICD-10 block")
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block and ICD-10 block")
       await act(async () => { await result.current.runPanel("soap", { force: true }) })
 
       expect(mockLoadIcdCrosswalk).toHaveBeenCalledTimes(1)
       expect(mockBuildMessages.mock.calls[0][0]).toMatchObject({
         icdCodeReference: expect.stringContaining(
-          "1. billed ICD-10-CM I10 Essential hypertension | ICD-9-CM equivalent: 401.9 UNSPECIFIED ESSENTIAL HYPERTENSION",
+          "1. billed ICD-10-CM I10 Essential hypertension | ICD-9-CM ALTERNATIVES (at most one): " +
+          "option 1: 401.0 MALIGNANT ESSENTIAL HYPERTENSION; option 2: 401.1 BENIGN ESSENTIAL HYPERTENSION; " +
+          "option 3: 401.9 UNSPECIFIED ESSENTIAL HYPERTENSION\n",
         ),
       })
     })
 
     it.each([
       ["a frontier model", "gpt-5.6-luna", "A: ICD-9 block", undefined],
-      ["a template without ICD-9", "openai-compatible-custom:vghtpe-tvghbrain", "Summarize the record", undefined],
-      ["a record without billed codes", "openai-compatible-custom:vghtpe-tvghbrain", "A: ICD-9 block", "Lab Reports:\nnone"],
+      ["a template without ICD-9", LOCAL_MODEL, "Summarize the record", undefined],
+      ["a record without billed codes", LOCAL_MODEL, "A: ICD-9 block", "Lab Reports:\nnone"],
     ])("leaves the request unchanged for %s", async (_label, model, prompt, context) => {
       const { result } = render(model, prompt, context)
       await act(async () => { await result.current.runPanel("soap", { force: true }) })
@@ -269,7 +287,7 @@ describe("useInsightGeneration provenance", () => {
     it("still generates when the crosswalk cannot be loaded", async () => {
       mockLoadIcdCrosswalk.mockRejectedValueOnce(new Error("offline"))
       const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
-      const { result } = render("openai-compatible-custom:vghtpe-tvghbrain", "A: ICD-9 block")
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block")
       await act(async () => { await result.current.runPanel("soap", { force: true }) })
 
       expect(mockBuildMessages.mock.calls[0][0]).not.toHaveProperty("icdCodeReference")
