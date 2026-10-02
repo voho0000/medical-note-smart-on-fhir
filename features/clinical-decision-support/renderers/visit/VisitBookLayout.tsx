@@ -18,14 +18,15 @@ import {
 import { displayDate } from './VisitStatusHeader'
 import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
 import { BookChainDone, BookDecisionControls } from './BookDecisionControls'
-import { VisitBookChromeContext } from './visit-book-chrome'
+import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
 import styles from './VisitBookLayout.module.css'
 
 /**
  * The visit laid out as a pocket-handbook page (owner request 2026-09-30,
  * after the Pocket Medicine-style prototype: 「把這個版面套到 localhost 上的
- * 真實 CDSS 試試看」, then 「我想要看到跟 prototype 一模一樣的畫面」). An
- * experiment beside the decision map, opened with `?visit=book`.
+ * 真實 CDSS 試試看」, then 「我想要看到跟 prototype 一模一樣的畫面」). Since
+ * 2026-10-01 it is the decision map (決策地圖 v2), in the CDSS panel or over the
+ * whole window; the first decision map is retired.
  *
  * Left, the decision map: every point of the page under its numbered section,
  * with a mark for where it stands today — the map says where the decisions
@@ -394,7 +395,7 @@ function questionsOf(point: object | undefined): QuestionsView | undefined {
 }
 
 /** The further question groups a point asks (HF DP-06's 誘因), each read as `questionsOf` reads one. */
-export function questionGroupsOf(point: object | undefined): QuestionsView[] {
+function questionGroupsOf(point: object | undefined): QuestionsView[] {
   const raw = (point as { questionGroups?: unknown } | undefined)?.questionGroups
   return Array.isArray(raw) ? raw.flatMap((group) => parseQuestions(group) ?? []) : []
 }
@@ -433,7 +434,7 @@ function parseQuestions(raw: unknown): QuestionsView | undefined {
   }
 }
 
-export interface ProfileGridView {
+interface ProfileGridView {
   title: string
   columns: { id: string; label: string }[]
   rows: { id: string; label: string }[]
@@ -444,7 +445,7 @@ export interface ProfileGridView {
 }
 
 /** The two-axis profile a point places the patient in (HF DP-06's 乾濕 by 冷暖), read defensively. */
-export function profileGridOf(point: object | undefined): ProfileGridView | undefined {
+function profileGridOf(point: object | undefined): ProfileGridView | undefined {
   const raw = (point as { profileGrid?: unknown } | undefined)?.profileGrid
   if (!raw || typeof raw !== 'object') return undefined
   const { title, columns, rows, cells, current, reading, note } = raw as Record<string, unknown>
@@ -867,6 +868,10 @@ export function VisitBookLayout({
   onAnswerQuestion,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
+  // Inside the CDSS panel unless the page around it says otherwise, or the
+  // address asks for the whole window (`?visit=book`).
+  const [urlBook] = useState(isVisitBookMode)
+  const inline = chrome ? Boolean(chrome.inline) : !urlBook
   const [mapOpen, setMapOpen] = useState(true)
   // Over the whole window, Esc returns to the panel, as a dialog would.
   const onCollapse = chrome?.onCollapse
@@ -880,7 +885,7 @@ export function VisitBookLayout({
   // reach — Tab no longer walks into the panel and the header underneath, and
   // a screen reader no longer reads them — until it is back in the panel.
   const bookRef = useRef<HTMLDivElement>(null)
-  const overWindow = !chrome?.inline
+  const overWindow = !inline
   useEffect(() => {
     const book = bookRef.current
     if (!overWindow || !book) return
@@ -932,7 +937,7 @@ export function VisitBookLayout({
     const ok = await copy(summaryText)
     if (!ok) toast.error(isEnglish ? 'Could not copy — the clipboard is unavailable in this context.' : '無法複製，此環境無法使用剪貼簿。')
   }
-  // Back to the page's own layout: the same address without the experiment.
+  // Back to the panel: the same address without `?visit=book`.
   const exitHref = (() => {
     if (typeof window === 'undefined') return undefined
     const url = new URL(window.location.href)
@@ -1184,7 +1189,7 @@ export function VisitBookLayout({
           <div className={styles.inner}>
             {current ? (
               <>
-                <BookChainDone steps={decided} />
+                <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
                 <p className={styles.question} data-visit-headline="">{shown.headline ?? shown.label}</p>
                 {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why="">{shown.why}</p> : null}
                 <BookDecisionControls
@@ -1196,7 +1201,7 @@ export function VisitBookLayout({
               </>
             ) : (
               <>
-                <BookChainDone steps={decided.slice(0, -1)} />
+                <BookChainDone steps={decided.slice(0, -1)} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
                 <BookDecisionControls
                   point={shown}
                   decision={row.steps[row.steps.length - 1].decision}
@@ -1451,7 +1456,7 @@ export function VisitBookLayout({
       <div className={`${styles.box} ${styles.inner}`} data-tone={tone} data-book-box={point.dp}>
         {current ? (
           <>
-            <BookChainDone steps={decided} />
+            <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
             <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}{shown.headline ?? shown.label}</p>
             <BookDecisionControls
@@ -1463,7 +1468,7 @@ export function VisitBookLayout({
           </>
         ) : (
           <>
-            <BookChainDone steps={decided.slice(0, -1)} />
+            <BookChainDone steps={decided.slice(0, -1)} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             <BookDecisionControls
               point={shown}
               decision={row.steps[row.steps.length - 1].decision}
@@ -1762,7 +1767,7 @@ export function VisitBookLayout({
   const chaptersShown = numbered.filter(({ section }) => !section.plan)
 
   return (
-    <div ref={bookRef} className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
+    <div ref={bookRef} className={`${styles.book} ${inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={inline ? 'true' : undefined}>
       <header className={styles.head}>
         <div className={styles.headInner}>
           {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
@@ -1806,7 +1811,7 @@ export function VisitBookLayout({
             <button key="window-toggle" type="button" className={styles.windowToggle} onClick={chrome.onCollapse} data-testid="cdss-book-collapse">
               {isEnglish ? 'Back to the panel' : '回到面板'}
             </button>
-          ) : exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
+          ) : exitHref && !inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Back to the panel' : '回到面板'}</a> : null}
         </div>
       </header>
 

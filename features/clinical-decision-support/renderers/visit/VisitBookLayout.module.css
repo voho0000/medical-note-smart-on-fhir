@@ -757,6 +757,8 @@
 @media (pointer: coarse) { .change { min-height: 44px; } }
 .decidedCheck { margin: 0; font-size: 13px; color: var(--ink-3); }
 .chainDone { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); }
+/* A step's 「改」 in the step line's own size, beside what it takes back. */
+.chainDone .change { margin-left: 0; padding: 0 4px; font-size: 13px; }
 
 /* HF DP-06 (owner request 2026-09-30, the prototype's 「現在是乾是濕？」):
    the signs beside the 2×2 they place the patient in, the triggers under them. */

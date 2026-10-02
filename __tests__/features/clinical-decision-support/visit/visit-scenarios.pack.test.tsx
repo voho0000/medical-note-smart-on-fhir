@@ -4,26 +4,30 @@
  * Each bundle goes through the app's own import parser, the FHIR adapter, the
  * host's AF calculators and the pack's `applyVisitAnswers` /
  * `buildVisitDecisionModel` (see `scenario-models`), and the map is drawn by
- * the real view. The assertions are brief §7's, with the deviation the
- * pack's author accepted:
+ * the real view — 決策地圖 v2, the pocket-handbook page, since the first
+ * decision map was retired (owner, 2026-10-01). What the three sections keep
+ * that v2 does not ask (the AF question groups, the HF follow-up block) is
+ * checked there, with `layout="sections"`. The assertions are brief §7's,
+ * with the deviation the pack's author accepted:
  *
  * - R2 reads the previous weight up to 120 days back, not 90 (P4's basis is a
  *   06-20 weight).
  *
  * Words are the pack's, so the assertions quote the pack; the host's own words
- * (「今天的決定都記下了」 when the pack has none) are chrome.
+ * are chrome. Which points are today's decisions is the pack's call too: its
+ * queue is read off the model the page drew (`drawn`), the page's marks off
+ * the map.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { intolerantPillars } from '@/features/clinical-decision-support/renderers/visit/visit-decisions'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
-import type { VisitAnswers } from '@/features/clinical-decision-support/types'
+import type { VisitAnswers, VisitDecisionModel } from '@/features/clinical-decision-support/types'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { buildClinicVitals, mergeClinicVitals, useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
-import { useVisitValuesStore } from '@/features/clinical-decision-support/stores/visit-values.store'
 import { atScenarioDay, DP06_EXAM_TERMS, examToday, scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -40,6 +44,9 @@ for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as co
 
 const PATIENT = 'scenario-patient'
 
+/** The model the page last drew, as the pack rebuilt it from every answer given on it. */
+let drawn: VisitDecisionModel | undefined
+
 /** The map for a scenario, rebuilt by the pack from every answer given on it. */
 function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { id: ScenarioId; page?: 'hf' | 'af'; layout?: 'map' | 'sections'; firstVisit?: boolean }) {
   const decisions = usePhysicianDecisions(PATIENT)
@@ -51,6 +58,9 @@ function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { 
   // The signs examined in the room reach the pack as LiveFeature hands them.
   const clinicVitals = useClinicVitals(PATIENT)
   const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant, firstVisit, afAnswers, clinicVitals }), [afAnswers, answers, clinicVitals, firstVisit, id, intolerant, page, phenotype])
+  useEffect(() => {
+    drawn = run.model
+  }, [run])
   return (
     <ClinicalDecisionSupportView
       result={run.result}
@@ -75,60 +85,55 @@ function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { 
   )
 }
 
-/**
- * Every decision row on the page, in page order — 01's, 02's, then 03's, each
- * at the head of its section — or one section's.
- */
-function queue(block?: 'status' | 'treatment' | 'outlook'): { dp: string; primary: string | null }[] {
-  const scope = block ? document.querySelector(`[data-testid="cdss-visit-queue-${block}"]`) : document
-  return [...(scope?.querySelectorAll<HTMLElement>('[data-visit-queue-row]') ?? [])].map((row) => ({
-    dp: row.dataset.visitCurrentDp ?? row.dataset.visitQueueDp ?? '',
-    primary: row.querySelector('[data-visit-primary]')?.textContent ?? null,
-  }))
-}
+/** Today's decisions as the pack queued them on the page last drawn. */
+const queued = (): readonly string[] => drawn?.queue ?? []
 
-function row(dp: string): HTMLElement {
-  const found = [...document.querySelectorAll<HTMLElement>('[data-visit-queue-row]')].find((element) => element.dataset.visitQueueDp === dp)
-  if (!found) throw new Error(`no queue row ${dp}`)
+/** A point of the page last drawn, as the pack graded it. */
+function drawnPoint(dp: string) {
+  const found = drawn?.points.find((item) => item.dp === dp)
+  if (!found) throw new Error(`the page drew no ${dp}`)
   return found
 }
 
+/** A point's entry on the page: its row, line, block or table. */
+function entry(dp: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(`[data-book-dp="${dp}"]`)
+  if (!found) throw new Error(`no entry ${dp}`)
+  return found
+}
+
+/** Where a point is decided: its box under a block (AF 抗凝, DP-06), else its entry. */
+const decision = (dp: string): HTMLElement => document.querySelector<HTMLElement>(`[data-book-box="${dp}"]`) ?? entry(dp)
+
+/** Where the map says a point stands today: act, safety, ask, wait, done, info or absent. */
+function mapMark(dp: string): string | undefined {
+  const line = document.querySelector<HTMLElement>(`[data-book-map-dp="${dp}"]`)
+  if (!line) throw new Error(`no map line ${dp}`)
+  return line.dataset.bookMark
+}
+
+/** A point's recommended button, wherever it is decided. */
 function primaryOf(dp: string): HTMLButtonElement {
-  return row(dp).querySelector<HTMLButtonElement>('[data-visit-primary]')!
-}
-
-function queryCell(dp: string, source = 'hf'): HTMLElement | undefined {
-  return [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
-    .find((element) => element.dataset.dp === dp && element.dataset.source === source)
-}
-
-function cell(dp: string, source = 'hf'): HTMLElement {
-  const found = queryCell(dp, source)
-  if (!found) throw new Error(`no map cell ${source}:${dp}`)
+  const found = decision(dp).querySelector<HTMLButtonElement>('[data-visit-primary]')
+  if (!found) throw new Error(`no primary button on ${dp}`)
   return found
 }
 
-/** A pillar's box in 02's 四支柱, whatever its state: a queued row, a box deciding in place, or a plain box. */
-function pillar(dp: string): HTMLElement {
-  const box = document.querySelector<HTMLElement>(`[data-testid="cdss-visit-pillars"] [data-visit-queue-dp="${dp}"], [data-testid="cdss-visit-pillars"] [data-visit-point-box="${dp}"]`)
-  if (!box) throw new Error(`no pillar box ${dp}`)
-  return box
-}
-
-/** A box in 02's 利尿劑, right under the pillars (DP-06), and the state it shows. */
-function diureticBox(dp: string): HTMLElement {
-  const box = document.querySelector<HTMLElement>(`[data-testid="cdss-visit-pillars-follow"] [data-visit-queue-dp="${dp}"], [data-testid="cdss-visit-pillars-follow"] [data-visit-point-box="${dp}"]`)
-  if (!box) throw new Error(`no diuretic box ${dp}`)
-  return box
-}
-const boxState = (box: HTMLElement) => box.getAttribute('data-state') ?? box.getAttribute('data-visit-queue-state')
-
-/** A row's 「依據與細節」: a queued point has no cell; its card opens under the row. */
-function rowDetail(dp: string): HTMLElement {
-  const found = document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
-  if (!found) throw new Error(`no 依據與細節 on row ${dp}`)
+/** One answer of an every-visit ask (DP-03). */
+function askOption(ask: string, value: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(`[data-book-ask="${ask}"] [data-book-ask-option="${value}"]`)
+  if (!found) throw new Error(`no answer ${ask}=${value}`)
   return found
 }
+
+/** The one table of a chapter (the medicines table, as the prototype draws it). */
+function chapterTable(chapter: string): HTMLElement {
+  const tables = document.querySelectorAll<HTMLElement>(`[data-book-section="${chapter}"] [role="group"]`)
+  expect(tables).toHaveLength(1)
+  return tables[0]!
+}
+
+const headline = () => document.getElementById('cdss-visit-headline')
 
 function point(id: ScenarioId, dp: string, options: { page?: 'hf' | 'af'; answers?: VisitAnswers; source?: 'hf' | 'af'; clinicVitals?: ReturnType<typeof examToday>; now?: Date } = {}) {
   const { model } = scenarioRun(id, options)
@@ -140,6 +145,7 @@ function point(id: ScenarioId, dp: string, options: { page?: 'hf' | 'af'; answer
 beforeEach(() => {
   Element.prototype.scrollIntoView = jest.fn()
   localStorage.clear()
+  drawn = undefined
   usePhysicianDecisionsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useClinicVitalsStore.setState({ byPatientId: {} })
@@ -150,73 +156,88 @@ beforeEach(() => {
 describe('real pack · P3 new AF (AF page)', () => {
   it('leads a first visit with the coded AF to confirm, as the HF page does', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    expect(queue('status')).toEqual([{ dp: 'DP-01', primary: 'AF' }])
+    expect(queued()).toContain('DP-01')
+    expect(mapMark('DP-01')).toBe('act')
+    expect(primaryOf('DP-01')).toHaveTextContent('AF')
     // The diagnosis first, the every-visit questions after it, on one page.
-    expect(row('DP-01').compareDocumentPosition(screen.getByTestId('cdss-visit-follow-up')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(entry('DP-01').compareDocumentPosition(screen.getByTestId('cdss-book-asks')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // A question, not a recommendation: the answers alike, side by side.
-    expect([...row('DP-01').querySelectorAll('[data-visit-action]')].map((button) => button.textContent)).toEqual(['AF', 'AFL', '都有'])
+    const controls = within(entry('DP-01')).getByTestId('cdss-visit-controls')
+    expect(controls).toHaveAttribute('data-visit-question')
+    expect([...controls.querySelectorAll('[data-visit-action]')].map((button) => button.textContent)).toEqual(['AF', 'AFL', '都有'])
     fireEvent.click(primaryOf('DP-01'))
     expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: true, atrialFlutter: false })
-    expect(queue('status')).toEqual([])
-    // The cell carries today's answer, as every decided cell does.
-    expect(cell('DP-01', 'af')).toHaveTextContent('已記錄AF')
-    expect(cell('DP-01', 'af')).toHaveAttribute('data-state', 'done')
-    // The follow-up asks are right after it; nothing moves by itself.
-    expect(document.querySelector('[data-visit-ask="af-symptoms"]')).not.toBeNull()
-    expect(screen.getByTestId('cdss-visit-column-status')).toHaveAttribute('data-open', 'true')
+    expect(queued()).not.toContain('DP-01')
+    // The point carries today's answer, as every decided point does.
+    expect(mapMark('DP-01')).toBe('done')
+    expect(within(entry('DP-01')).getByTestId('cdss-visit-decided').querySelector('[data-visit-decided]')).toHaveAttribute('data-visit-decided', 'af-dp01-af')
+    // The follow-up asks are right after it.
+    expect(document.querySelector('[data-book-ask="af-symptoms"]')).not.toBeNull()
   })
 
-  it('「都有」 names both, and the answer can be changed from its cell', () => {
+  it('「都有」 names both, and the answer can be changed with 改', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(row('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-both"]')!)
+    fireEvent.click(entry('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-both"]')!)
     expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: true, atrialFlutter: true })
-    expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AF＋AFL 首次評估/)
-    expect(queue('treatment').map((item) => item.dp)).toContain('DP-07')
-    // Opened from its cell, DP-01 says what was recorded and lets it change.
-    fireEvent.click(cell('DP-01', 'af'))
-    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-visit-change="DP-01"]')!)
-    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-testid="cdss-visit-detail"] [data-visit-action="af-dp01-af"]')!)
+    expect(headline()).toHaveTextContent(/^AF＋AFL 首次評估/)
+    expect(queued()).toContain('DP-07')
+    expect(primaryOf('DP-07')).toHaveTextContent('開始抗凝')
+    // On its own entry, DP-01 says what was recorded and lets it change.
+    fireEvent.click(entry('DP-01').querySelector<HTMLButtonElement>('[data-visit-change="DP-01"]')!)
+    fireEvent.click(entry('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-af"]')!)
     expect(useAfAnswersStore.getState().answers).toMatchObject({ atrialFibrillation: true, atrialFlutter: false })
-    expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AF 首次評估/)
+    expect(headline()).toHaveTextContent(/^AF 首次評估/)
   })
 
   it('「AFL」 keeps the anticoagulation row and leaves AF\'s rate and rhythm rules out', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(row('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-flutter"]')!)
+    fireEvent.click(entry('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-flutter"]')!)
     expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: false, atrialFlutter: true })
-    expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AFL 首次評估/)
-    expect(queue('treatment')).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
-    // On the overview, muted, and said for what it is.
-    expect(cell('DP-18', 'af')).toHaveTextContent('AFL：本 pack 未納入')
+    expect(headline()).toHaveTextContent(/^AFL 首次評估/)
+    expect(queued()).toContain('DP-07')
+    expect(mapMark('DP-07')).toBe('act')
+    expect(primaryOf('DP-07')).toHaveTextContent('開始抗凝')
+    // In the map, muted, and said for what it is.
+    expect(drawnPoint('DP-18').headline).toContain('AFL：本 pack 未納入')
+    expect(mapMark('DP-18')).toBe('absent')
+    expect(document.querySelector('[data-book-map-dp="DP-18"]')).toHaveTextContent('未納入')
   })
 
   it('asks symptoms and bleeding and walks the anticoagulation chain in one row', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    expect(document.querySelector('[data-visit-ask="af-symptoms"]')).not.toBeNull()
-    expect(document.querySelector('[data-visit-ask="bleeding"]')).not.toBeNull()
-    expect(queue('treatment')).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
+    expect(document.querySelector('[data-book-ask="af-symptoms"]')).not.toBeNull()
+    expect(document.querySelector('[data-book-ask="bleeding"]')).not.toBeNull()
+    expect(queued()).toContain('DP-07')
+    const chain = () => decision('DP-07')
+    expect(primaryOf('DP-07')).toHaveTextContent('開始抗凝')
     fireEvent.click(primaryOf('DP-07'))
-    expect(queue('treatment')).toHaveLength(1)
-    expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
+    // Still one row: the dose step in the same box, under the step it follows;
+    // DP-09 asks nothing of its own.
+    expect(chain().querySelector('[data-visit-chain-done="DP-07"]')).toHaveTextContent('開始抗凝')
+    expect(entry('DP-09').querySelector('[data-visit-primary]')).toBeNull()
+    expect(chain().querySelector('[data-visit-decided]')).toBeNull()
     expect(primaryOf('DP-07')).toHaveTextContent('apixaban 5 mg bid')
-    expect(row('DP-07')).toHaveTextContent('0/3')
+    // 減量條件 0/3: none of apixaban's three reduction criteria is met.
+    const apixaban = within(within(chain()).getByTestId('cdss-book-dose-table')).getAllByRole('row').find((row) => row.textContent?.startsWith('apixaban'))!
+    expect(apixaban).toHaveTextContent('✗ 年齡 ≥80（78 歲） · ✗ 體重 ≤60 kg（68 kg） · ✗ Cr ≥1.5 mg/dL（1.2 mg/dL）')
+    expect(apixaban).not.toHaveTextContent('✓')
     fireEvent.click(primaryOf('DP-07'))
-    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(within(chain()).getByTestId('cdss-visit-decided')).toHaveTextContent('apixaban 5 mg bid')
     // What to recheck, with no day count: ESC 2024 AF prints none, so the
     // plan names no return date of its own (clinician decision 2026-09-28).
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('Hb、Cr')
     expect(screen.getByTestId('cdss-visit-plan')).not.toHaveTextContent(/\d+ 天/)
-    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
   })
 
   it('queues rhythm control once symptoms are answered 「有」, and keeps screening out of the queue', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
-    expect(queue().map((item) => item.dp)).toContain('DP-18')
+    fireEvent.click(askOption('af-symptoms', 'yes'))
+    expect(queued()).toContain('DP-18')
+    expect(mapMark('DP-18')).toBe('act')
     expect(primaryOf('DP-18')).toHaveTextContent('討論節律控制')
-    expect(cell('DP-13', 'af')).toHaveAttribute('data-state', 'confirm')
-    expect(cell('DP-13', 'af')).toHaveTextContent('138/84')
-    for (const dp of ['DP-04', 'DP-05', 'DP-06']) expect(queue().map((item) => item.dp)).not.toContain(dp)
+    expect(drawnPoint('DP-13').state).toBe('confirm')
+    expect(entry('DP-13')).toHaveTextContent('138/84')
+    for (const dp of ['DP-04', 'DP-05', 'DP-06']) expect(queued()).not.toContain(dp)
   })
 })
 
@@ -232,124 +253,75 @@ describe('real pack · P4 stable and optimised', () => {
     expect(point('p4-stable-optimised', 'DP-09').headline).toBe('spironolactone 25 mg：足量')
 
     render(<ScenarioMap id="p4-stable-optimised" />)
-    // An empty queue draws no decision list in any section (there is no
-    // 「今天沒有要決定的事」 line any more). 02's one item is DP-12's iron
-    // screen — the record has no ferritin — which is a confirm, not a row.
-    expect(queue()).toEqual([])
-    for (const block of ['status', 'treatment', 'outlook']) {
-      expect(screen.queryByTestId(`cdss-visit-queue-${block}`)).toBeNull()
+    expect(queued()).toEqual([])
+    // Settled, the pillars carry no button; the map marks them settled.
+    for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) {
+      expect(mapMark(dp)).toBe('done')
+      expect(entry(dp).querySelector('[data-visit-primary]')).toBeNull()
     }
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('需你確認 1')
+    expect(entry('DP-09')).toHaveTextContent('spironolactone 25 mg：足量')
+    // The one treatment item is DP-12's iron screen — the record has no
+    // ferritin — which is a confirm, not a queued decision.
     expect(point('p4-stable-optimised', 'DP-12').state).toBe('confirm')
+    expect(primaryOf('DP-12')).toHaveTextContent('驗 ferritin、TSAT')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
   })
 
   // Clinician feedback 2026-09-28: 「治療隨時 HFrEF 的四大支柱呢…都要出現」.
-  it('keeps the four pillars together at the head of 02, settled ones too, each with its tile on the overview', () => {
+  it('keeps the four pillars together in the medicines table, settled ones too, each with its line in the map', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    const treatment = screen.getByTestId('cdss-visit-column-treatment')
-    const pillars = within(treatment).getByTestId('cdss-visit-pillars')
-    expect(pillars).toHaveTextContent('四支柱')
+    const drugs = document.querySelector<HTMLElement>('[data-book-section="drugs"]')!
+    expect(within(drugs).getByRole('heading', { level: 2 })).toHaveTextContent('四支柱')
+    const table = chapterTable('drugs')
+    const rows = [...table.children].filter((row): row is HTMLElement => row instanceof HTMLElement && !row.hasAttribute('aria-hidden'))
+    // The four, then the diuretic's row (DP-06, asked in 2).
+    expect(rows.map((row) => row.dataset.bookDp ?? `ref ${row.dataset.bookRef}`)).toEqual(['DP-10', 'DP-09', 'DP-07', 'DP-08', 'ref DP-06'])
     for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) {
-      expect(pillars).toContainElement(pillar(dp))
-      expect(pillar(dp)).toHaveTextContent('已定')
-      expect(treatment).not.toContainElement(cell(dp))
+      expect(table).toContainElement(entry(dp))
+      expect(entry(dp)).toHaveTextContent('已定')
+      expect(mapMark(dp)).toBe('done')
     }
     // DP-26 joins them only while a pillar is paused; there is none here, so
-    // it is on the overview alone.
-    expect(within(pillars).queryByText('暫停與重啟')).toBeNull()
-    expect(cell('DP-26')).toBeInTheDocument()
-
-    // A pillar's tile opens its card under its box.
-    fireEvent.click(cell('DP-09'))
-    expect(pillars).toContainElement(screen.getByTestId('cdss-visit-detail'))
-    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
+    // it stands on its own line.
+    expect(table).not.toContainElement(entry('DP-26'))
+    expect(entry('DP-26')).toHaveTextContent('無暫停中的支柱')
   })
 
-  // Clinician feedback 2026-09-28: 「HFpEF 不用出現不適用的吧」 — the four
-  // pillars stay in HFrEF; in HFpEF the block holds its two, MRA and SGLT2i.
-  it('shows HFpEF its two pillars only, with no 「不適用」 box', () => {
-    render(<ScenarioMap id="p9-hfpef-af-dose" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    const pillars = screen.getByTestId('cdss-visit-pillars')
-    expect(pillars).toHaveTextContent('HFpEF 基礎藥物')
-    expect(pillars).not.toHaveTextContent('四支柱')
-    expect(pillars).not.toHaveTextContent('不適用')
-    for (const dp of ['DP-09', 'DP-10']) expect(pillars).toContainElement(pillar(dp))
-    // The overview still lists them, muted, as the pack grades them.
-    for (const dp of ['DP-07', 'DP-08']) {
-      expect(() => pillar(dp)).toThrow()
-      expect(cell(dp)).toHaveAttribute('data-state', 'not-applicable')
-    }
-  })
-
-  it('opens the settled DP-09 with the 50 mg target in its reason, no button, the guideline folded', () => {
+  it('reads the settled DP-09 with the 50 mg target in its reason, no button, and the guideline under 看依據', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    fireEvent.click(rowDetail('DP-09'))
-    const detail = screen.getByTestId('cdss-visit-detail')
-    // Right under the pillar row it was opened from, which carries the reason;
-    // the card does not print it again (「卡片開頭精簡成只剩關閉鈕」).
-    expect(screen.getByTestId('cdss-visit-pillars')).toContainElement(detail)
-    const pillarRow = document.querySelector<HTMLElement>('[data-visit-point-box="DP-09"]')!
-    expect(pillarRow).toHaveTextContent('Table 11 目標 50 mg o.d.；RALES 試驗劑量 25 mg')
-    expect(detail).not.toHaveTextContent('RALES 試驗劑量 25 mg')
-    expect(within(detail).getByRole('heading', { level: 4 })).toHaveTextContent('DP-09 MRA')
-    expect(within(detail).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
-    // The guideline points open as the card opens; their sources and the
-    // module's card in one fold, closed.
-    expect(within(detail).getByTestId('cdss-visit-detail-guideline-points')).toBeVisible()
-    const evidence = within(detail).getByTestId('cdss-visit-detail-evidence')
-    expect(detail.querySelectorAll(':scope > details')).toHaveLength(1)
-    expect(evidence).not.toHaveAttribute('open')
-    expect(evidence.querySelector('summary')).toHaveTextContent('出處與依據')
-    expect(evidence).toContainElement(screen.getByTestId('cdss-visit-detail-module-heart-failure-mra'))
-    expect(screen.getByTestId('cdss-visit-detail-module-body-heart-failure-mra')).not.toBeVisible()
-    fireEvent.click(evidence.querySelector('summary')!)
-    expect(evidence).toHaveAttribute('open')
-    expect(screen.getByTestId('cdss-visit-detail-module-body-heart-failure-mra')).toBeVisible()
+    const mra = entry('DP-09')
+    expect(mra).toHaveTextContent('Table 11 目標 50 mg o.d.；RALES 試驗劑量 25 mg')
+    expect(within(mra).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
+    fireEvent.click(within(mra).getByRole('button', { name: /看依據/ }))
+    const panel = within(mra).getByTestId('cdss-book-reasoning')
+    expect(within(panel).getByRole('button', { name: '收起依據' })).toBeInTheDocument()
+    expect(panel).toHaveTextContent('DP-09MRA：依據')
+    expect(within(panel).getByTestId('cdss-book-guideline-points')).toBeVisible()
+    expect(within(mra).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
   })
 })
 
 describe('real pack · P5 titrating with AF', () => {
   it('queues ARNI, MRA and SGLT2i; confirms the beta-blocker dose; settles AF anticoagulation', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
-    expect(queue()).toEqual([
-      { dp: 'DP-07', primary: '換 ARNI' },
-      { dp: 'DP-09', primary: '開始 MRA' },
-      { dp: 'DP-10', primary: '開始 SGLT2i' },
-    ])
-    expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
-    // All three decide in their pillar boxes at the head of 02 — not as a
-    // separate list; their tiles on the overview mark them as today's.
-    const pillars = screen.getByTestId('cdss-visit-pillars')
+    expect(queued()).toEqual(['DP-07', 'DP-09', 'DP-10'])
+    expect(['DP-07', 'DP-09', 'DP-10'].map((dp) => primaryOf(dp).textContent)).toEqual(['換 ARNI', '開始 MRA', '開始 SGLT2i'])
+    expect(entry('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
+    // All three decide on their rows of the medicines table — not as a
+    // separate list; their lines in the map mark them as today's.
+    const table = chapterTable('drugs')
     for (const dp of ['DP-07', 'DP-09', 'DP-10']) {
-      expect(pillars).toContainElement(row(dp))
-      expect(cell(dp)).toHaveAttribute('data-in-queue', 'true')
+      expect(table).toContainElement(entry(dp))
+      expect(mapMark(dp)).toBe('act')
     }
-    expect(queue('treatment')).toEqual([])
-    // The map opens section by section: with no safety row the visit starts
-    // at 01, open; 02 and 03 are closed, and 02 says what it holds.
-    expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
-    for (const block of ['treatment', 'outlook']) {
-      expect(screen.getByTestId(`cdss-visit-section-toggle-${block}`)).toHaveAttribute('aria-expanded', 'false')
-    }
-    // 02's toggle reads its rows first (the three starts, counted once), then
-    // what its cells add: the β-blocker dose and DP-12's iron screen.
-    const treatmentToggle = screen.getByTestId('cdss-visit-section-toggle-treatment')
-    expect(treatmentToggle).toHaveTextContent('待決定 3 · 需你確認 2')
-    expect(treatmentToggle).not.toHaveTextContent('需處理')
-    fireEvent.click(treatmentToggle)
-    expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
-    // The beta-blocker's dose to confirm is decided in its own pillar box.
-    expect(pillar('DP-08')).toHaveAttribute('data-visit-queue-state', 'confirm')
-    expect(pillar('DP-08')).toHaveTextContent('bisoprolol 2.5 mg／目標 10 mg')
-    expect(within(pillar('DP-08')).getByRole('button', { name: '上調至 5 mg' })).toBeInTheDocument()
-    expect(cell('DP-14', 'af')).toHaveAttribute('data-state', 'done')
-    expect(cell('DP-14', 'af')).toHaveTextContent('apixaban 5 mg bid：劑量符合')
-    fireEvent.click(cell('DP-14', 'af'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveTextContent('減量條件 0/3')
+    // The beta-blocker's dose to confirm is decided on its own row.
+    expect(drawnPoint('DP-08').state).toBe('confirm')
+    expect(table).toContainElement(entry('DP-08'))
+    expect(entry('DP-08')).toHaveTextContent('bisoprolol 2.5 mg／目標 10 mg')
+    expect(within(entry('DP-08')).getByRole('button', { name: '上調至 5 mg' })).toBeInTheDocument()
+    expect(mapMark('DP-14')).toBe('done')
+    expect(entry('DP-14')).toHaveTextContent('apixaban 5 mg bid：劑量符合')
+    expect(entry('DP-14')).toHaveTextContent('減量條件 0/3')
   })
 
   it('records the three primaries, plans their checks and says the day is decided', () => {
@@ -357,13 +329,12 @@ describe('real pack · P5 titrating with AF', () => {
     for (const dp of ['DP-07', 'DP-09', 'DP-10']) fireEvent.click(primaryOf(dp))
     const plan = screen.getByTestId('cdss-visit-plan')
     expect(plan).toHaveTextContent('K、Cr、血壓，1–2 週內')
-    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('已決定 3')
-    // Recorded — and, as the steps count them (02 需你確認 2, 03 需你確認 1),
-    // what still needs the clinician beyond the queue: the day is not done.
+    expect([...plan.querySelectorAll<HTMLElement>('[data-plan-item]')].map((item) => item.dataset.dp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
+    // Recorded — and what still needs the clinician beyond the queue (DP-08's
+    // dose, DP-12's iron screen, DP-16's devices): the day is not done.
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了 · 還有 3 項需你確認' })).toBeInTheDocument()
-    expect(screen.getByTestId('cdss-visit-step-treatment')).toHaveTextContent('需你確認 2')
-    expect(screen.getByTestId('cdss-visit-step-outlook')).toHaveTextContent('需你確認 1')
+    expect(screen.getByTestId('cdss-visit-decided-line')).toHaveTextContent('今天的決定都記下了 · 還有 3 項需你確認')
+    for (const dp of ['DP-08', 'DP-12', 'DP-16']) expect(mapMark(dp)).toBe('act')
   })
 })
 
@@ -371,143 +342,77 @@ describe('real pack · P6 hyperkalaemia', () => {
   // ESC 2026 Supplementary Table S8: above 5.5 the MRA is halved and the
   // chemistry 「monitored closely」 — no interval, so the plan names what to
   // check and sets no return visit of its own.
-  it('puts the MRA halving first as a safety row and does not titrate RAS', () => {
+  it('makes the MRA halving the page\'s one safety decision and does not titrate RAS', () => {
     render(<ScenarioMap id="p6-hyperkalaemia" />)
-    expect(queue()).toEqual([{ dp: 'DP-09', primary: '減半劑量' }])
-    expect(row('DP-09')).toHaveAttribute('data-visit-queue-state', 'safety')
-    expect(row('DP-09')).toHaveTextContent('K 5.7 → MRA 減半？')
-    expect(pillar('DP-07')).toHaveAttribute('data-state', 'info')
+    expect(queued()).toEqual(['DP-09'])
+    expect(mapMark('DP-09')).toBe('safety')
+    expect(document.querySelectorAll('[data-book-map-dp][data-book-mark="safety"]')).toHaveLength(1)
+    expect(entry('DP-09')).toHaveAttribute('data-tone', 'safety')
+    expect(primaryOf('DP-09')).toHaveTextContent('減半劑量')
+    expect(entry('DP-09')).toHaveTextContent('K 5.7 → MRA 減半？')
+    expect(mapMark('DP-07')).toBe('info')
     fireEvent.click(primaryOf('DP-09'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr')
     expect(screen.getByTestId('cdss-visit-plan')).not.toHaveTextContent('天內')
-    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
   })
 
-  it('shows the pack’s own status on the card a row or cell opens, not the host re-grade', () => {
+  it('shows the pack’s own status on each point, not the host re-grade', () => {
     render(<ScenarioMap id="p6-hyperkalaemia" />)
     // The flow layout's re-grade reads K ≥5.0 and would call both of these
-    // 「需臨床確認」; on the map the card says what the pack said. DP-09 is the
-    // safety row, so its card opens under the row.
-    expect(cell('DP-09')).toHaveAttribute('data-in-queue', 'true')
-    fireEvent.click(rowDetail('DP-09'))
-    // In 四支柱 the card opens right under the pair of boxes, full width.
-    expect(screen.getByTestId('cdss-visit-pillars')).toContainElement(screen.getByTestId('cdss-visit-detail'))
-    const mra = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-mra')
-    expect(mra.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'actionable')
-    fireEvent.click(rowDetail('DP-07'))
-    // K 5.7 on the ARNI: the pack's own card calls for a temporary reduction
+    // 「需臨床確認」; the page marks what the pack said.
+    expect(drawnPoint('DP-09').state).toBe('safety')
+    expect(mapMark('DP-09')).toBe('safety')
+    // K 5.7 on the ARNI: the pack's own words call for a temporary reduction
     // (ESC §6.1.6) beside the MRA hold, not 「維持現劑量」.
-    const ras = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-ras-inhibition')
-    expect(ras.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'review')
-    expect(pillar('DP-07')).toHaveTextContent('先處理高血鉀')
-  })
-})
-
-// Clinician feedback 2026-09-28: 「user 都先看完 lab data 後才進來點 CDSS」 —
-// MediPrisma shows the record on the left; the map's values fold, as the three
-// sections' do, and a value behind today's safety item stays in view.
-describe('real pack · the status line\'s clinical values fold', () => {
-  afterEach(() => useVisitValuesStore.setState({ open: false }))
-
-  // As the three sections' 「臨床數值與來源 · LVEF 62%」, in the map's form:
-  // folded, the line keeps LVEF and what stands out (「LVEF 還是顯示，跟異常值」).
-  it('opens folded on LVEF and the safety value, and opens in full on 臨床數值', () => {
-    useVisitValuesStore.setState({ open: false })
-    render(<ScenarioMap id="p6-hyperkalaemia" />)
-    const toggle = screen.getByTestId('cdss-visit-values-toggle')
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByTestId('cdss-visit-key-values')).not.toBeVisible()
-    const summary = screen.getByTestId('cdss-visit-key-values-summary')
-    expect([...summary.querySelectorAll('[data-key]')].map((item) => item.getAttribute('data-key'))).toEqual(['LVEF', 'potassium'])
-    expect(summary.querySelector('[data-key="potassium"]')).toHaveAttribute('data-alert', 'true')
-    fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByTestId('cdss-visit-key-values')).toBeVisible()
-    expect(screen.queryByTestId('cdss-visit-key-values-summary')).toBeNull()
-    // The whole line folds it again, as the three sections' row does.
-    fireEvent.click(screen.getByTestId('cdss-visit-values-header'))
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    // …while 報告 on it opens the report, not the fold.
-    fireEvent.click(within(screen.getByTestId('cdss-visit-key-values-summary')).getByTestId('cdss-status-echo-report'))
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  })
-})
-
-// Clinician feedback 2026-09-28: the folded 「其他症狀、徵象與 NYHA」 row was
-// 「好不顯眼，UI 上也跟決策地圖不搭」 — it is drawn as a map point now.
-describe('real pack · DP-03\'s fuller questions, drawn as a point', () => {
-  it('reads 供參考 at a follow-up, 等你回答 with the open questions named once 喘 comes back worse', () => {
-    render(<ScenarioMap id="p4-stable-optimised" />)
-    const box = screen.getByTestId('cdss-visit-asks-detail')
-    expect(box).toHaveAttribute('data-state', 'info')
-    expect(within(box).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('DP-03')
-    expect(screen.getByTestId('cdss-visit-asks-detail-headline')).toHaveTextContent('選填：症狀、徵象、NYHA、代償狀態')
-    fireEvent.click(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!)
-    expect(box).toHaveAttribute('data-state', 'ask')
-    expect(screen.getByTestId('cdss-visit-asks-detail-headline')).toHaveTextContent('待補：症狀、徵象、NYHA、代償狀態')
-    expect(screen.getByTestId('cdss-visit-asks-detail-reason')).toHaveTextContent('喘比上次變差，已展開完整評估')
-    expect(box).toHaveAttribute('open')
-    expect(within(box).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('收合')
+    expect(drawnPoint('DP-07').state).toBe('info')
+    expect(mapMark('DP-07')).toBe('info')
+    expect(entry('DP-07')).toHaveTextContent('先處理高血鉀')
+    expect(entry('DP-07')).not.toHaveTextContent('維持現劑量')
+    expect(entry('DP-07').querySelector('[data-visit-primary]')).toBeNull()
   })
 })
 
 // Clinician decision 2026-09-28: whether a diagnosis is new is not the
 // record's to say (the cloud record covers about a year). With no stored CDSS
-// visit the page is the system's first look: 01 opens on 診斷, the clinician
-// answers the diagnosis, and the baseline work-up is there.
+// visit the page is the system's first look: the clinician answers the
+// diagnosis, and the baseline work-up is there.
 describe('real pack · P4 at the system’s first visit', () => {
   it('leads with the diagnosis unanswered, the record beside it; one press answers it', () => {
     render(<ScenarioMap id="p4-stable-optimised" firstVisit />)
     expect(document.body.textContent).toContain('HFrEF（LVEF 35%，03-10）：首次評估')
     expect(document.body.textContent).not.toContain('新診斷')
-    const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
-    // Not folded: at the system's first visit the diagnosis heads 01.
-    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
-    expect(view.compareDocumentPosition(screen.getByTestId('cdss-visit-follow-up')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const dp01 = within(view).getByTestId('cdss-hf-question-hf-suspicion')
-    expect(dp01).toHaveAttribute('data-state', 'open')
-    expect(dp01).toHaveTextContent('I50.22')
-    expect(within(dp01).queryByTestId('cdss-hf-question-answer-hf-suspicion')).toBeNull()
-    expect(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref')).not.toBeChecked()
-    fireEvent.click(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref'))
+    // The diagnosis heads the page, before the every-visit asks.
+    expect(entry('DP-01').compareDocumentPosition(screen.getByTestId('cdss-book-asks')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(mapMark('DP-01')).toBe('act')
+    const table = within(entry('DP-01')).getByTestId('cdss-book-classification')
+    expect(table).toHaveTextContent('I50.22')
+    expect(table).toHaveTextContent('LVEF 35%（03-10）')
+    expect(screen.getByTestId('cdss-book-class-hfrEF')).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByTestId('cdss-book-class-hfrEF'))
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfrEF' })
-    expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（醫師判斷）')
-    // The baseline work-up is on 診斷 for this first look.
-    expect(cell('DP-02')).toHaveAttribute('data-state', 'confirm')
+    expect(screen.getByTestId('cdss-book-class-hfrEF')).toHaveAttribute('aria-pressed', 'true')
+    expect(mapMark('DP-01')).toBe('done')
+    // The baseline work-up is there for this first look.
+    expect(drawnPoint('DP-02').state).toBe('confirm')
+    expect(primaryOf('DP-02')).toHaveTextContent('安排基線檢驗')
   })
 })
 
-describe('real pack · P4 on 01’s 診斷 view', () => {
+describe('real pack · P4’s diagnosis, held by the record', () => {
   // Clinician feedback 2026-09-28: 「補記診斷確認紀錄你覺得有需要留嗎？」 — a
   // diagnosis the record already carries is not confirmed a second time.
   it('offers no 補記診斷確認紀錄 for a diagnosis the record holds; DP-01 names it', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
-    // A returning patient: the settled diagnosis is folded after the asks.
-    expect(screen.getByTestId('cdss-visit-diagnosis-fold')).toContainElement(screen.getByTestId('cdss-visit-hf-diagnosis-view'))
-    const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
-    expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
-    expect(within(view).queryByText('補記診斷確認紀錄')).toBeNull()
+    expect(screen.queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
+    expect(screen.queryByText('補記診斷確認紀錄')).toBeNull()
     // DP-01 is the diagnosis question on every chart (clinician feedback:
-    // 「診斷留著讓人修改的空間」), drawn as a map point, standing on the record.
-    const dp01 = within(view).getByTestId('cdss-hf-question-hf-suspicion')
-    expect(dp01).toHaveAttribute('data-dp', 'DP-01')
-    expect(within(dp01).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（紀錄）')
-    expect(dp01).toHaveTextContent('I50.22')
-    expect(dp01).toHaveTextContent('已定')
-    // The map's own card for DP-01 is not drawn a second time beside it: its
-    // tile on the overview leads here.
-    expect(cell('DP-01')).not.toHaveAttribute('aria-expanded')
-    fireEvent.click(cell('DP-01'))
-    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
-    // 修改 opens the choices in place, the record's answer chosen; no HFpEF for an LVEF below 50%.
-    fireEvent.click(within(dp01).getByTestId('cdss-hf-question-edit-hf-suspicion'))
-    expect(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref')).toBeChecked()
-    expect(within(dp01).queryByTestId('cdss-hf-suspicion-option-hfpef')).toBeNull()
-    expect(dp01).toHaveTextContent('依 ESC 不列 HFpEF')
-    // 不修改 closes it again, the record's answer standing.
-    fireEvent.click(within(dp01).getByTestId('cdss-hf-question-collapse-hf-suspicion'))
-    expect(within(dp01).queryByTestId('cdss-hf-suspicion-option-hfref')).toBeNull()
-    expect(within(dp01).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（紀錄）')
+    // 「診斷留著讓人修改的空間」), drawn once, standing on the record.
+    expect(document.querySelectorAll('[data-book-dp="DP-01"]')).toHaveLength(1)
+    expect(within(entry('DP-01')).getByTestId('cdss-book-classification')).toHaveTextContent('I50.22')
+    expect(mapMark('DP-01')).toBe('done')
+    expect(screen.getByTestId('cdss-book-class-hfrEF')).toHaveAttribute('aria-pressed', 'true')
+    // No HFpEF for an LVEF below 50%.
+    expect(screen.queryByTestId('cdss-book-class-hfpEF')).toBeNull()
   })
 })
 
@@ -518,24 +423,22 @@ describe('real pack · P7 worsening congestion', () => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
     expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-stage', 'follow-up')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
-    expect(queue()).toEqual([])
+    expect(queued()).toEqual([])
     act(() => {
       useVisitAnswersStore.getState().answer(PATIENT, 'dyspnoea-trend', 'worse')
       useVisitAnswersStore.getState().answer(PATIENT, 'weight-trend', 'up')
     })
     // 濕 by the weight, but 冷暖 unexamined: DP-06 waits for the examination.
-    expect(queue()).toEqual([])
+    expect(queued()).toEqual([])
+    expect(mapMark('DP-06')).toBe('ask')
     act(() => {
       useClinicVitalsStore.getState().setVitals(PATIENT, { signAnswers: Object.fromEntries(Object.entries(examToday(['pitting-edema']).signAnswers).map(([term, answer]) => [term, answer.value])) })
     })
-    expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
-    // DP-04 (reassessment) is one of 01's diagnosis points: a diagnosis
-    // stands, so 01 leads with the asks — and DP-04 is on the overview all
-    // the same, its own card one press away.
-    expect(screen.getByTestId('cdss-visit-lead-status').firstElementChild).toBe(screen.getByTestId('cdss-visit-follow-up'))
-    expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
-    fireEvent.click(cell('DP-04'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-04')
+    expect(queued()).toEqual(['DP-06'])
+    expect(primaryOf('DP-06')).toHaveTextContent('利尿劑加量')
+    // DP-04 (reassessment) is on the page all the same, to confirm.
+    expect(drawnPoint('DP-04').state).toBe('confirm')
+    expect(mapMark('DP-04')).toBe('act')
     fireEvent.click(primaryOf('DP-06'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，1–2 週內')
   }))
@@ -575,14 +478,11 @@ describe('real pack · P8 first visit after an HF admission', () => {
     expect(model.flags).toContain('post-hfh')
     render(<ScenarioMap id="p8-post-discharge" />)
     expect(screen.getByTestId('cdss-visit-triggers')).toHaveTextContent('09-05～09-12 HF 住院')
-    // The pillars in their own places (07, 08, 09), each deciding in its box.
-    expect(queue()).toEqual([
-      { dp: 'DP-07', primary: '上調至 49/51' },
-      { dp: 'DP-08', primary: '上調至 5 mg' },
-      { dp: 'DP-09', primary: '重新開始 MRA' },
-    ])
-    expect(row('DP-07')).toHaveTextContent('ARNI 24/26 → 49/51 mg bid')
-    expect(row('DP-08')).toHaveTextContent('bisoprolol 2.5 mg → 5 mg')
+    // The pillars in their own rows (07, 08, 09), each deciding in place.
+    expect([...queued()].sort()).toEqual(['DP-07', 'DP-08', 'DP-09'])
+    expect(['DP-07', 'DP-08', 'DP-09'].map((dp) => primaryOf(dp).textContent)).toEqual(['上調至 49/51', '上調至 5 mg', '重新開始 MRA'])
+    expect(entry('DP-07')).toHaveTextContent('ARNI 24/26 → 49/51 mg bid')
+    expect(entry('DP-08')).toHaveTextContent('bisoprolol 2.5 mg → 5 mg')
     expect(screen.getByTestId('cdss-visit-plan-notes')).toHaveTextContent('6 週內密集回診')
   })
 
@@ -601,203 +501,103 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     expect(model.stage).toBe('follow-up')
     render(<ScenarioMap id="p9-hfpef-af-dose" />)
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
-    // The MRA start in its pillar box at the head of 02; the AF dose below.
-    expect(queue()).toEqual([
-      { dp: 'DP-09', primary: '開始 MRA' },
-      { dp: 'DP-14', primary: '改 2.5 mg bid' },
-    ])
-    expect(row('DP-14')).toHaveTextContent('apixaban 5 → 2.5 mg bid？')
-    expect(row('DP-14')).toHaveTextContent('2/3')
-    expect(row('DP-14')).toHaveTextContent('AF')
+    expect([...queued()].sort()).toEqual(['DP-09', 'DP-14'])
+    expect(primaryOf('DP-09')).toHaveTextContent('開始 MRA')
+    expect(primaryOf('DP-14')).toHaveTextContent('改 2.5 mg bid')
+    expect(entry('DP-14')).toHaveTextContent('apixaban 5 → 2.5 mg bid？')
+    expect(entry('DP-14')).toHaveTextContent('2/3')
+    expect(entry('DP-14')).toHaveTextContent('AF')
     // Weight is the clinician's answer now; until it is given DP-06 waits,
     // and 「減少」 on a loop diuretic asks whether it can come down.
-    // DP-06 prescribes, so it decides under the drugs (「利尿劑」); the
-    // overview lists it with 02's other points.
-    expect(screen.getByTestId('cdss-visit-overview-treatment')).toContainElement(cell('DP-06'))
-    expect(boxState(diureticBox('DP-06'))).toBe('ask')
-    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
-    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!)
+    expect(mapMark('DP-06')).toBe('ask')
+    fireEvent.click(askOption('dyspnoea-trend', 'stable'))
+    fireEvent.click(askOption('weight-trend', 'down'))
     // The signs and perfusion still to examine.
-    expect(boxState(diureticBox('DP-06'))).toBe('ask')
+    expect(mapMark('DP-06')).toBe('ask')
     act(() => {
       useClinicVitalsStore.getState().setVitals(PATIENT, { signAnswers: Object.fromEntries(Object.entries(examToday().signAnswers).map(([term, answer]) => [term, answer.value])) })
     })
-    expect(boxState(diureticBox('DP-06'))).toBe('confirm')
+    expect(drawnPoint('DP-06').state).toBe('confirm')
+    expect(mapMark('DP-06')).toBe('act')
     // The drug and its prescribed daily dose lead the question (「利尿劑加量沒顯示原本用什麼利尿劑跟原本劑量」).
-    expect(diureticBox('DP-06')).toHaveTextContent('furosemide 每日 20 mg：體重減少，是否減量？')
+    expect(decision('DP-06')).toHaveTextContent('furosemide 每日 20 mg：體重減少，是否減量？')
   }))
 
   // Owner feedback 2026-09-29: with room on the page, what a decision reads is
   // in view on its row — not three folds down in the module's card.
   it('prints on each open decision the record values it reads, dated, with the page’s LVEF left to the page', () => {
     render(<ScenarioMap id="p9-hfpef-af-dose" />)
-    // The values are in the record line or, where the pack gives Table 11's
-    // criteria (after 2.10.0), beside the criterion that reads them — once.
-    const evidence = [...row('DP-14').querySelectorAll<HTMLElement>('[data-visit-basis], [data-visit-criteria]')].map((element) => element.textContent).join(' ')
+    // Where the pack gives Table 11's criteria, each value is beside the
+    // criterion that reads it — once.
+    const criteria = [...entry('DP-14').querySelectorAll<HTMLElement>('[data-visit-criteria]')].map((element) => element.textContent).join(' ')
     for (const value of ['80 歲', '58 kg', '1.3 mg/dL']) {
-      expect(evidence).toContain(value)
-      expect(evidence.split(value).length - 1).toBe(1)
+      expect(criteria).toContain(value)
+      expect(criteria.split(value).length - 1).toBe(1)
     }
-    const mra = pillar('DP-09').querySelector<HTMLElement>('[data-visit-basis]')!
-    expect(mra).toHaveTextContent('K')
-    expect(mra).not.toHaveTextContent('LVEF')
-    // Once decided, the row is its record line.
-    fireEvent.click(primaryOf('DP-14'))
-    expect(row('DP-14').querySelector('[data-visit-basis], [data-visit-criteria]')).toBeNull()
+    // Elsewhere the record line: each value with its date; LVEF heads the
+    // page's values line and is not repeated on the pillar.
+    const mra = [...entry('DP-09').querySelectorAll('li')].map((item) => item.textContent)
+    expect(mra).toContain('K 4.4 mmol/L（09-20）')
+    expect(mra.join(' ')).not.toContain('LVEF')
+    expect(screen.getByTestId('cdss-book-values')).toHaveTextContent('LVEF 60%')
   })
 })
 
 describe('real pack · P11 dabigatran with CrCl under 30 (AF page)', () => {
   it('puts the contraindication first as a safety row', () => {
     render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
-    expect(document.querySelector('[data-visit-ask="af-symptoms"]')).not.toBeNull()
-    expect(document.querySelector('[data-visit-ask="bleeding"]')).not.toBeNull()
-    expect(queue()).toEqual([{ dp: 'DP-09', primary: '改用其他 DOAC' }])
-    expect(row('DP-09')).toHaveAttribute('data-visit-queue-state', 'safety')
-    expect(row('DP-09')).toHaveTextContent('dabigatran')
-    expect(row('DP-09')).toHaveTextContent('CrCl <30')
+    expect(document.querySelector('[data-book-ask="af-symptoms"]')).not.toBeNull()
+    expect(document.querySelector('[data-book-ask="bleeding"]')).not.toBeNull()
+    expect(queued()).toEqual(['DP-09'])
+    expect(mapMark('DP-09')).toBe('safety')
+    expect(decision('DP-09')).toHaveAttribute('data-tone', 'safety')
+    expect(primaryOf('DP-09')).toHaveTextContent('改用其他 DOAC')
+    expect(entry('DP-09')).toHaveTextContent('dabigatran')
+    expect(entry('DP-09')).toHaveTextContent('CrCl <30')
   })
 })
 
 describe('real pack · the other scenarios', () => {
-  it('P1 suspected HFpEF: diagnosis first — 「HFrEF 還是 HFpEF？」 is question 1 of 01’s 診斷 view, not a queue row', () => {
+  it('P1 suspected HFpEF: diagnosis first — 「HFrEF 還是 HFpEF？」 is DP-01’s table, answered there, not a second row', () => {
     const { model } = scenarioRun('p1-suspected-hfpef')
     expect(model.stage).toBe('suspected')
     expect(model.queue).toEqual(['DP-01'])
     expect(model.asks).toEqual([])
     render(<ScenarioMap id="p1-suspected-hfpef" />)
-    expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
-    expect(screen.getByTestId('cdss-visit-next-status')).toBeDisabled()
-    // No 「比上次」 before a diagnosis: 01 is open on 診斷, and 追蹤 waits for one.
-    expect(document.querySelector('[data-visit-ask]')).toBeNull()
-    expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
-    expect(screen.queryByTestId('cdss-visit-follow-up')).toBeNull()
-    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
-    // The assessment is in view and asks the diagnosis itself, as its only
-    // question until it is answered: HFrEF, HFpEF or 還不確定 — no 「否」.
-    const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
-    expect(assessment).toBeVisible()
-    expect(assessment).toHaveTextContent('診斷評估')
-    expect(within(assessment).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent))
-      .toEqual(['HFrEF（LVEF <50%）', 'HFpEF（LVEF ≥50%）', '還不確定'])
-    expect([...assessment.querySelectorAll('[data-testid^="cdss-hf-question-"]')].map((item) => item.getAttribute('data-testid')))
-      .toEqual(['cdss-hf-question-hf-suspicion'])
-    expect(within(assessment).getByTestId('cdss-hf-question-hf-suspicion')).toHaveTextContent(/紀錄：LVEF 62%/)
-    expect(screen.queryByTestId('cdss-visit-quick-confirm')).toBeNull()
-    // …so neither a row nor a cell asks it a second time: 01 has no decision
-    // list today, and DP-00 is not drawn as a cell.
-    expect(queue()).toEqual([])
-    expect(screen.queryByTestId('cdss-visit-queue-status')).toBeNull()
-    // Question 1 is DP-01 (DP-00 folded into it), and DP-34 only waits on it:
-    // their tiles on the overview lead to it and never open a card that asks
-    // it again.
-    for (const dp of ['DP-01', 'DP-34']) {
-      expect(cell(dp)).not.toHaveAttribute('aria-expanded')
-      fireEvent.click(cell(dp))
-      expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
-    }
-    // Question 1 is the only confirmation on the page.
-    expect(within(assessment).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
-    // It opens 01's working area; the other diagnosis points are on the overview.
-    expect(screen.getByTestId('cdss-visit-column-status')).toContainElement(assessment)
-    expect(screen.getByTestId('cdss-visit-overview-status')).toContainElement(cell('DP-02'))
+    // The treatment waits on the diagnosis.
+    for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) expect(entry(dp)).toHaveTextContent('確診後開啟')
+    // No 「比上次」 before a diagnosis.
+    expect(document.querySelector('[data-book-ask]')).toBeNull()
+    expect(screen.queryByTestId('cdss-book-asks')).toBeNull()
+    // DP-01's table asks the diagnosis itself, beside the record: HFrEF,
+    // HFpEF or 還不確定 — no 「否」.
+    expect(mapMark('DP-01')).toBe('act')
+    expect(within(entry('DP-01')).getByTestId('cdss-book-classification')).toHaveTextContent('LVEF 62%（09-20）')
+    const choices = within(entry('DP-01')).getByTestId('cdss-book-class-choices')
+    expect(within(choices).getAllByRole('button').map((button) => button.textContent)).toEqual(['HFrEF', 'HFpEF', '還不確定'])
+    // …so nothing asks it a second time: one DP-01 on the page; DP-34 is the
+    // table's other half, and DP-00 (folded into DP-01) has no entry.
+    expect(document.querySelectorAll('[data-book-dp="DP-01"]')).toHaveLength(1)
+    expect(document.querySelector('[data-book-dp="DP-34"]')).toBeNull()
+    expect(document.querySelector('[data-book-dp="DP-00"]')).toBeNull()
+    // The table is the only confirmation on the page.
+    expect(screen.queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
   })
 
-  it('P1 「還不確定」: question 1 stays open, the HFpEF criteria come up under it, then symptoms and signs — no NYHA, no separate confirmation', () => {
+  it('P1 one press on 「HFpEF」 is the diagnosis; the page stays put and asks 喘／體重比上次 after it', () => {
     render(<ScenarioMap id="p1-suspected-hfpef" />)
-    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-suspected'))
-    const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
-    expect([...assessment.querySelectorAll('[data-testid^="cdss-hf-question-"]:not([data-testid*="answer"]):not([data-testid*="edit"])')]
-      .map((item) => [item.getAttribute('data-testid'), item.getAttribute('data-number')]))
-      .toEqual([
-        // The diagnosis is drawn as DP-01, unnumbered; the card numbers from 1.
-        ['cdss-hf-question-hf-suspicion', null],
-        ['cdss-hf-question-symptoms', '1'],
-        ['cdss-hf-question-signs', '2'],
-      ])
-    expect(within(assessment).getByTestId('cdss-hf-question-hf-suspicion')).toHaveAttribute('data-dp', 'DP-01')
-    const evidence = within(assessment).getByTestId('cdss-hf-hfpef-evidence')
-    expect(evidence).toHaveTextContent('HFpEF 診斷條件')
-    expect(evidence).toHaveTextContent('LVEF ≥50%')
-    // Three quiet rows that name what supports each criterion (clinician
-    // feedback: 「畫面太花」), with Table 10 itself one press away.
-    expect(within(evidence).getByTestId('cdss-hf-hfpef-criteria-count')).toHaveTextContent('2/3 成立')
-    expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-lvef')).toHaveTextContent('62%，2026-09-20')
-    expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-symptoms-signs')).toHaveTextContent('在下方勾選')
-    const objective = within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-objective-abnormality')
-    expect(objective).toHaveTextContent('E/e′ 15')
-    expect(objective).toHaveTextContent('TR Vmax 2.9 m/s')
-    expect(objective).toHaveTextContent('NT-proBNP 680 pg/mL')
-    const table10 = within(evidence).getByTestId('cdss-hf-hfpef-criterion-objective-abnormality').querySelector('details')!
-    expect(table10.open).toBe(false)
-    fireEvent.click(within(table10).getByText('Table 10'))
-    expect(table10.open).toBe(true)
-    const rows = within(table10).getByTestId('cdss-hf-hfpef-criterion-evidence')
-    expect(rows).toHaveTextContent('門檻 >2.8 m/s')
-    expect(rows).toHaveTextContent('未取得：')
-    expect(evidence.querySelector('.bg-emerald-50')).toBeNull()
-    // The verdict stays on question 1, open with 「還不確定」 chosen.
-    expect(within(assessment).getByTestId('cdss-hf-suspicion-option-suspected')).toBeChecked()
-    expect(within(assessment).getByTestId('cdss-hf-suspicion-option-hfpef')).not.toBeChecked()
-    // Under question 1, before the symptoms that supply criterion (i)…
-    expect(evidence.compareDocumentPosition(within(assessment).getByTestId('cdss-hf-question-symptoms')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // No 「確認 HFpEF」 at the foot (clinician feedback: 「直接回填第一題就好了」).
-    expect(within(assessment).queryByTestId('cdss-hf-hfpef-confirm')).toBeNull()
-    // Ticking a symptom and answering question 1 is the diagnosis.
-    fireEvent.click(within(assessment).getByTestId('cdss-hf-suspicion-option-hfpef'))
+    fireEvent.click(screen.getByTestId('cdss-book-class-hfpEF'))
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfpEF', hfpEfConfirmed: true })
-  })
-
-  it('P1 one press on 「HFpEF」 is the diagnosis; the page stays put and 02 is the clinician’s to open', () => {
-    render(<ScenarioMap id="p1-suspected-hfpef" />)
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
-    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfpEF', hfpEfConfirmed: true })
-    // The answer stays where it was given, heading 01, and can be changed there.
-    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
-    expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFpEF（醫師判斷）')
+    // The answer stays where it was given, and can be changed there.
+    expect(screen.getByTestId('cdss-book-class-hfpEF')).toHaveAttribute('aria-pressed', 'true')
+    expect(mapMark('DP-01')).toBe('done')
+    expect(mapMark('DP-34')).toBe('done')
     // A new diagnosis is still asked 喘／體重比上次 (many a first CDSS visit is
-    // a returning patient): they follow the diagnosis in 01, on the same page.
-    // Nothing moves until the clinician presses.
-    expect(screen.getByTestId('cdss-visit-hf-diagnosis-view').compareDocumentPosition(screen.getByTestId('cdss-visit-asks')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
-    fireEvent.click(document.querySelector('[data-visit-ask="weight-trend"][data-value="same"]')!)
-    // Then 下一區 leads on to 02, when the clinician presses it.
-    const next = screen.getByTestId('cdss-visit-next-status')
-    expect(next).toBeEnabled()
-    fireEvent.click(next)
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
-  })
-
-  // DP-34 reads 「HFpEF：醫師已確認 · 診斷依據可在 01 打開」 once HFpEF is the
-  // answer: what it rests on stays under the answer, folded, and a press on
-  // DP-34 opens it there.
-  it('P1 after 「HFpEF」: the criteria and scores stay one press away under the answer, and DP-34 opens them', () => {
-    render(<ScenarioMap id="p1-suspected-hfpef" />)
-    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
-    const fold = screen.getByTestId('cdss-hf-hfpef-evidence-fold') as HTMLDetailsElement
-    expect(fold.open).toBe(false)
-    expect(fold.querySelector('summary')).toHaveTextContent('DP-34HFpEF 診斷依據2/3 成立')
-    expect(within(fold).getByTestId('cdss-hf-hfpef-criterion-line-lvef')).toHaveTextContent('62%，2026-09-20')
-    expect(within(fold).getByTestId('cdss-hf-hfpef-criterion-line-objective-abnormality')).toHaveTextContent('NT-proBNP 680 pg/mL')
-    // The symptoms questions are gone from 診斷 once it is answered: 追蹤 takes them.
-    expect(within(fold).getByTestId('cdss-hf-hfpef-criterion-line-symptoms-signs')).toHaveTextContent('可在「追蹤」補記')
-    expect(within(fold).getByTestId('cdss-hf-hfpef-scores')).toBeInTheDocument()
-    let frame: FrameRequestCallback | undefined
-    const raf = jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { frame = callback; return 0 })
-    fireEvent.click(cell('DP-34'))
-    act(() => frame?.(0))
-    raf.mockRestore()
-    // (Focus follows onto its summary in a browser; jsdom lays nothing out.)
-    expect(fold.open).toBe(true)
-  })
-
-  it('P1 after 「HFrEF」 or before an answer: no HFpEF fold', () => {
-    render(<ScenarioMap id="p1-suspected-hfpef" />)
-    expect(screen.queryByTestId('cdss-hf-hfpef-evidence-fold')).toBeNull()
-    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfref'))
-    expect(screen.queryByTestId('cdss-hf-hfpef-evidence-fold')).toBeNull()
+    // a returning patient): they follow the diagnosis, on the same page.
+    expect(entry('DP-01').compareDocumentPosition(screen.getByTestId('cdss-book-asks')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(askOption('dyspnoea-trend', 'stable'))
+    fireEvent.click(askOption('weight-trend', 'same'))
+    expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT]!)).toMatchObject({ 'dyspnoea-trend': 'stable', 'weight-trend': 'same' })
   })
 
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {
@@ -831,55 +631,51 @@ describe('real pack · what a clinician reads without opening anything', () => {
     // 「Today」 is the scenarios' visit date, whatever day the suite runs on;
     // only the clock is pinned.
     jest.useFakeTimers({ now: new Date('2026-09-27T10:00:00+08:00'), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'performance', 'hrtime'] })
-    render(<ScenarioMap id="p6-hyperkalaemia" />)
-    expect(screen.queryByTestId('cdss-visit-triage')).toBeNull()
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
-    expect(cell('DP-24')).toHaveTextContent('胸痛・暈厥・休息時喘・快速水腫')
-    const values = screen.getByTestId('cdss-visit-key-values')
-    const potassium = values.querySelector('[data-key="potassium"]')!
-    expect(potassium).toHaveAttribute('data-alert', 'true')
-    expect(values.querySelectorAll('[data-alert="true"]')).toHaveLength(1)
-    // 09-27 is the visit date: today's heart rate carries no date; K (09-24) a short one.
-    expect(values.querySelector('[data-key="heartRate"]')).not.toHaveTextContent('09-27')
-    expect(potassium).toHaveTextContent('09-24')
-    expect(potassium).not.toHaveTextContent('2026-09-24')
-    jest.useRealTimers()
-  })
-
-  it('keeps the AF follow-up questions folded at a first AF visit until an ask says 有 (P3)', () => {
-    render(<ScenarioMap id="p3-new-af" page="af" />)
-    expect(screen.getByTestId('cdss-visit-asks-detail')).not.toHaveAttribute('open')
-    expect(screen.getByTestId('cdss-visit-asks-detail-toggle')).not.toHaveTextContent('待')
-    fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
-    expect(screen.getByTestId('cdss-visit-asks-detail')).toHaveAttribute('open')
-  })
-
-  it('puts cards no point names inside 02, and gives the summary its own step after 03 (P5)', () => {
-    render(<ScenarioMap id="p5-titrating-af" />)
-    const other = screen.queryByTestId('cdss-visit-other-modules')
-    if (other) expect(screen.getByTestId('cdss-visit-column-treatment')).toContainElement(other)
-    // The summary is the visit's last step: out of the way until asked for, then read in full.
-    expect(screen.getByTestId('cdss-visit-summary-copy')).not.toBeVisible()
-    fireEvent.click(screen.getByTestId('cdss-visit-step-summary'))
-    expect(screen.getByTestId('cdss-visit-summary-copy')).toBeVisible()
-    expect(screen.getByTestId('cdss-visit-summary-text')).toBeVisible()
-    expect(screen.queryByTestId('cdss-visit-map-legend')).toBeNull()
+    try {
+      render(<ScenarioMap id="p6-hyperkalaemia" />)
+      expect(entry('DP-24')).toHaveTextContent('胸痛・暈厥・休息時喘・快速水腫')
+      const values = screen.getByTestId('cdss-book-values')
+      // K 5.7 is the one value marked.
+      expect([...values.querySelectorAll('b[class]')].map((value) => value.textContent)).toEqual(['5.7'])
+      expect(values).toHaveTextContent('K 5.7')
+      // 09-27 is the visit date: today's heart rate carries no date; K (09-24) a short one.
+      expect(values).toHaveTextContent('心率 70')
+      expect(values).not.toHaveTextContent('09-27')
+      expect(values).toHaveTextContent(/09-24 NT-proBNP 1500 · K 5\.7/)
+      expect(values).not.toHaveTextContent('2026-09-24')
+    } finally {
+      jest.useRealTimers()
+    }
   })
 })
 
-describe('real pack · AF 全部皆無', () => {
-  it('answers a follow-up checklist 無 in one press, leaves 「有改善」 alone, and undoes on a second press (P11)', () => {
-    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
-    // The safety row opens 02 at first paint; the asks and their fuller
-    // questions are 01's, one press away.
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
-    expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
-    fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
-    const group = document.querySelector('[data-af-question-group="followup"]') as HTMLDetailsElement
+/**
+ * The AF page's question groups live in the three sections (決策地圖 v2 asks
+ * only what the prototype asks; docs/LAUNCH-ROUTE-GATES.md): 全部皆無 is
+ * checked there, on the same answers.
+ */
+describe('real pack · AF 全部皆無 (three sections)', () => {
+  /** Opens the AF page's sections the way a clinician does, by their headings. */
+  const openSections = (...ids: ('diagnosis' | 'treatment' | 'prognosis')[]) => {
+    for (const id of ids) {
+      const toggle = screen.getByTestId(`cdss-af-${id}`).querySelector<HTMLButtonElement>('h3 > button')!
+      if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle)
+    }
+  }
+  const openGroup = (id: string): HTMLDetailsElement => {
+    const group = document.querySelector<HTMLDetailsElement>(`[data-af-question-group="${id}"]`)
+    if (!group) throw new Error(`no ${id} group`)
     fireEvent.click(group.querySelector('summary')!)
-    const answer = (question: string, label: '有' | '無' | '依病歷／待確定') =>
-      within(within(group).getByRole('group', { name: question })).getByRole('button', { name: label })
+    return group
+  }
+  const answerIn = (group: HTMLElement) => (question: string, label: '有' | '無' | '依病歷／待確定') =>
+    within(within(group).getByRole('group', { name: question })).getByRole('button', { name: label })
+
+  it('answers a follow-up checklist 無 in one press, leaves 「有改善」 alone, and undoes on a second press (P11)', () => {
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" layout="sections" />)
+    openSections('diagnosis')
+    const group = openGroup('followup')
+    const answer = answerIn(group)
     const button = within(group).getByTestId('cdss-af-none-followup')
     expect(button).toHaveTextContent('全部皆無')
     fireEvent.click(button)
@@ -893,43 +689,27 @@ describe('real pack · AF 全部皆無', () => {
     expect(answer('本次仍有心悸', '無')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  /** The groups a point's card opens with, from its tile or its queued row. */
-  const openPointGroups = (dp: string): HTMLDetailsElement[] => {
-    const opener = queryCell(dp, 'af') ?? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
-    if (!opener) throw new Error(`no cell or row for af:${dp}`)
-    fireEvent.click(opener)
-    return [...screen.getByTestId('cdss-visit-detail').querySelectorAll<HTMLDetailsElement>('[data-af-question-group]')]
-  }
-  const openGroup = (dp: string, id: string): HTMLDetailsElement => {
-    const group = openPointGroups(dp).find((element) => element.dataset.afQuestionGroup === id)
-    if (!group) throw new Error(`no ${id} group on af:${dp}`)
-    fireEvent.click(group.querySelector('summary')!)
-    return group
-  }
-  const answerIn = (group: HTMLElement) => (question: string, label: '有' | '無' | '依病歷／待確定') =>
-    within(within(group).getByRole('group', { name: question })).getByRole('button', { name: label })
-
   it('offers it on every checklist of problems, not on the NHI criteria, rate or antithrombotic groups (P11)', () => {
-    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" layout="sections" />)
+    openSections('diagnosis', 'treatment', 'prognosis')
     const offered = new Set(['screening', 'followup', 'adverse', 'bleeding', 'bleedingRisk', 'stroke', 'safety', 'comorbidity'])
     const seen = new Set<string>()
-    for (const dp of ['DP-07', 'DP-08', 'DP-13', 'DP-21']) {
-      for (const group of openPointGroups(dp)) {
-        const id = group.dataset.afQuestionGroup!
-        seen.add(id)
-        const button = group.querySelector(`[data-testid="cdss-af-none-${id}"]`)
-        if (offered.has(id)) expect(button).not.toBeNull()
-        else expect(button).toBeNull()
-      }
+    for (const group of document.querySelectorAll<HTMLElement>('[data-af-question-group]')) {
+      const id = group.dataset.afQuestionGroup!
+      seen.add(id)
+      const button = group.querySelector(`[data-testid="cdss-af-none-${id}"]`)
+      if (offered.has(id)) expect(button).not.toBeNull()
+      else expect(button).toBeNull()
     }
     // Not vacuous: the history, safety, HAS-BLED and comorbidity groups were
-    // drawn, and so was one that keeps no such button.
-    expect([...seen]).toEqual(expect.arrayContaining(['stroke', 'safety', 'bleedingRisk', 'comorbidity', 'antithrombotic']))
+    // drawn, and so were those that keep no such button.
+    expect([...seen]).toEqual(expect.arrayContaining(['stroke', 'safety', 'bleedingRisk', 'comorbidity', 'antithrombotic', 'rate', 'nhi']))
   })
 
   it('answers 瓣膜與當下安全 無 in one press and puts the rows back on a second (P11)', () => {
-    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
-    const group = openGroup('DP-08', 'safety')
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" layout="sections" />)
+    openSections('treatment')
+    const group = openGroup('safety')
     const answer = answerIn(group)
     const rows = ['機械瓣膜', '中重度 mitral stenosis', '已確認 HCM／心臟類澱粉沉積', '目前活動性出血', 'AF 相關血流動力學不穩定']
     const button = within(group).getByTestId('cdss-af-none-safety')
@@ -943,8 +723,9 @@ describe('real pack · AF 全部皆無', () => {
   })
 
   it('never writes 無 over the record: a HAS-BLED factor the record scores stays 有 (P11, Cr >2.26)', () => {
-    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
-    const group = openGroup('DP-13', 'bleedingRisk')
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" layout="sections" />)
+    openSections('prognosis')
+    const group = openGroup('bleedingRisk')
     const answer = answerIn(group)
     const renal = 'HAS-BLED 腎異常：透析／腎移植／Cr >2.26 mg/dL'
     // The pack scores it from the record; the question says so rather than 待確定.
@@ -959,8 +740,11 @@ describe('real pack · AF 全部皆無', () => {
   })
 
   it('leaves a row the record holds but cannot settle for the clinician, and says why (P3, ECG LVH)', () => {
-    render(<ScenarioMap id="p3-new-af" page="af" />)
-    const group = openGroup('DP-04', 'screening')
+    render(<ScenarioMap id="p3-new-af" page="af" layout="sections" />)
+    openSections('diagnosis')
+    // The coded AF opens on 追蹤; the screening questions are 診斷's.
+    fireEvent.click(within(within(screen.getByTestId('cdss-af-diagnosis')).getByRole('group', { name: '診斷或追蹤檢視' })).getByRole('button', { name: '診斷' }))
+    const group = openGroup('screening')
     const answer = answerIn(group)
     const lvh = '左心室肥厚'
     // The ECG report is there and does not mention LVH: not a 無 to write in bulk.
@@ -976,16 +760,17 @@ describe('real pack · AF 全部皆無', () => {
 
 describe('real pack · one answer, one decision, on every page', () => {
   it('records AF anticoagulation once: decided on the HF page, decided on the AF page (P9)', () => {
-    const hfCell = point('p9-hfpef-af-dose', 'DP-14')
-    const afOwner = scenarioRun('p9-hfpef-af-dose', { page: 'af' }).model.points.find((item) => item.decisionId === hfCell.decisionId)
+    const hfPoint = point('p9-hfpef-af-dose', 'DP-14')
+    const afOwner = scenarioRun('p9-hfpef-af-dose', { page: 'af' }).model.points.find((item) => item.decisionId === hfPoint.decisionId)
     expect(afOwner?.dp).toBeDefined()
     const { unmount } = render(<ScenarioMap id="p9-hfpef-af-dose" />)
     fireEvent.click(primaryOf('DP-14'))
     unmount()
 
     render(<ScenarioMap id="p9-hfpef-af-dose" page="af" />)
-    expect(row(afOwner!.dp)).toHaveAttribute('data-decided', 'true')
-    expect(Object.keys(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {})).toContain(`visit:${hfCell.decisionId}`)
+    expect(mapMark(afOwner!.dp)).toBe('done')
+    expect(within(decision(afOwner!.dp)).getByTestId('cdss-visit-decided')).toHaveTextContent('改 2.5 mg bid')
+    expect(Object.keys(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {})).toContain(`visit:${hfPoint.decisionId}`)
   })
 
   it('shows the map’s 喘 and 體重 answers in the three sections, and writes back to them (P4)', () => {
@@ -1008,172 +793,57 @@ describe('real pack · 「不耐受」 is the clinician’s', () => {
   // marked 不耐受 is ESC Table 15's prognostic medication intolerance at DP-19.
   it('turns 「不耐受」 on the β-blocker into an I NEED HELP item at DP-19 (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-outlook'))
-    expect(cell('DP-19')).not.toHaveAttribute('data-state', 'confirm')
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    expect(drawnPoint('DP-19').state).not.toBe('confirm')
+    expect(mapMark('DP-19')).toBe('info')
     // Beside 「上調至 5 mg」, the alternatives fold under 「其他」.
-    fireEvent.click(within(pillar('DP-08')).getByRole('button', { name: /其他/ }))
-    fireEvent.click(within(pillar('DP-08')).getByRole('button', { name: '不耐受' }))
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-outlook'))
-    expect(cell('DP-19')).toHaveAttribute('data-state', 'confirm')
-    expect(cell('DP-19')).toHaveTextContent('進階 HF 風險：轉介評估？')
+    fireEvent.click(within(entry('DP-08')).getByRole('button', { name: /其他/ }))
+    fireEvent.click(within(entry('DP-08')).getByRole('button', { name: '不耐受' }))
+    expect(drawnPoint('DP-19').state).toBe('confirm')
+    expect(mapMark('DP-19')).toBe('act')
+    expect(entry('DP-19')).toHaveTextContent('進階 HF 風險：轉介評估？')
   })
 })
 
-describe('real pack · reading the map without scrolling back up', () => {
-  it('steps from card to card in the pack order and on into the next section (P5)', () => {
-    render(<ScenarioMap id="p5-titrating-af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    // The stepper walks the cards that open at a section's head, in pack
-    // order. The four pillars decide in their own boxes, so it walks what
-    // follows them: DP-11 → DP-25 (medication reconciliation) → …
-    fireEvent.click(cell('DP-11'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
-    fireEvent.click(screen.getByTestId('cdss-visit-detail-next'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-25')
-    // The card sits at the head of 02; its tile on the overview is marked open.
-    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-25')
-    expect(cell('DP-25')).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.click(screen.getByTestId('cdss-visit-detail-previous'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
-
-    // The last card of 02 leads into 03, which opens in its place.
-    const treatmentTiles = [...screen.getByTestId('cdss-visit-overview-treatment').querySelectorAll<HTMLElement>('button[data-dp]')]
-    fireEvent.click(treatmentTiles.at(-1)!)
-    const next = screen.getByTestId('cdss-visit-detail-next')
-    expect(next).toHaveTextContent('03 預後與計畫')
-    fireEvent.click(next)
-    expect(screen.getByTestId('cdss-visit-column-outlook')).toBeVisible()
-    expect(screen.getByTestId('cdss-visit-column-treatment')).not.toBeVisible()
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', next.dataset.stepDp!)
-
-    fireEvent.click(screen.getByTestId('cdss-visit-detail-collapse'))
-    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
-  })
-
+describe('real pack · the every-visit answers in the three sections', () => {
   it('marks a chosen answer with the page’s selected tint, a warning with the risk colour and an improvement with green (P7)', () => {
-    render(<ScenarioMap id="p7-worsening-congestion" />)
-    const worse = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!
-    const better = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!
-    const down = document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!
-    expect(worse).toHaveTextContent('變差')
+    render(<ScenarioMap id="p7-worsening-congestion" layout="sections" />)
+    const followUp = screen.getByTestId('cdss-followup-priorities')
+    const breath = () => within(followUp).getByRole('group', { name: '喘 變化' })
+    const weight = () => within(followUp).getByRole('group', { name: '體重變化' })
+    const worse = () => within(breath()).getByRole('button', { name: '惡化' })
+    const better = () => within(breath()).getByRole('button', { name: '進步' })
+    const down = () => within(weight()).getByRole('button', { name: '減少' })
     // Open answers carry their colour on the frame only, on one ground
     // (「沒選的時候可以只有外框有顏色」); a chosen one fills in: the page's
     // selected tint, a warning the risk colour, an improvement the success green.
-    for (const open of [worse, better, down]) expect(open.className).toContain('bg-card')
-    expect(worse.className).toContain('border-destructive/45')
-    expect(better.className).toContain('border-emerald-600/45')
-    expect(down.className).toContain('border-amber-500/55')
-    fireEvent.click(worse)
-    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!.className).toContain('bg-destructive/10')
-    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!)
-    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!.className).toContain('bg-emerald-50')
-    fireEvent.click(down)
+    for (const open of [worse(), better(), down()]) expect(open.className).toContain('bg-card')
+    expect(worse().className).toContain('border-destructive/45')
+    expect(better().className).toContain('border-emerald-600/45')
+    expect(down().className).toContain('border-amber-500/55')
+    fireEvent.click(worse())
+    expect(worse().className).toContain('bg-destructive/10')
+    fireEvent.click(better())
+    expect(better().className).toContain('bg-emerald-50')
+    fireEvent.click(down())
     // 體重減少: amber — dry weight or dehydration, look at which.
-    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="down"]')!.className).toContain('bg-amber-50')
+    expect(down().className).toContain('bg-amber-50')
   })
 })
 
 describe('real pack · follow-up questions open once the pack says follow-up', () => {
-  it('does not lock symptoms, signs and NYHA behind a hidden 「是否懷疑心衰竭」 (P9 HFpEF, P10 improved EF)', () => {
+  it('does not lock symptoms, signs and NYHA behind a hidden 「是否懷疑心衰竭」 (P9 HFpEF, P10 improved EF; three sections)', () => {
     for (const id of ['p9-hfpef-af-dose', 'p10-improved-ef'] as ScenarioId[]) {
-      const { unmount } = render(<ScenarioMap id={id} />)
-      fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!)
+      const { unmount } = render(<ScenarioMap id={id} layout="sections" />)
+      const breath = within(screen.getByTestId('cdss-followup-priorities')).getByRole('group', { name: '喘 變化' })
+      fireEvent.click(within(breath).getByRole('button', { name: '惡化' }))
+      for (const question of ['symptoms', 'signs', 'nyha']) {
+        expect({ id, question, state: screen.getByTestId(`cdss-hf-question-${question}`).getAttribute('data-state') }).toEqual({ id, question, state: 'open' })
+      }
       expect(screen.queryByText('先回答「是否懷疑心衰竭」後開放')).toBeNull()
+      expect(screen.queryByText('先回答「HFrEF 還是 HFpEF？」後開放')).toBeNull()
       unmount()
       useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+      useClinicVitalsStore.setState({ byPatientId: {} })
     }
-  })
-})
-
-describe('real pack · one heading per group', () => {
-  it('draws 用藥安全 once even though its points are apart in the pack order (P5)', () => {
-    const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
-    render(<ScenarioMap id="p5-titrating-af" />)
-    const treatment = screen.getByTestId('cdss-visit-overview-treatment')
-    expect(treatment.querySelectorAll('[data-map-group="medication-safety"]')).toHaveLength(1)
-    expect(errors.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false)
-    errors.mockRestore()
-  })
-})
-
-
-// Review of #179 (2026-09-29): two ways back into a card from the overview.
-describe('real pack · returning to a card from the overview', () => {
-  it('reopens a card left open in another section in one press (P5 DP-08)', () => {
-    render(<ScenarioMap id="p5-titrating-af" />)
-    fireEvent.click(cell('DP-08'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
-    // Over to 01: 02 closes, and DP-08's card with it.
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
-    expect(cell('DP-08')).toHaveAttribute('aria-expanded', 'false')
-    // One press on DP-08 brings its card back, rather than closing what the
-    // clinician could no longer see.
-    fireEvent.click(cell('DP-08'))
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
-    expect(screen.getByTestId('cdss-visit-detail')).toBeVisible()
-    expect(cell('DP-08')).toHaveAttribute('aria-expanded', 'true')
-    // A second press closes it, as before.
-    fireEvent.click(cell('DP-08'))
-    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
-  })
-
-  it('takes DP-03’s link to the fuller questions on a first visit, where 01 leads with the diagnosis (P5)', () => {
-    render(<ScenarioMap id="p5-titrating-af" firstVisit />)
-    expect(screen.getByTestId('cdss-visit-hf-diagnosis-view').compareDocumentPosition(screen.getByTestId('cdss-visit-asks-detail')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    fireEvent.click(cell('DP-03'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-03')
-    fireEvent.click(screen.getByTestId('cdss-visit-go-to-asks-detail'))
-    // The card gives way to the section, and the questions are open.
-    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
-    const detail = screen.getByTestId('cdss-visit-asks-detail') as HTMLDetailsElement
-    expect(detail.open).toBe(true)
-    expect(detail).toBeVisible()
-  })
-})
-
-// Walking P1 and P7 (2026-09-29): 02's step said 「需你確認 2」 and 「需你確認
-// 4」, but what it counted beyond the decision rows and the pillars (DP-12,
-// DP-31, DP-32) was only on the map's column — folded away on a phone.
-describe('real pack · what a step counts is in its section', () => {
-  it('lists P7’s 02 points beyond the pillar box, one press each, the pillars not twice', () => {
-    render(<ScenarioMap id="p7-worsening-congestion" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
-    expect(screen.getByTestId('cdss-visit-step-treatment')).toHaveTextContent('需你確認 4')
-    const list = screen.getByTestId('cdss-visit-still-open-treatment')
-    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-12'])
-    expect(list).toHaveTextContent('篩檢缺鐵')
-    fireEvent.click(within(list).getByRole('button', { name: /DP-12/ }))
-    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-12')
-    expect(screen.queryByTestId('cdss-visit-still-open-treatment')).toBeNull()
-  })
-
-  it('puts P1’s comorbidity and self-care questions in 02 once HFpEF is the diagnosis', () => {
-    render(<ScenarioMap id="p1-suspected-hfpef" />)
-    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
-    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
-    // DP-31 opens from its own checklist box, over the comorbidities it lists; DP-32 from the list.
-    expect(within(screen.getByTestId('cdss-visit-checklist-DP-31')).getByRole('button', { name: /DP-31/ })).toHaveTextContent('semaglutide')
-    const list = screen.getByTestId('cdss-visit-still-open-treatment')
-    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-32'])
-    fireEvent.click(within(screen.getByTestId('cdss-visit-checklist-DP-31')).getByRole('button', { name: /DP-31/ }))
-    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-31')
-  })
-})
-
-describe('real pack · AF P3, the every-visit questions answered in 02', () => {
-  it('marks them done where they were answered, and sends no one back to 01 for what the answers did not open', () => {
-    render(<ScenarioMap id="p3-new-af" page="af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
-    const carried = screen.getByTestId('cdss-visit-pending-asks-treatment')
-    for (const row of carried.querySelectorAll('[data-visit-ask-row]')) {
-      fireEvent.click(within(row as HTMLElement).getByRole('button', { name: '無' }))
-    }
-    expect(carried).toHaveAttribute('data-done', 'true')
-    // 01 still needs DP-05's baseline, but that is 01's own, not something an answer opened.
-    expect(screen.getByTestId('cdss-visit-step-status')).toHaveTextContent('需你確認 1')
-    expect(screen.queryByTestId('cdss-visit-pending-asks-to-status-treatment')).toBeNull()
   })
 })
