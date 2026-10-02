@@ -13,7 +13,9 @@ import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clini
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { hfFollowUpHistory } from './utils/hf-follow-up'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
+import { createHospitalAwareCdssPatientProfile } from './utils/hospital-medication-profile'
+import { buildHospitalAwareCdssResult } from './utils/hospital-medication-review'
+import { HospitalMedicationReview } from './renderers/HospitalMedicationReview'
 import {
   getApplicableClinicalGuidelinePacks,
   getDefaultClinicalGuidelinePack,
@@ -414,7 +416,7 @@ export default function LiveClinicalDecisionSupportFeature({
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
     if (!patient) return null
-    return createFhirCdssPatientProfile({
+    return createHospitalAwareCdssPatientProfile({
       patient,
       conditions: clinicalData.conditions,
       encounters: clinicalData.encounters,
@@ -533,13 +535,14 @@ export default function LiveClinicalDecisionSupportFeature({
   const result = useMemo(() => {
     if (!profile) return null
     return selectedPack.applies(profile)
-      ? selectedPack.build({ profile, locale: cdssLocale })
+      ? buildHospitalAwareCdssResult(selectedPack, profile, cdssLocale)
       : null
   }, [cdssLocale, profile, selectedPack])
 
   const englishResult = useMemo(() => {
     if (cdssLocale === 'en') return result
-    return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
+    return profile && selectedPack.applies(profile)
+      ? buildHospitalAwareCdssResult(selectedPack, profile, 'en') : null
   }, [cdssLocale, profile, result, selectedPack])
 
   // The layout this browser chose, or — when it never chose — the pack's own
@@ -563,7 +566,8 @@ export default function LiveClinicalDecisionSupportFeature({
     if (!profile || !result || result.packId !== selectedPack.id) return []
     return companionPacks.flatMap((pack) => {
       try {
-        return pack.applies(profile) ? [pack.build({ profile, locale: cdssLocale })] : []
+        return pack.applies(profile)
+          ? [buildHospitalAwareCdssResult(pack, profile, cdssLocale)] : []
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {
           console.error(`[cdss] companion ${pack.id} could not be built`, error)
@@ -581,7 +585,7 @@ export default function LiveClinicalDecisionSupportFeature({
     return companionResults.flatMap((companion) => {
       const pack = companionPacks.find((candidate) => candidate.id === companion.packId)
       try {
-        return pack ? [pack.build({ profile, locale: 'en' })] : []
+        return pack ? [buildHospitalAwareCdssResult(pack, profile, 'en')] : []
       } catch {
         return []
       }
@@ -802,6 +806,8 @@ export default function LiveClinicalDecisionSupportFeature({
           )}
         </div>
       </header>
+
+      <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
 
       {/*
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy

@@ -7,6 +7,11 @@
 // never invents level 2-4 labels by slicing a full ingredient code.
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
+import {
+  resolveHospitalMedicationName,
+  hospitalMedicationDisplayName,
+  type HospitalMedicationName,
+} from '@/src/shared/utils/hospital-medication-names'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import {
@@ -53,6 +58,7 @@ export interface TimelineDrug {
   drugName: string
   drugProductName?: string
   drugTerminology?: MedicationEntity['drugTerminology']
+  hospitalMedicationName?: HospitalMedicationName
   prescriptionType: TimelinePrescriptionType
   categoryKey: string
   categoryLabel: string
@@ -414,13 +420,17 @@ export function useMedicationTimeline(
       const prescriptionType = resolvedPrescriptionType(
         prescriptionTypesByDrug.get(clinicalDrugKey),
       )
+      const hospitalMedicationName = !med.drugTerminology
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code)
+        : undefined
       const officialProductName = audience === 'medical'
         ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
+          || (hospitalMedicationName?.status === 'normalized' ? hospitalMedicationName.productName : undefined)
         : locale === 'en'
           ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
           : med.drugTerminology?.officialNameZh
       const ingredientName = audience === 'medical'
-        ? med.drugTerminology?.ingredientText?.trim()
+        ? med.drugTerminology?.ingredientText?.trim() || hospitalMedicationDisplayName(hospitalMedicationName)
         : undefined
       const drugName = ingredientName
         || officialProductName
@@ -490,6 +500,7 @@ export function useMedicationTimeline(
           existing.drugName = drugName
           existing.drugProductName = drugProductName
           existing.drugTerminology = med.drugTerminology
+          existing.hospitalMedicationName = hospitalMedicationName
           existing.categoryKey = category.key
           existing.categoryLabel = category.label
           existing.atcLevel2 = atcLevel2
@@ -504,6 +515,7 @@ export function useMedicationTimeline(
           drugName,
           drugProductName,
           drugTerminology: med.drugTerminology,
+          hospitalMedicationName,
           prescriptionType,
           categoryKey: category.key,
           categoryLabel: category.label,

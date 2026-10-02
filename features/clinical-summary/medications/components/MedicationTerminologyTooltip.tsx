@@ -5,9 +5,47 @@ import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { clinicalTooltipSurfaceClass } from '@/features/clinical-summary/components/clinical-metadata-styles'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import type { MedicationRow } from '../types'
+import type { HospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
+
+/** Same provenance in list, overview, timeline label, and timeline fill detail. */
+export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicationName }) {
+  const { locale } = useLanguage()
+  const en = locale === 'en'
+  const rows = [
+    [en ? 'Ingredient' : '成分名', name.ingredientName || (en ? 'Ingredient unconfirmed' : '成分未確認')],
+    [en ? 'Recorded generic name' : '原始學名欄位', name.recordedGenericName],
+    [en ? 'Recorded product name' : '原始商品名', name.recordedProductName],
+  ].filter((row): row is [string, string] => Boolean(row[1]))
+  return (
+    <div>
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-left">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-secondary-foreground/65">{label}</dt>
+            <dd className="min-w-0 break-words font-medium">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1 text-xs text-secondary-foreground/70">
+        {name.source === 'verified-product-alias'
+          ? (en ? 'Verified product-name ingredient reference' : '商品名成分對照')
+          : name.source === 'recorded-generic-name'
+            ? (en ? 'Ingredient explicitly named in the source record' : '來源藥名明列成分')
+            : (en ? 'Hospital source record' : '院內原始紀錄')}
+        {' · '}{en ? 'Reviewed' : '核對日期'} {name.reviewedAt}
+        <div>{en ? 'Strength and formulation: see the original name.' : '含量與劑型請依原始藥名核對。'}</div>
+        {name.referenceUrl && (
+          <a href={name.referenceUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+            {en ? 'Ingredient reference' : '成分對照來源'}
+          </a>
+        )}
+      </div>
+    </div>
+  )
+}
 
 interface MedicationTerminologyTooltipProps {
-  medication: Pick<MedicationRow, 'drugTerminology'>
+  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName'>
   enabled: boolean
   /** Facts about THIS prescription — dose, frequency, days supplied — shown
    *  under the drug-master rows. The card above describes the drug; this
@@ -27,11 +65,12 @@ export function MedicationTerminologyTooltip({
   const { t, locale } = useLanguage()
   const mt = (t.medications as any)
   const terminology = medication.drugTerminology
+  const hospitalName = !terminology ? medication.hospitalMedicationName : undefined
 
   // `extra` alone is worth a card: a drug missing from the NHI master still
   // has a dose and a supply, and dropping the tooltip would make those rows
   // silently behave differently from their neighbours.
-  if (!enabled || (!terminology && !extra)) return children
+  if (!enabled || (!terminology && !hospitalName && !extra)) return children
 
   const atcNames = [
     terminology?.atcNameEn,
@@ -87,8 +126,9 @@ export function MedicationTerminologyTooltip({
               </div>
             ))}
           </dl>
+          {hospitalName && <HospitalMedicationNameDetails name={hospitalName} />}
           {extra && (
-            <div className={rows.length > 0
+            <div className={rows.length > 0 || hospitalName
               ? 'mt-1.5 border-t border-secondary-foreground/15 pt-1.5'
               : undefined}
             >

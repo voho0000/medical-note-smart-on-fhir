@@ -1,6 +1,7 @@
 // Custom Hook: Medication Rows Processing
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo } from 'react'
+import { hospitalMedicationDisplayName, resolveHospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
 import type { MedicationRow } from '../types'
 import {
   formatDate,
@@ -152,6 +153,9 @@ export function useMedicationRows(
     const enriched = medications.map((med: any, idx: number) => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
+      const hospitalMedicationName = !drugTerminology
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code)
+        : undefined
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
       // localized (zh-TW) name in `.text` and the English name in
@@ -174,11 +178,12 @@ export function useMedicationRows(
       }
       const officialProductName = audience === 'medical'
         ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
+          || (hospitalMedicationName?.status === 'normalized' ? hospitalMedicationName.productName : undefined)
         : locale === 'en'
           ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
           : drugTerminology?.officialNameZh
       const ingredientName = audience === 'medical'
-        ? drugTerminology?.ingredientText?.trim()
+        ? drugTerminology?.ingredientText?.trim() || hospitalMedicationDisplayName(hospitalMedicationName)
         : undefined
       let medicationName = ingredientName || officialProductName || sourceMedicationName
       if (!medicationName) medicationName = 'Unknown Medication'
@@ -325,6 +330,9 @@ export function useMedicationRows(
         drugTerminology?.officialNameZh,             // 官方藥名 中文
         drugTerminology?.officialNameEn,             // 官方藥名 英文
         drugTerminology?.ingredientText,              // 成分
+        hospitalMedicationName?.ingredientName,
+        hospitalMedicationName?.recordedGenericName,
+        hospitalMedicationName?.recordedProductName,
         drugTerminology?.doseForm,                    // 劑型
         drugTerminology?.atcCode,                     // ATC 碼
         drugTerminology?.atcNameZh,                   // ATC 分類 中文
@@ -371,6 +379,7 @@ export function useMedicationRows(
         isChronic,
         category,
         drugTerminology,
+        hospitalMedicationName,
         pharmacy,
         icdCode,
         icdText,
