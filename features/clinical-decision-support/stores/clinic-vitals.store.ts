@@ -118,11 +118,23 @@ export interface ExaminedSign extends AnsweredField<SignAnswerValue> {
   examinedOn: string
 }
 
+/**
+ * The NYHA class, with the day it was graded as well as the moment it changed —
+ * as a sign carries `examinedOn`. Grading III again the next day is a new
+ * assessment with an unchanged answer: `assessedOn` moves to the new day,
+ * `modifiedAt` stays on the day the answer last changed. The decision map
+ * asks for today's grade and reads the first (#233 review).
+ */
+export interface GradedNyha extends AnsweredField<NyhaAnswerValue> {
+  /** The day the class was last graded, as YYYY-MM-DD in this browser's calendar; absent on a record kept before it. */
+  assessedOn?: string
+}
+
 export interface ClinicVitals {
   hfFollowUp?: HfFollowUpHistory
   entries: Readonly<Partial<Record<ClinicVitalsEntryKey, MeasuredEntry>>>
   /** The NYHA class graded in the room; absent means nobody has been asked. */
-  nyhaClass?: AnsweredField<NyhaAnswerValue>
+  nyhaClass?: GradedNyha
   /**
    * One answer per sign, keyed by the canonical term the evidence table's rows
    * are matched on. 「有」, 「無」, 「未評估」 — or absent, which is 「沒問」.
@@ -265,8 +277,30 @@ export function mergeClinicVitals(
   if (JSON.stringify(hfFollowUp) !== JSON.stringify(base.hfFollowUp)) changed = true
   const next: ClinicVitals = { entries, signAnswers, ...(hfFollowUp ? { hfFollowUp } : {}) }
 
+  // The NYHA class is graded each visit: the same class again on a later day
+  // re-dates the assessment (`assessedOn`), not the answer (`modifiedAt`), so
+  // today's grade can be recorded although it has not changed. Again on the
+  // same day it is a no-op.
+  const assessedOn = todayIsoDate(now)
+  const nyha = patch.nyhaClass
+  const existingNyha = base.nyhaClass
+  if (nyha === undefined) {
+    if (existingNyha) next.nyhaClass = existingNyha
+  } else if (nyha === null) {
+    if (existingNyha) changed = true
+  } else if (existingNyha?.value === nyha) {
+    if (existingNyha.assessedOn === assessedOn) next.nyhaClass = existingNyha
+    else {
+      next.nyhaClass = { ...existingNyha, assessedOn }
+      changed = true
+    }
+  } else {
+    next.nyhaClass = { value: nyha, modifiedAt, assessedOn }
+    changed = true
+  }
+
   const carryAnswer = <T extends string>(
-    key: 'nyhaClass' | 'compensationStatus',
+    key: 'compensationStatus',
     incoming: T | null | undefined,
   ) => {
     const existing = base[key] as AnsweredField<T> | undefined
@@ -285,7 +319,6 @@ export function mergeClinicVitals(
     ;(next[key] as AnsweredField<T>) = { value: incoming, modifiedAt }
     changed = true
   }
-  carryAnswer('nyhaClass', patch.nyhaClass)
   carryAnswer('compensationStatus', patch.compensationStatus)
 
   return changed ? next : base
@@ -387,7 +420,13 @@ function toClinicVitals(parsed: unknown): ClinicVitals {
           : calendarDayOf(answer.modifiedAt),
       }
     }
-    const nyhaClass = toAnsweredField(record.nyhaClass, ['I', 'II', 'III', 'IV', NOT_ASSESSED] as const)
+    const nyhaAnswer = toAnsweredField(record.nyhaClass, ['I', 'II', 'III', 'IV', NOT_ASSESSED] as const)
+    // A record kept before the grade carried its own day was graded when it was
+    // last changed; the fact reads `modifiedAt` for it, as it always did.
+    const assessedOn = (record.nyhaClass as Record<string, unknown> | undefined)?.assessedOn
+    const nyhaClass: GradedNyha | undefined = nyhaAnswer
+      ? { ...nyhaAnswer, ...(typeof assessedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(assessedOn) ? { assessedOn } : {}) }
+      : undefined
     const compensationStatus = toAnsweredField(
       record.compensationStatus,
       ['compensated', 'decompensated', NOT_ASSESSED] as const,

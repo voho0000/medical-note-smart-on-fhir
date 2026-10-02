@@ -13,7 +13,9 @@ import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clini
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { hfFollowUpHistory } from './utils/hf-follow-up'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
+import { createHospitalAwareCdssPatientProfile } from './utils/hospital-medication-profile'
+import { buildHospitalAwareCdssResult } from './utils/hospital-medication-review'
+import { HospitalMedicationReview } from './renderers/HospitalMedicationReview'
 import {
   getApplicableClinicalGuidelinePacks,
   getDefaultClinicalGuidelinePack,
@@ -233,14 +235,9 @@ function LayoutSwitcher({
   onSelect: (layout: CdssLayout) => void
 }) {
   const isEnglish = locale === 'en'
-  const labels: Record<'map' | 'book' | 'sections' | 'nhi', { label: string; title: string }> = {
+  const labels: Record<'map' | 'sections' | 'nhi', { label: string; title: string }> = {
+    // The first decision map was retired on 2026-10-01; v2 kept its name.
     map: {
-      label: isEnglish ? 'Decision map' : '決策地圖',
-      title: isEnglish
-        ? "Today's decisions first, then the three sections as the map's three columns"
-        : '今天要決定的事在最上面；三區塊就是地圖的三欄',
-    },
-    book: {
       label: isEnglish ? 'Decision map v2' : '決策地圖 v2',
       title: isEnglish
         ? 'The decision map as a pocket-handbook page: the map on the left, each point once on the right'
@@ -262,7 +259,7 @@ function LayoutSwitcher({
     : packId === AF_PACK_ID
       ? AF_SWITCHABLE_LAYOUTS
       : CDSS_SWITCHABLE_LAYOUTS
-  ).filter((id) => (id !== 'map' && id !== 'book') || mapAvailable)
+  ).filter((id) => id !== 'map' || mapAvailable)
   const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
@@ -316,7 +313,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
-  // `?visit=book` opens the handbook page whatever layout this browser chose.
+  // `?visit=book` opens the decision map over the whole window, where the map is the layout.
   const [urlBookMode] = useState(isVisitBookMode)
   // 決策地圖 v2 opened over the whole window from the panel; a new page load opens it in the panel.
   const [bookFullWindow, setBookFullWindow] = useState(false)
@@ -419,7 +416,7 @@ export default function LiveClinicalDecisionSupportFeature({
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
     if (!patient) return null
-    return createFhirCdssPatientProfile({
+    return createHospitalAwareCdssPatientProfile({
       patient,
       conditions: clinicalData.conditions,
       encounters: clinicalData.encounters,
@@ -538,13 +535,14 @@ export default function LiveClinicalDecisionSupportFeature({
   const result = useMemo(() => {
     if (!profile) return null
     return selectedPack.applies(profile)
-      ? selectedPack.build({ profile, locale: cdssLocale })
+      ? buildHospitalAwareCdssResult(selectedPack, profile, cdssLocale)
       : null
   }, [cdssLocale, profile, selectedPack])
 
   const englishResult = useMemo(() => {
     if (cdssLocale === 'en') return result
-    return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
+    return profile && selectedPack.applies(profile)
+      ? buildHospitalAwareCdssResult(selectedPack, profile, 'en') : null
   }, [cdssLocale, profile, result, selectedPack])
 
   // The layout this browser chose, or — when it never chose — the pack's own
@@ -552,7 +550,7 @@ export default function LiveClinicalDecisionSupportFeature({
   // and atrial fibrillation today).
   // A retired layout (新版流程, 原版看板) stored before it went reads as no choice.
   const preferredLayout: CdssLayout = layout && !RETIRED_LAYOUTS.includes(layout) ? layout : defaultLayoutFor(selectedPack.id)
-  const wantsMap = (preferredLayout === 'map' || preferredLayout === 'book') && hasVisitMap(selectedPack.id)
+  const wantsMap = preferredLayout === 'map' && hasVisitMap(selectedPack.id)
 
   // A map can read other packs' results beside the page's own — the pack
   // names them (`VisitMapDefinition.companions`): on the heart-failure page,
@@ -568,7 +566,8 @@ export default function LiveClinicalDecisionSupportFeature({
     if (!profile || !result || result.packId !== selectedPack.id) return []
     return companionPacks.flatMap((pack) => {
       try {
-        return pack.applies(profile) ? [pack.build({ profile, locale: cdssLocale })] : []
+        return pack.applies(profile)
+          ? [buildHospitalAwareCdssResult(pack, profile, cdssLocale)] : []
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {
           console.error(`[cdss] companion ${pack.id} could not be built`, error)
@@ -586,7 +585,7 @@ export default function LiveClinicalDecisionSupportFeature({
     return companionResults.flatMap((companion) => {
       const pack = companionPacks.find((candidate) => candidate.id === companion.packId)
       try {
-        return pack ? [pack.build({ profile, locale: 'en' })] : []
+        return pack ? [buildHospitalAwareCdssResult(pack, profile, 'en')] : []
       } catch {
         return []
       }
@@ -707,14 +706,11 @@ export default function LiveClinicalDecisionSupportFeature({
   // The switch offers the map wherever the package can build one; only a map
   // that was asked for and could not be built is withdrawn from it.
   const mapOffered = hasVisitMap(result.packId) && (!wantsMap || mapAvailable)
-  const prefersMap = preferredLayout === 'map' || preferredLayout === 'book'
+  const prefersMap = preferredLayout === 'map'
   const chosenLayout: CdssLayout = result.packId === LIPID_PACK_ID
     ? preferredLayout === 'flow' || prefersMap ? 'sections' : preferredLayout
     : preferredLayout === 'nhi' || (prefersMap && !mapAvailable) ? 'sections' : preferredLayout
-  // 決策地圖 v2 is the same map drawn as the handbook page: the view gets the
-  // map, and the handbook is switched on around it.
-  const effectiveLayout: CdssLayout = chosenLayout === 'book' ? 'map' : chosenLayout
-  const bookMode = effectiveLayout === 'map' && (urlBookMode || chosenLayout === 'book')
+  const effectiveLayout: CdssLayout = chosenLayout
   const isMap = effectiveLayout === 'map'
   const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
   const isNhiTable = effectiveLayout === 'nhi' && result.packId === LIPID_PACK_ID
@@ -795,9 +791,9 @@ export default function LiveClinicalDecisionSupportFeature({
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
             </Button>
           ) : null}
-          {/* The map's 今天要決定 says what needs the clinician, item by item;
-              these two counts would repeat it less exactly, so the map leaves
-              them out. */}
+          {/* The map's 今天待決定 and its rail say what needs the clinician,
+              point by point; these two counts would repeat it less exactly,
+              so the map leaves them out. */}
           {isMap ? null : (
             <div className="flex shrink-0 items-center gap-1.5">
               <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
@@ -811,19 +807,23 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
+      <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
+
       {/*
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy
         button for it sits beside the one for this visit's summary.
       */}
-      {/* The map carries the handoff at its foot, beside the visit summary. */}
+      {/* The decision map draws no handoff card (owner decision 2026-09-30,
+          docs/LAUNCH-ROUTE-GATES.md); the three sections carry it. */}
       {result.clinicalHandoff && !isVisitFlow && !isNhiTable && !isMap ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
-      {/* The pocket-handbook page. Opened by `?visit=book` it draws its own
-          header over the whole window, and the disease tabs go into it; chosen
-          as 決策地圖 v2 it stays in this panel, under the header above. */}
-      <VisitBookChromeContext.Provider value={!bookMode ? null : !urlBookMode && !bookFullWindow ? {
+      {/* The decision map (決策地圖 v2, the pocket-handbook page) stays in this
+          panel, under the header above. Opened by `?visit=book`, or 全螢幕
+          from the panel, it draws its own header over the whole window, and
+          the disease tabs go into it. */}
+      <VisitBookChromeContext.Provider value={!isMap ? null : !urlBookMode && !bookFullWindow ? {
         inline: true,
         onExpand: () => setBookFullWindow(true),
       } : {
@@ -840,7 +840,6 @@ export default function LiveClinicalDecisionSupportFeature({
         ...(urlBookMode ? {} : { onCollapse: () => setBookFullWindow(false) }),
       }}>
       <ClinicalDecisionSupportView
-        calculatorAutofill={autofill}
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}
@@ -884,7 +883,7 @@ export default function LiveClinicalDecisionSupportFeature({
       />
       </VisitBookChromeContext.Provider>
       </PreventReadingContext.Provider>
-      {/* On the map, the reset sits at the foot, after the summary: it clears
+      {/* On the map, the reset sits at the foot, after today's plan: it clears
           every answer and decision on the page, and has no business beside
           the first things a clinician reads. */}
       {isMap && patientId ? (

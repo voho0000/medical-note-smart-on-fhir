@@ -121,9 +121,6 @@ function Section({
     </section>
   )
 }
-/** Every AF question group id, in the order the flow asks them. */
-export const AF_QUESTION_GROUP_IDS: readonly string[] = QUESTION_GROUPS.map((group) => group.id)
-
 /** A question group's own title, as the AF flow prints it. */
 export function afQuestionGroupTitle(id: string, isEnglish: boolean): string | undefined {
   const group = QUESTION_GROUPS.find((candidate) => candidate.id === id)
@@ -170,7 +167,7 @@ const HAS_BLED_SCORE_ROWS: Readonly<Record<string, string>> = {
 /** Items whose 有 is good news; a bulk 無 would record the opposite of 「沒有問題」. */
 const BULK_NONE_EXCLUDED: ReadonlySet<string> = new Set(['treatmentBenefit'])
 
-export function AfQuestionGroups({
+function AfQuestionGroups({
   groupIds,
   board,
   result,
@@ -377,10 +374,10 @@ export function AfQuestionGroups({
   )
 }
 
-export type AfControlStrategy = 'rate' | 'rhythm'
+type AfControlStrategy = 'rate' | 'rhythm'
 
 /** R · the primary control strategy, one of two; it opens that strategy's questions and cards. */
-export function AfControlStrategyPicker({
+function AfControlStrategyPicker({
   value,
   onChange,
   isEnglish: en,
@@ -431,7 +428,7 @@ export function AfControlStrategyPicker({
 }
 
 /** The record's AF inputs as the flow shows them: value, date, and 「建議複驗」 when stale. */
-export function AfRecordMetrics({ board, isEnglish: en }: { board: DiseaseBoardModel; isEnglish: boolean }) {
+function AfRecordMetrics({ board, isEnglish: en }: { board: DiseaseBoardModel; isEnglish: boolean }) {
   return (
     <dl className="grid grid-cols-2 @min-[40rem]:grid-cols-4" data-testid="cdss-af-record-metrics">
       {board.metrics.map((m) => (

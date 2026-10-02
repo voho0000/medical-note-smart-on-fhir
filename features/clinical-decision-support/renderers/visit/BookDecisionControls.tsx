@@ -7,6 +7,22 @@ import type { QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import styles from './VisitBookLayout.module.css'
 
+/**
+ * After 「改」 the line that held it is gone; focus goes on to what the
+ * clinician decides next in the same box or row — its recommendation, else
+ * its first button — rather than falling to the page.
+ */
+function clearAndRefocus(button: HTMLElement, clear: () => void) {
+  const holder = button.closest<HTMLElement>('[data-book-box], [data-book-dp]')
+  clear()
+  requestAnimationFrame(() => {
+    if (document.activeElement && document.activeElement !== document.body && holder?.contains(document.activeElement)) return
+    const next = holder?.querySelector<HTMLElement>('[data-visit-primary]:not([disabled])')
+      ?? holder?.querySelector<HTMLElement>('button:not([disabled])')
+    next?.focus()
+  })
+}
+
 /** The prototype's check mark: a stroke, never an icon font or emoji. */
 function Tick({ small = false }: { small?: boolean }) {
   const size = small ? 14 : 16
@@ -76,7 +92,7 @@ export function BookDecisionControls({
             <button
               type="button"
               className={styles.change}
-              onClick={onClear}
+              onClick={(event) => clearAndRefocus(event.currentTarget, onClear)}
               aria-label={isEnglish ? `Change the decision on ${point.dp}` : `改 ${point.dp} 的決定`}
               data-visit-change={point.dp}
             >
@@ -168,17 +184,40 @@ export function BookDecisionControls({
   )
 }
 
-/** A chain's steps already taken today, one line each: ✓ the DP and what was chosen. */
-export function BookChainDone({ steps }: { steps: readonly QueueStep[] }) {
+/**
+ * A chain's steps already taken today, one line each: ✓ the DP, what was
+ * chosen and, where the page can take it back, 「改」 — so 開始抗凝 can still
+ * become 暫緩 once a DOAC is chosen (owner request 2026-10-01: 「第一步旁邊也
+ * 加『改』」). Taking a step back takes the steps that followed from it too.
+ */
+export function BookChainDone({ steps, isEnglish = false, onClear }: {
+  steps: readonly QueueStep[]
+  isEnglish?: boolean
+  onClear?: (step: QueueStep) => void
+}) {
   return (
     <>
-      {steps.map((step) => (
-        <p key={step.key} className={styles.chainDone} data-visit-chain-done={step.point.dp}>
-          <Tick small />
-          <span className={styles.dpTag}>{step.point.dp}</span>
-          <span>{step.decision?.record.actionLabel ?? step.decision?.action.label}</span>
-        </p>
-      ))}
+      {steps.map((step) => {
+        const label = step.decision?.record.actionLabel ?? step.decision?.action.label
+        return (
+          <p key={step.key} className={styles.chainDone} data-visit-chain-done={step.point.dp}>
+            <Tick small />
+            <span className={styles.dpTag}>{step.point.dp}</span>
+            <span>{label}</span>
+            {onClear ? (
+              <button
+                type="button"
+                className={styles.change}
+                onClick={(event) => clearAndRefocus(event.currentTarget, () => onClear(step))}
+                aria-label={isEnglish ? `Change ${step.point.dp}: ${label}` : `改 ${step.point.dp}：${label}`}
+                data-visit-chain-change={step.key}
+              >
+                {isEnglish ? 'Change' : '改'}
+              </button>
+            ) : null}
+          </p>
+        )
+      })}
     </>
   )
 }

@@ -18,14 +18,15 @@ import {
 import { displayDate } from './VisitStatusHeader'
 import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
 import { BookChainDone, BookDecisionControls } from './BookDecisionControls'
-import { VisitBookChromeContext } from './visit-book-chrome'
+import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
 import styles from './VisitBookLayout.module.css'
 
 /**
  * The visit laid out as a pocket-handbook page (owner request 2026-09-30,
  * after the Pocket Medicine-style prototype: 「把這個版面套到 localhost 上的
- * 真實 CDSS 試試看」, then 「我想要看到跟 prototype 一模一樣的畫面」). An
- * experiment beside the decision map, opened with `?visit=book`.
+ * 真實 CDSS 試試看」, then 「我想要看到跟 prototype 一模一樣的畫面」). Since
+ * 2026-10-01 it is the decision map (決策地圖 v2), in the CDSS panel or over the
+ * whole window; the first decision map is retired.
  *
  * Left, the decision map: every point of the page under its numbered section,
  * with a mark for where it stands today — the map says where the decisions
@@ -382,7 +383,7 @@ function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
 interface QuestionsView {
   title: string
   answers: string
-  rows: { id: string; label: string; answer?: boolean; record?: boolean; recordHolds?: boolean; terms?: string[] }[]
+  rows: { id: string; label: string; detail?: string; answer?: boolean; record?: boolean; recordHolds?: boolean; terms?: string[] }[]
   bulkNone?: boolean
   labels?: { yes: string; no: string }
   note?: string
@@ -394,14 +395,37 @@ function questionsOf(point: object | undefined): QuestionsView | undefined {
 }
 
 /** The further question groups a point asks (HF DP-06's 誘因), each read as `questionsOf` reads one. */
-export function questionGroupsOf(point: object | undefined): QuestionsView[] {
+function questionGroupsOf(point: object | undefined): QuestionsView[] {
   const raw = (point as { questionGroups?: unknown } | undefined)?.questionGroups
   return Array.isArray(raw) ? raw.flatMap((group) => parseQuestions(group) ?? []) : []
 }
 
-/** The row a point's questions hold under an id, in `questions` or a further group — for its `terms`. */
+interface MoreQuestionsView {
+  title: string
+  badge?: string
+  groups: QuestionsView[]
+  note?: string
+}
+
+/** A point's folded, optional questions (HF DP-06's other symptoms and signs), read defensively. */
+function moreQuestionsOf(point: object | undefined): MoreQuestionsView | undefined {
+  const raw = (point as { moreQuestions?: unknown } | undefined)?.moreQuestions
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, badge, groups, note } = raw as Record<string, unknown>
+  const parsed = Array.isArray(groups) ? groups.flatMap((group) => parseQuestions(group) ?? []) : []
+  if (typeof title !== 'string' || !parsed.length) return undefined
+  return {
+    title,
+    ...(typeof badge === 'string' ? { badge } : {}),
+    groups: parsed,
+    ...(typeof note === 'string' ? { note } : {}),
+  }
+}
+
+/** The row a point's questions hold under an id, in `questions`, a further group or the fold — for its `terms`. */
 export function questionRowOf(point: object, id: string): QuestionsView['rows'][number] | undefined {
-  return [questionsOf(point), ...questionGroupsOf(point)].flatMap((group) => group?.rows ?? []).find((row) => row.id === id)
+  return [questionsOf(point), ...questionGroupsOf(point), ...(moreQuestionsOf(point)?.groups ?? [])]
+    .flatMap((group) => group?.rows ?? []).find((row) => row.id === id)
 }
 
 function parseQuestions(raw: unknown): QuestionsView | undefined {
@@ -409,12 +433,13 @@ function parseQuestions(raw: unknown): QuestionsView | undefined {
   const { title, answers, rows, bulkNone, note, labels } = raw as Record<string, unknown>
   if (typeof title !== 'string' || typeof answers !== 'string' || !Array.isArray(rows)) return undefined
   const parsed = rows.flatMap((row): QuestionsView['rows'] => {
-    const { id, label, answer, record, recordHolds, terms } = (row ?? {}) as Record<string, unknown>
+    const { id, label, detail, answer, record, recordHolds, terms } = (row ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || typeof label !== 'string') return []
     const termList = Array.isArray(terms) ? terms.filter((term): term is string => typeof term === 'string') : []
     return [{
       id,
       label,
+      ...(typeof detail === 'string' ? { detail } : {}),
       ...(typeof answer === 'boolean' ? { answer } : {}),
       ...(typeof record === 'boolean' ? { record } : {}),
       ...(recordHolds === true ? { recordHolds: true } : {}),
@@ -433,7 +458,7 @@ function parseQuestions(raw: unknown): QuestionsView | undefined {
   }
 }
 
-export interface ProfileGridView {
+interface ProfileGridView {
   title: string
   columns: { id: string; label: string }[]
   rows: { id: string; label: string }[]
@@ -444,7 +469,7 @@ export interface ProfileGridView {
 }
 
 /** The two-axis profile a point places the patient in (HF DP-06's 乾濕 by 冷暖), read defensively. */
-export function profileGridOf(point: object | undefined): ProfileGridView | undefined {
+function profileGridOf(point: object | undefined): ProfileGridView | undefined {
   const raw = (point as { profileGrid?: unknown } | undefined)?.profileGrid
   if (!raw || typeof raw !== 'object') return undefined
   const { title, columns, rows, cells, current, reading, note } = raw as Record<string, unknown>
@@ -737,7 +762,10 @@ function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions:
       ) : null}
       {questions.rows.map((row) => (
         <div key={row.id} className={styles.questionRow} data-book-question={row.id}>
-          <span id={`${idBase}-${row.id}`}>{row.label}</span>
+          <span id={`${idBase}-${row.id}`}>
+            {row.label}
+            {row.detail ? <span className={styles.questionDetail}>{row.detail}</span> : null}
+          </span>
           <div role="group" aria-labelledby={`${idBase}-${row.id}`} className={styles.questionGroup}>
             {options.map((option) => {
               // The record's reading stands until the clinician answers; pressing it makes it theirs,
@@ -762,6 +790,74 @@ function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions:
         </div>
       ))}
       {questions.note ? <p className={styles.questionsNote}>{questions.note}</p> : null}
+    </div>
+  )
+}
+
+/**
+ * A point's folded, optional questions — HF DP-06's other symptoms and signs
+ * (owner decision 2026-10-02, the design canvas 「決策地圖 v2 · 今日評估」).
+ * Folded, the head names what is inside, or once any is answered how many and
+ * what was found; open, the groups side by side, and 「其餘皆無」 across them.
+ * A row left blank was not assessed: the fold never answers it.
+ */
+function MoreQuestions({ more, isEnglish, onAnswer }: {
+  more: MoreQuestionsView
+  isEnglish: boolean
+  onAnswer?: (group: QuestionsView, id: string, value: boolean | undefined) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const bodyId = useId()
+  const rows = more.groups.flatMap((group) => group.rows)
+  const answered = rows.filter((row) => row.answer !== undefined)
+  const found = rows.filter((row) => row.answer === true)
+  const sep = isEnglish ? ', ' : '、'
+  const count = answered.length
+    ? `${isEnglish ? `${answered.length} of ${rows.length} answered` : `已答 ${answered.length}／${rows.length}`}${
+      found.length
+        ? `${isEnglish ? ' · present: ' : '・有：'}${found.map((row) => row.label).join(sep)}`
+        : answered.length === rows.length ? (isEnglish ? ' · none' : '・皆無') : ''
+    }`
+    : (isEnglish ? 'Not answered' : '尚未填')
+  const unanswered = more.groups.flatMap((group) => group.rows.filter((row) => row.answer === undefined).map((row) => ({ group, row })))
+  return (
+    <div className={styles.more} data-book-more="" {...(open ? { 'data-open': '' } : {})}>
+      <button type="button" className={styles.moreHead} aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((value) => !value)}>
+        <span aria-hidden="true" className={styles.moreCaret}>{open ? '▾' : '▸'}</span>
+        <span className={styles.moreText}>
+          <span><b>{more.title}</b>{more.badge ? <span className={styles.moreBadge}>{more.badge}・{isEnglish ? `${rows.length} items` : `${rows.length} 項`}</span> : null}</span>
+          {open ? null : <span className={styles.moreItems}>{more.groups.map((group) => group.rows.map((row) => row.label).join(sep)).join(isEnglish ? ' · ' : '・')}</span>}
+        </span>
+        <span className={styles.moreCount}>{count}</span>
+      </button>
+      {open ? (
+        <div id={bodyId} className={styles.moreBody}>
+          <div className={styles.moreGroups}>
+            {more.groups.map((group) => (
+              <PointQuestions
+                key={group.title}
+                questions={group}
+                isEnglish={isEnglish}
+                titled
+                {...(onAnswer ? { onAnswer: (id: string, value: boolean | undefined) => onAnswer(group, id, value) } : {})}
+              />
+            ))}
+          </div>
+          <div className={styles.moreFoot}>
+            {onAnswer && unanswered.length ? (
+              <button
+                type="button"
+                className={styles.bulkNone}
+                onClick={() => { for (const { group, row } of unanswered) onAnswer(group, row.id, false) }}
+                data-book-more-none=""
+              >
+                {answered.length ? (isEnglish ? 'None of the rest' : '其餘皆無') : (isEnglish ? 'None of these' : '全部皆無')}
+              </button>
+            ) : null}
+            {more.note ? <span>{more.note}</span> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -867,6 +963,10 @@ export function VisitBookLayout({
   onAnswerQuestion,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
+  // Inside the CDSS panel unless the page around it says otherwise, or the
+  // address asks for the whole window (`?visit=book`).
+  const [urlBook] = useState(isVisitBookMode)
+  const inline = chrome ? Boolean(chrome.inline) : !urlBook
   const [mapOpen, setMapOpen] = useState(true)
   // Over the whole window, Esc returns to the panel, as a dialog would.
   const onCollapse = chrome?.onCollapse
@@ -880,7 +980,7 @@ export function VisitBookLayout({
   // reach — Tab no longer walks into the panel and the header underneath, and
   // a screen reader no longer reads them — until it is back in the panel.
   const bookRef = useRef<HTMLDivElement>(null)
-  const overWindow = !chrome?.inline
+  const overWindow = !inline
   useEffect(() => {
     const book = bookRef.current
     if (!overWindow || !book) return
@@ -932,7 +1032,7 @@ export function VisitBookLayout({
     const ok = await copy(summaryText)
     if (!ok) toast.error(isEnglish ? 'Could not copy — the clipboard is unavailable in this context.' : '無法複製，此環境無法使用剪貼簿。')
   }
-  // Back to the page's own layout: the same address without the experiment.
+  // Back to the panel: the same address without `?visit=book`.
   const exitHref = (() => {
     if (typeof window === 'undefined') return undefined
     const url = new URL(window.location.href)
@@ -1184,7 +1284,7 @@ export function VisitBookLayout({
           <div className={styles.inner}>
             {current ? (
               <>
-                <BookChainDone steps={decided} />
+                <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
                 <p className={styles.question} data-visit-headline="">{shown.headline ?? shown.label}</p>
                 {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why="">{shown.why}</p> : null}
                 <BookDecisionControls
@@ -1196,7 +1296,7 @@ export function VisitBookLayout({
               </>
             ) : (
               <>
-                <BookChainDone steps={decided.slice(0, -1)} />
+                <BookChainDone steps={decided.slice(0, -1)} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
                 <BookDecisionControls
                   point={shown}
                   decision={row.steps[row.steps.length - 1].decision}
@@ -1391,6 +1491,7 @@ export function VisitBookLayout({
     const table = optionTableOf(point)
     const grid = profileGridOf(point)
     const groups = questionGroupsOf(point)
+    const more = moreQuestionsOf(point)
     const title = score?.title ?? table?.title ?? questions?.title ?? ''
     const part = section.pointLabels?.[point.dp] ?? point.label
     const answer: AnswerQuestion | undefined = onAnswerQuestion && questions
@@ -1433,6 +1534,14 @@ export function VisitBookLayout({
         })}
         {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
         {withDecision ? blockDecision(point, entry) : null}
+        {/* Optional, and changes nothing today's decision reads: after it. */}
+        {more ? (
+          <MoreQuestions
+            more={more}
+            isEnglish={isEnglish}
+            {...(onAnswerQuestion ? { onAnswer: (group: QuestionsView, id: string, value: boolean | undefined) => onAnswerQuestion(point, group.answers, id, value) } : {})}
+          />
+        ) : null}
       </div>
     )
   }
@@ -1451,7 +1560,7 @@ export function VisitBookLayout({
       <div className={`${styles.box} ${styles.inner}`} data-tone={tone} data-book-box={point.dp}>
         {current ? (
           <>
-            <BookChainDone steps={decided} />
+            <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
             <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}{shown.headline ?? shown.label}</p>
             <BookDecisionControls
@@ -1463,7 +1572,7 @@ export function VisitBookLayout({
           </>
         ) : (
           <>
-            <BookChainDone steps={decided.slice(0, -1)} />
+            <BookChainDone steps={decided.slice(0, -1)} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             <BookDecisionControls
               point={shown}
               decision={row.steps[row.steps.length - 1].decision}
@@ -1762,7 +1871,7 @@ export function VisitBookLayout({
   const chaptersShown = numbered.filter(({ section }) => !section.plan)
 
   return (
-    <div ref={bookRef} className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
+    <div ref={bookRef} className={`${styles.book} ${inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={inline ? 'true' : undefined}>
       <header className={styles.head}>
         <div className={styles.headInner}>
           {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
@@ -1806,7 +1915,7 @@ export function VisitBookLayout({
             <button key="window-toggle" type="button" className={styles.windowToggle} onClick={chrome.onCollapse} data-testid="cdss-book-collapse">
               {isEnglish ? 'Back to the panel' : '回到面板'}
             </button>
-          ) : exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
+          ) : exitHref && !inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Back to the panel' : '回到面板'}</a> : null}
         </div>
       </header>
 

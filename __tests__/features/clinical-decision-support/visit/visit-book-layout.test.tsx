@@ -4,7 +4,7 @@
  * reasoning of a point to weigh under 看依據 — and the same decisions as the map.
  */
 import { useMemo, useState } from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
@@ -249,6 +249,58 @@ describe.each([
     expect(screen.getByTestId('cdss-book-end')).toHaveTextContent('apixaban 5 mg bid')
   })
 
+  // Owner request 2026-10-01: 「第一步旁邊也加『改』」 — 開始抗凝 pressed by
+  // mistake was only undone by 恢復本頁預設, which clears the whole page.
+  describe('a chain\'s first step can be taken back on its own line (P3 DP-07)', () => {
+    const box = () => document.querySelector<HTMLElement>('[data-book-box="DP-07"]')!
+    const primary = () => box().querySelector<HTMLButtonElement>('[data-visit-primary]')!
+    const decisions = () => Object.values(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {}).map((decision) => decision.actionLabel)
+
+    it('before the DOAC is chosen: 改 beside 開始抗凝 asks 要不要 again, focus on its recommendation', async () => {
+      render(<BookPage id="p3-new-af" page="af" />)
+      fireEvent.click(primary())
+      expect(box()).toHaveTextContent('選 DOAC')
+      fireEvent.click(within(box()).getByRole('button', { name: '改 DP-07：開始抗凝' }))
+      expect(decisions()).toEqual([])
+      expect(box()).toHaveTextContent('今天：CHA₂DS₂-VA 4：開始抗凝？')
+      expect(primary()).toHaveTextContent('開始抗凝')
+      expect(box().querySelector('[data-visit-chain-done]')).toBeNull()
+      expect(mapLine('DP-07')).toHaveAttribute('data-book-mark', 'act')
+      // The line with 改 is gone; focus goes on to the question it reopened.
+      await waitFor(() => expect(primary()).toHaveFocus())
+    })
+
+    it('after the DOAC: 改 beside 開始抗凝 takes the DOAC back with it, and 暫緩 can be recorded instead', () => {
+      render(<BookPage id="p3-new-af" page="af" />)
+      fireEvent.click(primary())
+      fireEvent.click(primary())
+      expect(decisions()).toEqual(['開始抗凝', 'apixaban 5 mg bid'])
+      // Two 改 now: the DOAC's, and the first step's on its own line.
+      expect(within(box()).getByRole('button', { name: '改 DP-07 的決定' })).toBeInTheDocument()
+      fireEvent.click(within(box()).getByRole('button', { name: '改 DP-07：開始抗凝' }))
+      // The DOAC followed from 開始抗凝: it goes too, rather than standing alone.
+      expect(decisions()).toEqual([])
+      expect(screen.getByTestId('cdss-book-end')).not.toHaveTextContent('apixaban 5 mg bid')
+      fireEvent.click(within(box()).getByRole('button', { name: '其他' }))
+      fireEvent.click(within(box()).getByRole('button', { name: '暫緩' }))
+      expect(decisions()).toEqual(['暫緩'])
+      expect(within(box()).getByTestId('cdss-visit-decided')).toHaveTextContent('暫緩')
+      expect(within(box()).queryByTestId('cdss-book-dose-table')).toBeNull()
+    })
+
+    it('the DOAC\'s own 改 still takes back the DOAC alone, focus on the DOACs', async () => {
+      render(<BookPage id="p3-new-af" page="af" />)
+      fireEvent.click(primary())
+      fireEvent.click(primary())
+      fireEvent.click(within(box()).getByRole('button', { name: '改 DP-07 的決定' }))
+      expect(decisions()).toEqual(['開始抗凝'])
+      expect(within(box()).getByRole('button', { name: '改 DP-07：開始抗凝' })).toBeInTheDocument()
+      expect(within(box()).getByTestId('cdss-book-dose-table')).toBeInTheDocument()
+      await waitFor(() => expect(primary()).toHaveFocus())
+      expect(primary()).toHaveTextContent('apixaban 5 mg bid')
+    })
+  })
+
   describe('DP-01 is answered in its phenotype table, once (owner request 2026-09-30)', () => {
     it('before a diagnosis: the table offers HFrEF, HFpEF and 還不確定; the old question is gone (P1)', () => {
       render(<BookPage id="p1-suspected-hfpef" page="hf" />)
@@ -323,18 +375,87 @@ describe.each([
     })
   })
 
-  it('DP-03 asks the pack\'s every-visit questions and nothing of the old cards (P9)', () => {
+  it('DP-03 asks the pack\'s every-visit questions and NYHA, and nothing of the old cards (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     const asks = within(entry('DP-03')).getByTestId('cdss-book-asks')
     expect(within(asks).getAllByRole('group').map((group) => group.getAttribute('aria-labelledby') && document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent))
-      .toEqual(['喘比上次', '體重比上次'])
-    // As the Artifact: no asks card, and no fold of fuller questions (owner decision 2026-09-30).
+      .toEqual(['喘比上次', '體重比上次', 'NYHA 分級'])
+    // No asks card and no fold of the first card's questions here (owner decision
+    // 2026-09-30); NYHA came back beside the asks on 2026-10-02.
     expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
     expect(screen.queryByTestId('cdss-book-asks-detail')).toBeNull()
     expect(screen.queryByText('其他症狀、徵象與 NYHA')).toBeNull()
     fireEvent.click(within(asks).getByRole('button', { name: '穩定' }))
     expect(within(asks).getByRole('button', { name: '穩定' })).toHaveAttribute('aria-pressed', 'true')
     expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT]!)['dyspnoea-trend']).toBe('stable')
+  })
+
+  describe('today\'s assessment brought back (owner decision 2026-10-02, design canvas 「決策地圖 v2 · 今日評估」)', () => {
+    const atScenarioDay = <T,>(run: () => T): T => {
+      // The grade and the examination count for today only: the day the scenario was written.
+      jest.useFakeTimers({ doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame'] })
+      jest.setSystemTime(new Date('2026-09-27T10:00:00+08:00'))
+      try { return run() } finally { jest.useRealTimers() }
+    }
+
+    it('DP-03 grades NYHA, each class with its meaning, into the clinic examination; pressed again it is withdrawn (P9)', () => atScenarioDay(() => {
+      render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+      const nyha = within(entry('DP-03')).getByRole('group', { name: 'NYHA 分級' })
+      expect(within(nyha).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        'I一般活動無症狀', 'II一般活動有症狀', 'III輕度活動即有症狀', 'IV休息時也有症狀',
+      ])
+      expect(entry('DP-03')).toHaveTextContent('會用在 DP-16 ICD（II–III）、DP-13 AMT（II–IV）、DP-19 進階轉介（III–IV）')
+      fireEvent.click(within(nyha).getByRole('button', { name: /^III/ }))
+      expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.nyhaClass?.value).toBe('III')
+      expect(within(entry('DP-03')).getByRole('button', { name: /^III/ })).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(within(entry('DP-03')).getByRole('button', { name: /^III/ }))
+      expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.nyhaClass).toBeUndefined()
+      expect(within(entry('DP-03')).getByRole('button', { name: /^III/ })).toHaveAttribute('aria-pressed', 'false')
+    }))
+
+    it('a class graded yesterday is shown, not chosen; the same class today is recorded as today\'s and can be withdrawn (P9, #233 review)', () => atScenarioDay(() => {
+      useClinicVitalsStore.getState().setVitals(PATIENT, { nyhaClass: 'III' }, new Date('2026-09-26T10:00:00+08:00'))
+      render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+      const iii = () => within(entry('DP-03')).getByRole('button', { name: /^III/ })
+      expect(entry('DP-03')).toHaveTextContent('上次評估 NYHA III（09-26）')
+      expect(iii()).toHaveAttribute('aria-pressed', 'false')
+      fireEvent.click(iii())
+      expect(iii()).toHaveAttribute('aria-pressed', 'true')
+      expect(entry('DP-03')).not.toHaveTextContent('上次評估')
+      expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.nyhaClass).toMatchObject({ value: 'III', assessedOn: '2026-09-27' })
+      fireEvent.click(iii())
+      expect(iii()).toHaveAttribute('aria-pressed', 'false')
+      expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.nyhaClass).toBeUndefined()
+    }))
+
+    it('DP-06 folds the other symptoms and signs: named folded, answered open, the rest none at once (P9)', () => atScenarioDay(() => {
+      render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+      const dp06 = entry('DP-06')
+      const head = within(dp06).getByRole('button', { name: /其他症狀與徵象/ })
+      expect(head).toHaveAttribute('aria-expanded', 'false')
+      expect(head).toHaveTextContent('選填・9 項')
+      expect(head).toHaveTextContent('勞力性呼吸困難、疲倦／運動耐受下降、腳腫（自述）、腹脹／吃一點就飽、夜咳／喘鳴、彎腰呼吸困難・第三心音、肝頸反流、腹水')
+      expect(head).toHaveTextContent('尚未填')
+      // Folded, none of its rows is on the page.
+      expect(dp06.querySelector('[data-book-question="exertional-dyspnea"]')).toBeNull()
+      fireEvent.click(head)
+      expect(head).toHaveAttribute('aria-expanded', 'true')
+      const more = dp06.querySelector<HTMLElement>('[data-book-more]')!
+      expect(within(more).getByText('病人描述的症狀')).toBeInTheDocument()
+      expect(within(more).getByText('你檢查到的徵象')).toBeInTheDocument()
+      expect(within(more).getByText('exertional dyspnea')).toBeInTheDocument()
+      fireEvent.click(within(more.querySelector<HTMLElement>('[data-book-question="exertional-dyspnea"]')!).getByRole('button', { name: '有' }))
+      const signs = () => useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.signAnswers ?? {}
+      expect(signs()['exertional-dyspnea']?.value).toBe('present')
+      expect(within(dp06).getByRole('button', { name: /其他症狀與徵象/ })).toHaveTextContent('已答 1／9・有：勞力性呼吸困難')
+      fireEvent.click(within(more).getByRole('button', { name: '其餘皆無' }))
+      for (const term of ['fatigue-exercise-intolerance', 'reported-ankle-swelling', 'abdominal-bloating', 'nocturnal-cough', 'bendopnea', 'third-heart-sound', 'hepatojugular-reflux', 'ascites']) {
+        expect(signs()[term]?.value).toBe('absent')
+      }
+      expect(signs()['exertional-dyspnea']?.value).toBe('present')
+      // Optional: none of it settles DP-06's own question.
+      expect(within(dp06).getByTestId('cdss-book-profile-reading')).toHaveTextContent('先答體重與鬱血、灌流徵候')
+    }))
   })
 
   describe('the AF anticoagulation chapter as the prototype draws it (P9)', () => {
@@ -483,7 +604,7 @@ describe.each([
         fireEvent.click(within(screen.getByRole('group', { name: '體重比上次' })).getByRole('button', { name: '不變' }))
         const dp06 = entry('DP-06')
         expect(dp06.querySelector('[data-book-profile-cell="dry-warm"]')).toHaveAttribute('data-current')
-        expect(within(dp06).getByTestId('cdss-book-profile-reading')).toHaveTextContent('暖乾，但喘變差 → 先查誘因')
+        expect(within(dp06).getByTestId('cdss-book-profile-reading')).toHaveTextContent('暖乾・代償，但喘變差 → 先查誘因')
         expect(dp06.querySelector('[data-book-box="DP-06"]')).toHaveTextContent('先查誘因')
         expect(dp06.querySelector('[data-book-question-group="為什麼現在？誘因"]')).toBeInTheDocument()
         fireEvent.click(within(dp06.querySelector<HTMLElement>('[data-book-question-group="為什麼現在？誘因"]')!).getAllByRole('button', { name: '有' })[3]!)

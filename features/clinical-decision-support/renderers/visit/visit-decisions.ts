@@ -330,15 +330,6 @@ export function sourceTag(point: DecisionPointView): string {
   return point.sourceLabel ?? point.source.toUpperCase()
 }
 
-/** A section's name on one line, for the visit's steps: 「01 現況」. */
-export function blockShortTitle(block: VisitBlock, isEnglish: boolean): string {
-  switch (block) {
-    case 'status': return isEnglish ? '01 Status' : '01 現況'
-    case 'treatment': return isEnglish ? '02 Treatment' : '02 治療'
-    case 'outlook': return isEnglish ? '03 Plan' : '03 預後與計畫'
-  }
-}
-
 export function blockTitle(block: VisitBlock, isEnglish: boolean): string {
   switch (block) {
     case 'status': return isEnglish ? '01 Status · diagnosis / follow-up' : '01 現況 · 診斷／追蹤'

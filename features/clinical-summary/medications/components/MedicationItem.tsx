@@ -377,10 +377,10 @@ export function MedicationItem({
             <span
               className={cn(
                 "flex min-w-0 flex-1 items-baseline gap-1",
-                terminology && "cursor-help",
+                (terminology || medication.hospitalMedicationName) && "cursor-help",
               )}
               title={fullMedicationTitle}
-              tabIndex={terminology ? 0 : undefined}
+              tabIndex={terminology || medication.hospitalMedicationName ? 0 : undefined}
             >
               <span
                 className="min-w-0 truncate text-[0.8125rem] font-semibold tracking-[-0.005em]"

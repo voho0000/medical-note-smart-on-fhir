@@ -1,7 +1,8 @@
-// Dev harness: a simulated cardiologist on the decision map. Answers the
-// every-visit questions the way the scenario says, then presses the primary
-// button of every queued row (following each chain to its next step) and
-// records what was read and pressed. Exposed as window.__cdssSimulate(visit).
+// Dev harness: a simulated cardiologist on the decision map (決策地圖 v2).
+// Answers the every-visit questions the way the scenario says, then presses
+// the primary button of every point the map marks as today's (following each
+// chain to its next step) and records what was read and pressed. Exposed as
+// window.__cdssSimulate(visit).
 const ANSWER_VALUE = {
   'dyspnoea-trend': { 變差: 'worse', 穩定: 'stable', 進步: 'better' },
   'weight-trend': { 增加: 'up', 不變: 'same', 減少: 'down' },
@@ -23,7 +24,7 @@ export function installSimulate() {
       const ask = VISIT_KEY[key]
       const value = ANSWER_VALUE[ask]?.[label]
       if (!ask || !value) continue
-      const button = screen().querySelector(`button[data-visit-ask="${ask}"][data-value="${value}"]`)
+      const button = screen().querySelector(`[data-book-ask="${ask}"] button[data-book-ask-option="${value}"]`)
       if (!button) { steps.push({ kind: 'ask-missing', ask, value }); continue }
       if (button.getAttribute('aria-pressed') === 'true') {
         steps.push({ kind: 'ask-prefilled', ask, value, prefilled: button.dataset.prefilled === 'true' })
@@ -33,21 +34,19 @@ export function installSimulate() {
       steps.push({ kind: 'ask', ask, value })
       await sleep(600)
     }
-    // 2. The queue, top to bottom, following chains.
+    // 2. Today's points, top to bottom, following chains.
+    const markOf = (dp) => screen().querySelector(`[data-book-map-dp="${dp}"]`)?.dataset.bookMark
     for (let guard = 0; guard < 12; guard += 1) {
-      const row = [...screen().querySelectorAll('[data-visit-queue-row]')].find((candidate) => (
-        candidate.dataset.decided !== 'true' && candidate.querySelector('[data-visit-primary]')
+      const primary = [...screen().querySelectorAll('[data-visit-primary]:not([disabled])')].find((button) => (
+        ['act', 'safety'].includes(markOf(button.closest('[data-book-dp]')?.dataset.bookDp))
       ))
-      if (!row) break
-      const primary = row.querySelector('[data-visit-primary]')
-      const headline = clean(row.querySelector('[data-visit-headline]')?.textContent)
-      const why = clean(row.querySelector('[data-visit-why]')?.textContent)
+      if (!primary) break
+      const entry = primary.closest('[data-book-dp]')
       steps.push({
         kind: 'decide',
-        dp: row.dataset.visitCurrentDp || row.dataset.visitQueueDp,
-        state: row.dataset.visitQueueState,
-        headline,
-        why,
+        dp: primary.dataset.visitPrimary,
+        mark: markOf(entry.dataset.bookDp),
+        text: clean(entry.textContent).slice(0, 160),
         primary: clean(primary.textContent),
       })
       primary.click()
