@@ -116,8 +116,9 @@ describe('LabReportsAdminPage', () => {
         results: { assay_value: 'Negative' }, withheld: { memo_data: 60 },
       },
       {
-        // The 健保月檔 copy of row 1: same test, day and value — merged.
-        ref: 3, source: 's02', ordinal: 9, dates: { case_time: { day: 3, time: '11:46:00' } },
+        // The 健保月檔 copy of row 1: same test, report instance (the minute)
+        // and value — merged.
+        ref: 3, source: 's02', ordinal: 9, dates: { case_time: { day: 3, time: '09:30:00' } },
         fields: { order_code: '12999C', assay_item_name: 'C3', unit_data: 'mg/dL', hosp: '合成醫院', data_mark: '健保月檔;' },
         results: { assay_value: '98' }, withheld: {},
       },
