@@ -10,7 +10,7 @@
 // The preview table and the JSON view render the SAME payload object that is
 // posted (see buildLabDataReport), so what is shown is what is sent.
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
-import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Loader2 } from "lucide-react"
+import { AlertCircle, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -50,8 +49,9 @@ import {
 import { findDescriptionIdentifiers } from "../utils/identifier-scan"
 import { rawCaptureOrigin } from "../utils/raw-capture-client"
 import { assembleRawLabSource, type RawLabExtract } from "../utils/raw-lab-rows"
-import { importedBundleId, readRawLabRows } from "../utils/read-raw-lab-rows"
-import { submitLabDataReport, type LabDataReportSubmitResult } from "../utils/submit-lab-data-report"
+import { importedBundleId, readRawLabRows, type RawLabRead } from "../utils/read-raw-lab-rows"
+import { sendLabDataReportInBackground } from "../utils/send-in-background"
+import type { LabDataReportSubmitResult } from "../utils/submit-lab-data-report"
 import {
   LAB_DATA_REPORT_MAX_DESCRIPTION,
   LAB_DATA_REPORT_MAX_ROWS,
@@ -152,16 +152,19 @@ export function LabDataReportDialog({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [rawOpen, setRawOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [reportId, setReportId] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const [launchSource, setLaunchSource] = useState<string | undefined>(undefined)
   const [includeRaw, setIncludeRaw] = useState(true)
   const [bundleId, setBundleId] = useState<string | null>(null)
   const [raw, setRaw] = useState<RawState>({ status: 'idle' })
-  const abortRef = useRef<AbortController | null>(null)
-  const rawAbortRef = useRef<AbortController | null>(null)
+  /** The latest raw read and its abort. Closing the dialog before 確定送出
+   *  aborts it; 確定送出 hands it to the background send. It stays after it
+   *  settles (aborting a settled read does nothing), so a read that finished
+   *  just before 確定送出, ahead of its result reaching `raw`, is handed over
+   *  instead of being read a second time. */
+  const rawReadRef = useRef<{ controller: AbortController; read: Promise<RawLabRead> } | null>(null)
+  /** Set once 確定送出 handed the report to the background: closing the
+   *  dialog must then no longer abort its raw read. */
+  const handedOffRef = useRef(false)
   const sendRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -171,8 +174,7 @@ export function LabDataReportDialog({
     })
     return () => {
       cancelled = true
-      abortRef.current?.abort()
-      rawAbortRef.current?.abort()
+      if (!handedOffRef.current) rawReadRef.current?.controller.abort()
     }
   }, [])
 
@@ -213,7 +215,7 @@ export function LabDataReportDialog({
     if (!open) setRaw({ status: 'idle' })
   }
   useEffect(() => {
-    if (!open) rawAbortRef.current?.abort()
+    if (!open && !handedOffRef.current) rawReadRef.current?.controller.abort()
   }, [open])
   useEffect(() => {
     if (raw.status !== 'ready') return
@@ -227,12 +229,12 @@ export function LabDataReportDialog({
   /** Reads and narrows the raw capture; null when the read was abandoned. */
   const readRaw = async (): Promise<RawState | null> => {
     if (!bundleId) return null
-    rawAbortRef.current?.abort()
+    rawReadRef.current?.controller.abort()
     const controller = new AbortController()
-    rawAbortRef.current = controller
     setRaw({ status: 'reading' })
-    const result = await readRawLabRows(bundleId, { signal: controller.signal })
-    if (rawAbortRef.current === controller) rawAbortRef.current = null
+    const read = readRawLabRows(bundleId, { signal: controller.signal })
+    rawReadRef.current = { controller, read }
+    const result = await read
     if (!result.ok && result.code === 'ABORTED') return null
     const next: RawState = result.ok
       ? { status: 'ready', extract: result.extract, expiresAt: result.expiresAt, producerVersion: result.producerVersion }
@@ -269,48 +271,49 @@ export function LabDataReportDialog({
 
   const rowCount = payload.rows.length
   const descriptionIssues = useMemo(() => findDescriptionIdentifiers(description), [description])
-  const readingRaw = raw.status === 'reading'
-  const canSend = rowCount > 0 && descriptionIssues.length === 0 && !sending && !readingRaw
+  const canSend = rowCount > 0 && descriptionIssues.length === 0
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next && sending) return
-    onOpenChange(next)
-  }
+  const handleOpenChange = (next: boolean) => onOpenChange(next)
 
-  const requestSend = async () => {
-    setError(null)
+  const requestSend = () => {
     if (!canSend) return
-    // The raw capture is read here, after the clinician chose to send, so the
-    // confirmation can say how many raw rows go with the report.
-    if (wantsRaw && raw.status === 'idle' && (await readRaw()) === null) return
+    // The raw capture starts reading now, after the clinician chose to send;
+    // the confirmation opens at once and shows how the read is going.
+    if (wantsRaw && raw.status === 'idle') void readRaw()
     setConfirmOpen(true)
   }
 
-  const send = async () => {
+  // 確定送出: the dialog closes at once and the report finishes in the
+  // background (a clinic cannot wait on a spinner); a toast gives the report
+  // id, or the reason with 重試.
+  const send = () => {
     setConfirmOpen(false)
-    setSending(true)
-    setError(null)
-    const controller = new AbortController()
-    abortRef.current = controller
-    const result = await submitLabDataReport(payload, { signal: controller.signal })
-    abortRef.current = null
-    setSending(false)
-    if (result.ok) {
-      setReportId(result.reportId)
-      return
+    let rawRead: RawLabRead | Promise<RawLabRead> | undefined
+    if (wantsRaw && bundleId) {
+      if (raw.status === 'ready') {
+        rawRead = { ok: true, extract: raw.extract, expiresAt: raw.expiresAt, producerVersion: raw.producerVersion }
+      } else if (raw.status === 'failed') {
+        rawRead = { ok: false, code: raw.code }
+      } else {
+        // Still reading, or done but not yet in `raw` (hand that read
+        // over), or never started (start it).
+        rawRead = rawReadRef.current?.read ?? readRawLabRows(bundleId)
+      }
     }
-    setError(errorMessage(result, strings))
-  }
-
-  const copyId = async () => {
-    if (!reportId) return
-    try {
-      await navigator.clipboard.writeText(reportId)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // The id stays on screen and selectable.
-    }
+    handedOffRef.current = true
+    void sendLabDataReportInBackground({
+      base: payload,
+      ...(rawRead && { raw: { read: rawRead, dayZero: built.dayZero, includeValues } }),
+    }, {
+      sending: strings.backgroundSending,
+      readingRaw: strings.backgroundReadingRaw,
+      successTitle: strings.successTitle,
+      successId: strings.successId,
+      copyId: strings.copyId,
+      retry: strings.retry,
+      failure: (result) => errorMessage(result, strings),
+    })
+    onOpenChange(false)
   }
 
   const toggleFlagged = (id: string) => {
@@ -344,32 +347,12 @@ export function LabDataReportDialog({
             event.preventDefault()
             sendRef.current?.focus()
           }}
-          onInteractOutside={(event) => { if (sending) event.preventDefault() }}
-          onEscapeKeyDown={(event) => { if (sending) event.preventDefault() }}
         >
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-12 text-left">
             <DialogTitle className="text-base">{strings.title}</DialogTitle>
             <DialogDescription className="text-xs">{strings.subtitle}</DialogDescription>
           </DialogHeader>
 
-          {reportId ? (
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4" role="status" aria-live="polite">
-              <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                {strings.successTitle}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>{strings.successId}</span>
-                <span className="select-all rounded border border-border bg-muted/40 px-2 py-0.5 font-mono text-foreground tabular-nums">
-                  {reportId}
-                </span>
-                <Button type="button" variant="ghost" size="sm" onClick={copyId} className="h-7 px-2 text-xs max-md:h-11">
-                  <Copy aria-hidden="true" />
-                  {copied ? strings.copied : strings.copyId}
-                </Button>
-              </div>
-            </div>
-          ) : (
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
               {reportablePanels.length > 0 && (
                 <fieldset>
@@ -426,7 +409,7 @@ export function LabDataReportDialog({
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                       event.preventDefault()
-                      void requestSend()
+                      requestSend()
                     }
                   }}
                   placeholder={strings.descriptionPlaceholder}
@@ -530,42 +513,21 @@ export function LabDataReportDialog({
                 </section>
               )}
             </div>
-          )}
-
-          {error && !reportId && (
-            <Alert variant="destructive" role="alert" aria-live="assertive" className="mx-4 mb-2 w-auto shrink-0">
-              <AlertCircle aria-hidden="true" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
 
           <DialogFooter className="shrink-0 gap-2 border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-md:flex-col-reverse sm:justify-end">
-            {reportId ? (
-              <Button type="button" autoFocus onClick={() => onOpenChange(false)} className="max-md:h-11 max-md:w-full">
-                {strings.close}
-              </Button>
-            ) : (
-              <>
-                <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={sending} className="max-md:h-11 max-md:w-full">
-                  {strings.cancel}
-                </Button>
-                <Button
-                  ref={sendRef}
-                  type="button"
-                  onClick={() => { void requestSend() }}
-                  disabled={sending || readingRaw || rowCount === 0}
-                  aria-disabled={!canSend || undefined}
-                  className="max-md:h-11 max-md:w-full"
-                >
-                  {(sending || readingRaw) && <Loader2 className="animate-spin" aria-hidden="true" />}
-                  {sending
-                    ? strings.sending
-                    : readingRaw
-                      ? strings.readingRaw
-                      : fill(strings.send ?? '{count}', { count: rowCount })}
-                </Button>
-              </>
-            )}
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} className="max-md:h-11 max-md:w-full">
+              {strings.cancel}
+            </Button>
+            <Button
+              ref={sendRef}
+              type="button"
+              onClick={requestSend}
+              disabled={rowCount === 0}
+              aria-disabled={!canSend || undefined}
+              className="max-md:h-11 max-md:w-full"
+            >
+              {fill(strings.send ?? '{count}', { count: rowCount })}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -576,6 +538,12 @@ export function LabDataReportDialog({
             <AlertDialogTitle>{strings.confirmTitle}</AlertDialogTitle>
             <AlertDialogDescription>
               {fill(includeValues ? strings.confirmWithValues : strings.confirmWithoutValues, { count: rowCount })}
+              {wantsRaw && raw.status === 'reading' && (
+                <span className="mt-1 flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  {strings.confirmRawReading}
+                </span>
+              )}
               {payload.rawSource && (
                 <span className="mt-1 block">
                   {fill(strings.confirmRaw ?? '{count}', { count: payload.rawSource.rows.length })}
@@ -592,7 +560,7 @@ export function LabDataReportDialog({
           </AlertDialogHeader>
           <AlertDialogFooter className="max-md:flex-col-reverse max-md:gap-2">
             <AlertDialogCancel className="max-md:h-11">{strings.confirmBack}</AlertDialogCancel>
-            <AlertDialogAction className="max-md:h-11" onClick={() => { void send() }}>
+            <AlertDialogAction className="max-md:h-11" onClick={send}>
               {strings.confirmSend}
             </AlertDialogAction>
           </AlertDialogFooter>

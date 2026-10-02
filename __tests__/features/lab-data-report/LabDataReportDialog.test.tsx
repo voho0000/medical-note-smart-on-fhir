@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { LabDataReportDialog } from '@/features/lab-data-report/components/LabDataReportDialog'
 import { submitLabDataReport } from '@/features/lab-data-report/utils/submit-lab-data-report'
+import { toast } from 'sonner'
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
@@ -20,6 +21,9 @@ jest.mock('@/src/application/telemetry/launch-context', () => ({
 }))
 jest.mock('@/features/lab-data-report/utils/submit-lab-data-report', () => ({
   submitLabDataReport: jest.fn(),
+}))
+jest.mock('sonner', () => ({
+  toast: { loading: jest.fn(() => 'report-toast'), success: jest.fn(), error: jest.fn() },
 }))
 
 const LOINC = 'http://loinc.org'
@@ -41,11 +45,13 @@ const observations = [
   urineRow('c', '2026-03-01', '777-3', 'PLT', 250),
 ]
 
+const onOpenChange = jest.fn()
+
 async function renderDialog() {
   const result = render(
     <LabDataReportDialog
       open
-      onOpenChange={() => {}}
+      onOpenChange={onOpenChange}
       panels={[{ id: 'cbc', label: '血液' }, { id: 'urine', label: '尿液' }]}
       observations={observations}
       nameMode="standardized"
@@ -59,6 +65,10 @@ async function renderDialog() {
 describe('LabDataReportDialog', () => {
   beforeEach(() => {
     (submitLabDataReport as jest.Mock).mockReset()
+    ;(toast.loading as jest.Mock).mockClear()
+    ;(toast.success as jest.Mock).mockClear()
+    ;(toast.error as jest.Mock).mockClear()
+    onOpenChange.mockClear()
   })
 
   it('sends in two presses with nothing filled in: 送出 → 確定送出', async () => {
@@ -74,7 +84,15 @@ describe('LabDataReportDialog', () => {
     expect(submitLabDataReport).not.toHaveBeenCalled()
 
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
-    expect(await screen.findByText('LDR-20260927-ABCDEF12')).toBeInTheDocument()
+    // The dialog closes at once; the report finishes in the background and
+    // answers with a toast carrying the report id.
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(toast.loading).toHaveBeenCalledWith('回報送出中…')
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('已送出，謝謝回報', expect.objectContaining({
+      id: 'report-toast',
+      description: '回報編號 LDR-20260927-ABCDEF12',
+      action: expect.objectContaining({ label: '複製' }),
+    })))
     const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
     expect(payload).toEqual(expect.objectContaining({
       problemType: 'unspecified',
@@ -102,7 +120,7 @@ describe('LabDataReportDialog', () => {
     // Enter in the note goes straight to the confirmation.
     fireEvent.keyDown(note, { key: 'Enter' })
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '確定送出' }))
-    await screen.findByText('LDR-20260927-ABCDEF12')
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
     expect((submitLabDataReport as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
       problemType: 'wrong-panel',
       description: 'Hb 和 PLT 出現在尿液',
@@ -129,8 +147,10 @@ describe('LabDataReportDialog', () => {
     expect(within(table).getAllByText(/檢體為尿液/)).toHaveLength(3)
   })
 
-  it('offers only panels with rows as chips and sends the ticked ones; keeps the form after a failed send', async () => {
-    ;(submitLabDataReport as jest.Mock).mockResolvedValue({ ok: false, status: 429 })
+  it('offers only panels with rows as chips and sends the ticked ones; a failure offers 重試 with the same report', async () => {
+    ;(submitLabDataReport as jest.Mock)
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({ ok: true, reportId: 'LDR-20260927-ABCDEF12' })
     await renderDialog()
     // 血液 has no rows in this patient, so it is not offered.
     expect(screen.queryByRole('button', { name: '血液' })).not.toBeInTheDocument()
@@ -138,8 +158,15 @@ describe('LabDataReportDialog', () => {
     expect(screen.getByRole('button', { name: '尿液' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '送出 3 筆' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '確定送出' }))
-    expect(await screen.findByText('這台裝置送出次數過多，請一小時後再試。')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByRole('button', { name: '送出 3 筆' })).toBeEnabled())
-    expect((submitLabDataReport as jest.Mock).mock.calls[0][0].scope.flaggedCategories).toEqual(['urine'])
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('這台裝置送出次數過多，請一小時後再試。', expect.objectContaining({
+      id: 'report-toast',
+      action: expect.objectContaining({ label: '重試' }),
+    })))
+    const first = (submitLabDataReport as jest.Mock).mock.calls[0][0]
+    expect(first.scope.flaggedCategories).toEqual(['urine'])
+    // 重試 sends the very same report (the Function dedupes a resend).
+    await act(async () => { (toast.error as jest.Mock).mock.calls[0][1].action.onClick({ preventDefault: jest.fn() }) })
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    expect((submitLabDataReport as jest.Mock).mock.calls[1][0]).toBe(first)
   })
 })
