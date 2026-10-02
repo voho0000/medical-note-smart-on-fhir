@@ -66,6 +66,18 @@ reconciliation requests; their derived visit actions are retired. Safety modules
 keep their warnings but do not offer prescribe/dose-adjust visit actions based only
 on unconfirmed use. Chinese and English use the same policy.
 
+The decision map reads any AF anticoagulant regimen as a settled decision
+(「已抗凝」, DP-07 已定, CHA₂DS₂-VA 「已在用」). When every anticoagulant on the
+profile comes from an unconfirmed hospital prescription, the profile names it
+(`hospitalMedicationUnconfirmedAnticoagulation`) and `buildVisitModel` keeps AF's
+「要不要抗凝」 point — on the AF page, and where the heart-failure page folds it —
+in the pack's own 待核對 form: `info`, the order's agent and dose as information
+(「apixaban 5 mg bid：使用待核對」), 核對目前用藥 as missing data, no action, and the
+CHA₂DS₂-VA verdict 「· 院內處方待核對」 marked pending. The regimen stays on the
+profile for interaction, dose and bleeding checks, so the map never reads 「未用抗凝」
+and offers no second anticoagulant. A confirmed MedicationStatement or NHI record
+still settles the point as before.
+
 ## Incomplete inventory scope
 
 One active/unconfirmed hospital ingredient outside the exact-name catalogue makes

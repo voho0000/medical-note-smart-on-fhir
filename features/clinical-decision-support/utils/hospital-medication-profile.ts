@@ -26,11 +26,28 @@ export interface HospitalMedicationEvidence {
   factKey: string
 }
 
+type AfMedicationRegimen = NonNullable<CdssPatientProfile['afMedicationRegimens']>[number]
+
+/** Anticoagulation the record shows only through unconfirmed hospital prescriptions. */
+export interface HospitalUnconfirmedAnticoagulation {
+  /** The DOAC/VKA regimens that rest only on those prescriptions, in profile order. */
+  regimens: readonly AfMedicationRegimen[]
+  /** The prescriptions themselves, as cited everywhere else. */
+  sources: readonly CdssFactSource[]
+}
+
 export type HospitalAwareCdssProfile = CdssPatientProfile & {
   hospitalMedicationEvidence?: readonly HospitalMedicationEvidence[]
   hospitalMedicationPolicyVersion?: string
   /** Classes with an unconfirmed prescription: eligible for safety exposure checks. */
   hospitalMedicationPossibleExposureClasses?: readonly CdssMedicationClassId[]
+  /**
+   * Present when every anticoagulant on the profile comes from an unconfirmed
+   * hospital prescription. Safety checks read `afMedicationRegimens` as possible
+   * exposure; the decision map must keep 「要不要抗凝」 待核對 rather than read
+   * the same regimen as a settled anticoagulation decision.
+   */
+  hospitalMedicationUnconfirmedAnticoagulation?: HospitalUnconfirmedAnticoagulation
 }
 
 export const HOSPITAL_MEDICATION_POLICY_VERSION = 'vgh-cdss-medications-20261001-v2'
@@ -65,6 +82,20 @@ export function createHospitalMedicationEvaluationProfile(profile: HospitalAware
 
 const EXCLUDED = new Set(['cancelled', 'entered-in-error'])
 const NOT_CURRENT = new Set(['stopped', 'completed', 'not-taken'])
+
+/** The AF regimen ingredients the visit map counts as anticoagulation (DOACs and warfarin). */
+const ANTICOAGULANT_INGREDIENTS = new Set(['apixaban', 'dabigatran', 'edoxaban', 'rivaroxaban', 'warfarin'])
+const isAnticoagulantRegimen = (regimen: AfMedicationRegimen) => ANTICOAGULANT_INGREDIENTS.has(regimen.ingredient)
+
+/** What the AF visit map reads as 「已抗凝」: an anticoagulant regimen, a current DOAC/VKA class, or a VKA fact. */
+function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMedicationRegimens' | 'medicationClassContexts' | 'facts'>): boolean {
+  return Boolean(profile.afMedicationRegimens?.some(isAnticoagulantRegimen))
+    || (['direct-oral-anticoagulant', 'vitamin-k-antagonist'] as CdssMedicationClassId[])
+      .some((classId) => profile.medicationClassContexts?.[classId]?.state === 'confirmed-current')
+    || Boolean(profile.facts.currentVitaminKAntagonist)
+}
+
+const ANTICOAGULANT_FACT_KEYS = ['currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant'] as const
 
 /** A validityPeriod is a dispensing window, not evidence of taking a drug.
  * https://hl7.org/fhir/R4/medicationrequest-definitions.html#MedicationRequest.dispenseRequest.validityPeriod
@@ -285,10 +316,33 @@ export function createHospitalAwareCdssPatientProfile(
   const possibleExposureClasses = [...new Set(uncertain.flatMap((item) => item.classIds))]
     .filter((classId) => exposureProfile.medicationClassContexts?.[classId]?.state === 'confirmed-current'
       && contexts[classId]?.state !== 'confirmed-current' && contexts[classId]?.state !== 'on-hold')
-  const afMedicationRegimens = exposureProfile.afMedicationRegimens?.map((regimen) => ({
-    ...regimen, sources: regimen.sources.map(restoreSource),
-  }))
+  const isPending = (source: CdssFactSource) => pendingById.has(`${source.resourceType}:${source.resourceId}`)
+  const pendingOnly = (regimen: AfMedicationRegimen) => regimen.sources.length > 0 && regimen.sources.every(isPending)
+  // Regimens with a confirmed source first: wherever one regimen names the
+  // patient's anticoagulant, it is a confirmed one, not a pending order's.
+  const afMedicationRegimens = exposureProfile.afMedicationRegimens
+    && [...exposureProfile.afMedicationRegimens]
+      .sort((a, b) => Number(pendingOnly(a)) - Number(pendingOnly(b)))
+      .map((regimen) => ({ ...regimen, sources: regimen.sources.map(restoreSource) }))
+  // The decision map reads any anticoagulant regimen as a settled decision
+  // (「已抗凝」, DP-07 已定). Name the anticoagulation that rests only on
+  // unconfirmed hospital prescriptions so the map keeps it 待核對; the regimens
+  // stay on the profile for interaction, dose and bleeding checks.
+  // Only pending records differ between the two passes, so an anticoagulant
+  // that the confirmed pass lacks rests on unconfirmed prescriptions alone.
+  const anticoagulantRegimens = (afMedicationRegimens ?? []).filter(isAnticoagulantRegimen)
+  const unconfirmedAnticoagulation = !anticoagulationOnProfile(profile)
+    && anticoagulationOnProfile({ afMedicationRegimens, medicationClassContexts: contexts, facts })
+    ? {
+        regimens: anticoagulantRegimens,
+        sources: [...new Map([
+          ...anticoagulantRegimens.flatMap((regimen) => regimen.sources),
+          ...ANTICOAGULANT_FACT_KEYS.flatMap((key) => facts[key]?.sources ?? []),
+        ].filter(isPending).map((source) => [`${source.resourceType}:${source.resourceId}`, source])).values()],
+      }
+    : undefined
   return { ...profile, facts, medicationContexts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
     hospitalMedicationPolicyVersion: HOSPITAL_MEDICATION_POLICY_VERSION,
-    hospitalMedicationPossibleExposureClasses: possibleExposureClasses, afMedicationRegimens }
+    hospitalMedicationPossibleExposureClasses: possibleExposureClasses, afMedicationRegimens,
+    ...(unconfirmedAnticoagulation ? { hospitalMedicationUnconfirmedAnticoagulation: unconfirmedAnticoagulation } : {}) }
 }

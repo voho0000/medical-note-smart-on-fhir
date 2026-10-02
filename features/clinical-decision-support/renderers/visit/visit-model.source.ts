@@ -24,6 +24,7 @@ import type {
   VisitDecisionModel,
   VisitMapDefinition,
 } from '../../types'
+import { applyHospitalMedicationVisitReview } from '../../utils/hospital-medication-visit'
 
 type VisitModelBuilder = (input: BuildVisitDecisionModelInput) => VisitDecisionModel
 
@@ -101,11 +102,15 @@ export function applyPreviousVisit(profile: CdssPatientProfile, date: string | u
  * The model for this result, or undefined when there is none to draw — the
  * package has no builder, the pack is not one the map serves, or the builder
  * threw. The caller falls back to the three sections in every such case.
+ *
+ * An anticoagulant known only from an unconfirmed hospital prescription stays
+ * 待核對 on the map rather than 「已抗凝」 (`applyHospitalMedicationVisitReview`),
+ * as the result adapter keeps it from settling the cards.
  */
 export function buildVisitModel(input: BuildVisitDecisionModelInput): VisitDecisionModel | undefined {
   if (!packBuilder) return undefined
   try {
-    return packBuilder(input)
+    return applyHospitalMedicationVisitReview(packBuilder(input), input.profile, input.locale)
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[cdss] visit decision model could not be built', error)
