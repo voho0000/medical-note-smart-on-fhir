@@ -3223,11 +3223,11 @@ export const en = {
     rawNone: 'Not attached',
     rawTitle: 'MediCloud raw rows',
     rawIntro: 'Paired to converted rows by same day + order code or test name + value. An unpaired raw row may have been dropped or mis-converted; a converted row with no raw row needs its origin traced.',
-    rawStats: '{raw} raw rows, {paired} paired ({differs} with a different value); {unmatchedRaw} raw rows unpaired, {unmatchedConverted} converted rows without a raw row.',
+    rawStats: '{raw} raw rows, {paired} paired ({differs} with a different value, {codeOnly} by order code only), {merged} copies merged into a converted row (daily/monthly, history); {unmatchedRaw} raw rows unpaired, {unmatchedConverted} converted rows without a raw row.',
     rawOtherSource: '{count} more converted rows come from another module (e.g. IMUE0140 adult health check), outside the attached raw rows.',
     otherSource: 'From another module; no raw row attached',
     valueDiffers: 'value differs',
-    rawUnmatchedOnly: 'Unpaired or differing only',
+    rawUnmatchedOnly: 'Unpaired, differing or code-only',
     rawTableLabel: 'Raw rows table',
     rawNotes: {
       dropped: '{count} identifier- or date-like strings were removed in the browser.',
@@ -3253,6 +3253,9 @@ export const en = {
     unpaired: 'Unpaired',
     noRawPair: 'No raw row',
     pairedWith: 'Converted #{ref}',
+    mergedInto: 'Merged into converted #{ref}',
+    mergedCopy: 'Merged copy',
+    codeOnly: 'order code only',
   },
 }
 

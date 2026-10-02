@@ -629,8 +629,19 @@ function RowDetail({
               ? [[fields.pairedRaw, (() => {
                 const rawRef = pairing.rawByConverted.get(row.ref)
                 const raw = rawRef === undefined ? undefined : rawByRef.get(rawRef)
-                if (raw) return `${describeRawRow(raw)}${pairing.valueDiffers.has(raw.ref) ? `（${strings.valueDiffers}）` : ''}`
-                return pairing.otherSource.includes(row.ref) ? strings.otherSource : strings.noRawPair
+                if (!raw) return pairing.otherSource.includes(row.ref) ? strings.otherSource : strings.noRawPair
+                const notes = [
+                  pairing.valueDiffers.has(raw.ref) && strings.valueDiffers,
+                  pairing.codeOnly.has(raw.ref) && strings.codeOnly,
+                ].filter(Boolean)
+                const merged = [...pairing.mergedInto]
+                  .filter(([, into]) => into === row.ref)
+                  .map(([mergedRef]) => rawByRef.get(mergedRef))
+                  .filter((copy): copy is LabDataReportRawRow => !!copy)
+                return [
+                  `${describeRawRow(raw)}${notes.length > 0 ? `（${notes.join('、')}）` : ''}`,
+                  ...merged.map((copy) => `${strings.mergedCopy}：${describeRawRow(copy)}`),
+                ].join('\n')
               })()] as [string, string]]
               : []),
           ]
@@ -679,8 +690,11 @@ function RawRowsSection({
     rawSource.unknownFields.length > 0 && fill(notes.unknown, { fields: rawSource.unknownFields.join(', ') }),
     fill(notes.status, { s02: rawSource.endpointStatus.s02 ?? '—', s03: rawSource.endpointStatus.s03 ?? '—' }),
   ].filter((line): line is string => !!line)
+  // Worth a look: rows nothing explains, pairs whose values differ, and
+  // pairs made on the order code alone. Merged copies are explained.
   const shown = unmatchedOnly
-    ? rawRows.filter((row) => !pairing.convertedByRaw.has(row.ref) || pairing.valueDiffers.has(row.ref))
+    ? rawRows.filter((row) => (!pairing.convertedByRaw.has(row.ref) && !pairing.mergedInto.has(row.ref))
+      || pairing.valueDiffers.has(row.ref) || pairing.codeOnly.has(row.ref))
     : rawRows
 
   return (
@@ -692,6 +706,8 @@ function RawRowsSection({
           raw: rawRows.length,
           paired: pairing.convertedByRaw.size,
           differs: pairing.valueDiffers.size,
+          codeOnly: pairing.codeOnly.size,
+          merged: pairing.mergedInto.size,
           unmatchedRaw: pairing.unmatchedRaw.length,
           unmatchedConverted: pairing.unmatchedConverted.length,
         })}
@@ -729,6 +745,8 @@ function RawRowsSection({
             {shown.map((row) => {
               const pairedRef = pairing.convertedByRaw.get(row.ref)
               const paired = pairedRef === undefined ? undefined : convertedByRef.get(pairedRef)
+              const mergedRef = pairing.mergedInto.get(row.ref)
+              const mergedHost = mergedRef === undefined ? undefined : convertedByRef.get(mergedRef)
               const value = row.results.assay_value ?? row.results.assaY_VALUE
               const withheld = row.withheld.assay_value ?? row.withheld.assaY_VALUE
               const extra = [
@@ -746,7 +764,7 @@ function RawRowsSection({
                 row.fields.func_type && `dept ${row.fields.func_type}`,
               ].filter(Boolean)
               return (
-                <tr key={row.ref} className={cn('border-t border-border/70 align-top', (!paired || pairing.valueDiffers.has(row.ref)) && 'bg-amber-50 dark:bg-amber-950/30')}>
+                <tr key={row.ref} className={cn('border-t border-border/70 align-top', ((!paired && !mergedHost) || pairing.valueDiffers.has(row.ref)) && 'bg-amber-50 dark:bg-amber-950/30')}>
                   <th scope="row" className="sticky left-0 bg-background px-2 py-1 text-left font-normal text-muted-foreground">
                     {row.ref}
                   </th>
@@ -757,8 +775,18 @@ function RawRowsSection({
                         {pairing.valueDiffers.has(row.ref) && (
                           <span className="ml-1 font-medium text-amber-700 dark:text-amber-400">{strings.valueDiffers}</span>
                         )}
+                        {pairing.codeOnly.has(row.ref) && (
+                          <span className="ml-1 text-muted-foreground">{strings.codeOnly}</span>
+                        )}
                         <span className="block text-muted-foreground">
                           {(paired.app.categoryId ? panelLabels[paired.app.categoryId] ?? paired.app.categoryId : '—')} › {paired.app.column}
+                        </span>
+                      </>
+                    ) : mergedHost ? (
+                      <>
+                        {fill(strings.mergedInto, { ref: mergedHost.ref })}
+                        <span className="block text-muted-foreground">
+                          {(mergedHost.app.categoryId ? panelLabels[mergedHost.app.categoryId] ?? mergedHost.app.categoryId : '—')} › {mergedHost.app.column}
                         </span>
                       </>
                     ) : (

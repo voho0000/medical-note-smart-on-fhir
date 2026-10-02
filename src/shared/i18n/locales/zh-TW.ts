@@ -3228,11 +3228,11 @@ export const zhTW = {
     rawNone: '未附',
     rawTitle: '雲端病歷原始列',
     rawIntro: '依「同一天＋醫令或項目名稱＋數值」自動配對到轉換後的列。沒配對到的原始列，可能是轉換時被丟掉或轉錯；沒有原始列的轉換後列，要查它從哪裡來。',
-    rawStats: '原始列 {raw} 列，配對 {paired} 列（其中數值不同 {differs} 列）；未配對原始列 {unmatchedRaw} 列，找不到原始列的轉換後列 {unmatchedConverted} 列。',
+    rawStats: '原始列 {raw} 列，配對 {paired} 列（其中數值不同 {differs} 列、只靠醫令碼 {codeOnly} 列），併入同一轉換列的副本（日／月檔、歷史列）{merged} 列；未配對原始列 {unmatchedRaw} 列，找不到原始列的轉換後列 {unmatchedConverted} 列。',
     rawOtherSource: '另有 {count} 列轉換後結果來自其他模組（如 IMUE0140 成人預防保健），不在附上的原始列範圍。',
     otherSource: '來自其他模組，未附原始列',
     valueDiffers: '數值不同',
-    rawUnmatchedOnly: '只看未配對或數值不同',
+    rawUnmatchedOnly: '只看未配對、數值不同或只靠醫令碼',
     rawTableLabel: '原始列表格',
     rawNotes: {
       dropped: '瀏覽器端移除 {count} 個疑似身分資料或日期的字串。',
@@ -3258,5 +3258,8 @@ export const zhTW = {
     unpaired: '未配對',
     noRawPair: '找不到原始列',
     pairedWith: '轉換後 #{ref}',
+    mergedInto: '併入轉換後 #{ref}',
+    mergedCopy: '併入的副本',
+    codeOnly: '只靠醫令碼',
   },
 } satisfies Translation
