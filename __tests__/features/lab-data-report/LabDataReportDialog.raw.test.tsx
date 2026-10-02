@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { toast } from 'sonner'
 import { LabDataReportDialog } from '@/features/lab-data-report/components/LabDataReportDialog'
 import { submitLabDataReport } from '@/features/lab-data-report/utils/submit-lab-data-report'
 import { readRawLabRows } from '@/features/lab-data-report/utils/read-raw-lab-rows'
@@ -22,6 +23,9 @@ jest.mock('@/src/application/telemetry/launch-context', () => ({
 }))
 jest.mock('@/features/lab-data-report/utils/submit-lab-data-report', () => ({
   submitLabDataReport: jest.fn(),
+}))
+jest.mock('sonner', () => ({
+  toast: { loading: jest.fn(() => 'report-toast'), success: jest.fn(), error: jest.fn() },
 }))
 jest.mock('@/features/lab-data-report/utils/read-raw-lab-rows', () => ({
   importedBundleId: jest.fn(() => Promise.resolve('bundle-1')),
@@ -75,7 +79,14 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
   beforeEach(() => {
     ;(submitLabDataReport as jest.Mock).mockReset().mockResolvedValue({ ok: true, reportId: 'LDR-20260929-ABCDEF12' })
     ;(readRawLabRows as jest.Mock).mockReset()
+    ;(toast.success as jest.Mock).mockClear()
+    ;(toast.loading as jest.Mock).mockClear()
   })
+
+  const sent = async () => {
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    return (submitLabDataReport as jest.Mock).mock.calls[0][0]
+  }
 
   it('offers the raw rows ticked, reads them only on 送出, and says how many go', async () => {
     ;(readRawLabRows as jest.Mock).mockResolvedValue({ ok: true, extract, expiresAt: Date.now() + 60_000, producerVersion: '0.12.19' })
@@ -91,8 +102,7 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     expect(submitLabDataReport).not.toHaveBeenCalled()
 
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
-    expect(await screen.findByText('LDR-20260929-ABCDEF12')).toBeInTheDocument()
-    const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
+    const payload = await sent()
     expect(payload.rawSource).toEqual(expect.objectContaining({ producer: 'medcloud2', producerVersion: '0.12.19', s02Rows: 2 }))
     expect(payload.rawSource.rows.map((row: any) => row.fields.order_code)).toEqual(['08003C', '09005C'])
     // Same day axis as the converted rows: both are day 0.
@@ -109,8 +119,7 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     const confirm = await screen.findByRole('alertdialog')
     expect(within(confirm).getByText(/雲端病歷原始資料無法取得（雲端病歷分頁已關閉，或無法確認病人），這次只送轉換後的結果/)).toBeInTheDocument()
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
-    await screen.findByText('LDR-20260929-ABCDEF12')
-    const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
+    const payload = await sent()
     expect(payload.rawSource).toBeUndefined()
     expect(payload.rawSourceError).toBe('PATIENT_UNVERIFIED')
     expect(payload.rows).toHaveLength(1)
@@ -122,9 +131,8 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
     const confirm = await screen.findByRole('alertdialog')
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
-    await screen.findByText('LDR-20260929-ABCDEF12')
+    const payload = await sent()
     expect(readRawLabRows).not.toHaveBeenCalled()
-    const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
     expect(payload.rawSource).toBeUndefined()
     expect(payload.rawSourceError).toBeUndefined()
   })
@@ -136,8 +144,7 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
     const confirm = await screen.findByRole('alertdialog')
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
-    await screen.findByText('LDR-20260929-ABCDEF12')
-    const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
+    const payload = await sent()
     expect(payload.rawSource.rows[0].results).toEqual({})
     expect(payload.rawSource.rows[0].withheld).toEqual({ assay_value: 4 })
   })
@@ -152,11 +159,44 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
     const confirm = await screen.findByRole('alertdialog')
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
-    await screen.findByText('LDR-20260929-ABCDEF12')
+    expect(toast.loading).not.toHaveBeenCalledWith('讀取雲端病歷原始資料並送出回報中…')
+    const payload = await sent()
     expect(readRawLabRows).not.toHaveBeenCalled()
-    const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
     expect(payload.rawSource).toBeUndefined()
     expect(payload.rawSourceError).toBeUndefined()
+  })
+
+  it('opens the confirmation without waiting for the raw read, and sends it once read', async () => {
+    let finish: (value: unknown) => void = () => {}
+    ;(readRawLabRows as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const view = await renderDialog()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
+    const confirm = await screen.findByRole('alertdialog')
+    expect(within(confirm).getByText('另附雲端病歷原始檢驗列（正在讀取，可直接確定送出）')).toBeInTheDocument()
+    // 確定送出 at once: the dialog closes, the background waits for the read.
+    fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
+    expect(toast.loading).toHaveBeenCalledWith('讀取雲端病歷原始資料並送出回報中…')
+    expect(submitLabDataReport).not.toHaveBeenCalled()
+    // The read now belongs to the background send: closing does not abort it.
+    view.unmount()
+    expect((readRawLabRows as jest.Mock).mock.calls[0][1].signal.aborted).toBe(false)
+    await act(async () => { finish({ ok: true, extract, expiresAt: Date.now() + 60_000, producerVersion: '0.12.19' }) })
+    const payload = await sent()
+    expect(payload.rawSource.rows).toHaveLength(2)
+    expect(readRawLabRows).toHaveBeenCalledTimes(1)
+  })
+
+  it('abandons the raw read when the dialog closes before 確定送出', async () => {
+    ;(readRawLabRows as jest.Mock).mockReturnValue(new Promise(() => {}))
+    const view = await renderDialog()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
+    await screen.findByRole('alertdialog')
+    const { signal } = (readRawLabRows as jest.Mock).mock.calls[0][1]
+    expect(signal.aborted).toBe(false)
+    view.unmount()
+    expect(signal.aborted).toBe(true)
+    expect(toast.loading).not.toHaveBeenCalled()
+    expect(submitLabDataReport).not.toHaveBeenCalled()
   })
 
   it('previews the raw rows on request, before anything is sent', async () => {
