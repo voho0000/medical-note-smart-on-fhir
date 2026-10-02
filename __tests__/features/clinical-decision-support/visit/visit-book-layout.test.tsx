@@ -413,6 +413,21 @@ describe.each([
       expect(within(entry('DP-03')).getByRole('button', { name: /^III/ })).toHaveAttribute('aria-pressed', 'false')
     }))
 
+    it('a class graded yesterday is shown, not chosen; the same class today is recorded as today\'s and can be withdrawn (P9, #233 review)', () => atScenarioDay(() => {
+      useClinicVitalsStore.getState().setVitals(PATIENT, { nyhaClass: 'III' }, new Date('2026-09-26T10:00:00+08:00'))
+      render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+      const iii = () => within(entry('DP-03')).getByRole('button', { name: /^III/ })
+      expect(entry('DP-03')).toHaveTextContent('上次評估 NYHA III（09-26）')
+      expect(iii()).toHaveAttribute('aria-pressed', 'false')
+      fireEvent.click(iii())
+      expect(iii()).toHaveAttribute('aria-pressed', 'true')
+      expect(entry('DP-03')).not.toHaveTextContent('上次評估')
+      expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.nyhaClass).toMatchObject({ value: 'III', assessedOn: '2026-09-27' })
+      fireEvent.click(iii())
+      expect(iii()).toHaveAttribute('aria-pressed', 'false')
+      expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.nyhaClass).toBeUndefined()
+    }))
+
     it('DP-06 folds the other symptoms and signs: named folded, answered open, the rest none at once (P9)', () => atScenarioDay(() => {
       render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
       const dp06 = entry('DP-06')
