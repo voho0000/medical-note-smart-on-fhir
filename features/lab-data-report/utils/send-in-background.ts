@@ -53,8 +53,15 @@ export function sendLabDataReportInBackground(
   const pendingRaw = report.raw && report.raw.read instanceof Promise
   const id = toast.loading(pendingRaw ? strings.readingRaw : strings.sending)
 
+  // Every step updates the one toast `id`. Sonner closes a toast once its
+  // action button's onClick returns unless the click was preventDefault()ed,
+  // so both actions below prevent it: a retry has already turned this toast
+  // into its loading (or even its outcome) toast by then, and closing it
+  // would take the report id, or the next 重試, off the screen.
   const submit = async (payload: LabDataReportPayload): Promise<LabDataReportSubmitResult> => {
-    toast.loading(strings.sending, { id })
+    // An update keeps the fields it does not name: drop the failed attempt's
+    // 重試 so a pending retry cannot be pressed twice.
+    toast.loading(strings.sending, { id, action: undefined })
     const result = await submitLabDataReport(payload)
     if (result.ok) {
       toast.success(strings.successTitle, {
@@ -63,7 +70,12 @@ export function sendLabDataReportInBackground(
         duration: 12_000,
         action: {
           label: strings.copyId,
-          onClick: () => { void navigator.clipboard?.writeText(result.reportId).catch(() => undefined) },
+          // Copying leaves the id on screen: the clipboard can refuse it
+          // silently (no permission, an insecure context).
+          onClick: (event) => {
+            event.preventDefault()
+            void navigator.clipboard?.writeText(result.reportId).catch(() => undefined)
+          },
         },
       })
     } else {
@@ -72,7 +84,13 @@ export function sendLabDataReportInBackground(
       toast.error(strings.failure(result), {
         id,
         duration: Number.POSITIVE_INFINITY,
-        action: { label: strings.retry, onClick: () => { void submit(payload) } },
+        action: {
+          label: strings.retry,
+          onClick: (event) => {
+            event.preventDefault()
+            void submit(payload)
+          },
+        },
       })
     }
     return result

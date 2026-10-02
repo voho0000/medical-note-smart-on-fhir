@@ -51,11 +51,31 @@ describe('sendLabDataReportInBackground', () => {
     const [message, options] = (toast.error as jest.Mock).mock.calls[0]
     expect(message).toBe('failed')
     expect(options.duration).toBe(Number.POSITIVE_INFINITY)
-    await options.action.onClick()
+    // The retry keeps the toast it is about to reuse (sonner closes it
+    // otherwise), and the retry's loading step drops the spent 重試.
+    const retryClick = { preventDefault: jest.fn() }
+    await options.action.onClick(retryClick)
+    expect(retryClick.preventDefault).toHaveBeenCalled()
+    expect(toast.loading).toHaveBeenLastCalledWith('sending', { id: 't1', action: undefined })
     await Promise.resolve()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(submitLabDataReport).toHaveBeenCalledTimes(2)
     expect((submitLabDataReport as jest.Mock).mock.calls[1][0]).toBe((submitLabDataReport as jest.Mock).mock.calls[0][0])
     expect(toast.success).toHaveBeenCalledWith('done', expect.objectContaining({ description: 'id LDR-2' }))
+  })
+
+  it('copies the report id and leaves the toast up', async () => {
+    ;(submitLabDataReport as jest.Mock).mockResolvedValue({ ok: true, reportId: 'LDR-3' })
+    const writeText = jest.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    try {
+      await sendLabDataReportInBackground({ base }, strings)
+      const copyClick = { preventDefault: jest.fn() }
+      ;(toast.success as jest.Mock).mock.calls[0][1].action.onClick(copyClick)
+      expect(copyClick.preventDefault).toHaveBeenCalled()
+      expect(writeText).toHaveBeenCalledWith('LDR-3')
+    } finally {
+      delete (navigator as { clipboard?: unknown }).clipboard
+    }
   })
 })

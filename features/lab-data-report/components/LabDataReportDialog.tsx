@@ -156,9 +156,12 @@ export function LabDataReportDialog({
   const [includeRaw, setIncludeRaw] = useState(true)
   const [bundleId, setBundleId] = useState<string | null>(null)
   const [raw, setRaw] = useState<RawState>({ status: 'idle' })
-  const rawAbortRef = useRef<AbortController | null>(null)
-  /** The raw read in flight, so 確定送出 can hand it to the background send. */
-  const rawReadRef = useRef<Promise<RawLabRead> | null>(null)
+  /** The latest raw read and its abort. Closing the dialog before 確定送出
+   *  aborts it; 確定送出 hands it to the background send. It stays after it
+   *  settles (aborting a settled read does nothing), so a read that finished
+   *  just before 確定送出, ahead of its result reaching `raw`, is handed over
+   *  instead of being read a second time. */
+  const rawReadRef = useRef<{ controller: AbortController; read: Promise<RawLabRead> } | null>(null)
   /** Set once 確定送出 handed the report to the background: closing the
    *  dialog must then no longer abort its raw read. */
   const handedOffRef = useRef(false)
@@ -171,7 +174,7 @@ export function LabDataReportDialog({
     })
     return () => {
       cancelled = true
-      if (!handedOffRef.current) rawAbortRef.current?.abort()
+      if (!handedOffRef.current) rawReadRef.current?.controller.abort()
     }
   }, [])
 
@@ -212,7 +215,7 @@ export function LabDataReportDialog({
     if (!open) setRaw({ status: 'idle' })
   }
   useEffect(() => {
-    if (!open && !handedOffRef.current) rawAbortRef.current?.abort()
+    if (!open && !handedOffRef.current) rawReadRef.current?.controller.abort()
   }, [open])
   useEffect(() => {
     if (raw.status !== 'ready') return
@@ -226,15 +229,12 @@ export function LabDataReportDialog({
   /** Reads and narrows the raw capture; null when the read was abandoned. */
   const readRaw = async (): Promise<RawState | null> => {
     if (!bundleId) return null
-    rawAbortRef.current?.abort()
+    rawReadRef.current?.controller.abort()
     const controller = new AbortController()
-    rawAbortRef.current = controller
     setRaw({ status: 'reading' })
-    const reading = readRawLabRows(bundleId, { signal: controller.signal })
-    rawReadRef.current = reading
-    const result = await reading
-    if (rawReadRef.current === reading) rawReadRef.current = null
-    if (rawAbortRef.current === controller) rawAbortRef.current = null
+    const read = readRawLabRows(bundleId, { signal: controller.signal })
+    rawReadRef.current = { controller, read }
+    const result = await read
     if (!result.ok && result.code === 'ABORTED') return null
     const next: RawState = result.ok
       ? { status: 'ready', extract: result.extract, expiresAt: result.expiresAt, producerVersion: result.producerVersion }
@@ -295,8 +295,9 @@ export function LabDataReportDialog({
       } else if (raw.status === 'failed') {
         rawRead = { ok: false, code: raw.code }
       } else {
-        // Still reading (hand the read over) or never started (start it).
-        rawRead = rawReadRef.current ?? readRawLabRows(bundleId)
+        // Still reading, or done but not yet in `raw` (hand that read
+        // over), or never started (start it).
+        rawRead = rawReadRef.current?.read ?? readRawLabRows(bundleId)
       }
     }
     handedOffRef.current = true

@@ -151,7 +151,7 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
   it('opens the confirmation without waiting for the raw read, and sends it once read', async () => {
     let finish: (value: unknown) => void = () => {}
     ;(readRawLabRows as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve }))
-    await renderDialog()
+    const view = await renderDialog()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
     const confirm = await screen.findByRole('alertdialog')
     expect(within(confirm).getByText('另附雲端病歷原始檢驗列（正在讀取，可直接確定送出）')).toBeInTheDocument()
@@ -159,10 +159,26 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
     expect(toast.loading).toHaveBeenCalledWith('讀取雲端病歷原始資料並送出回報中…')
     expect(submitLabDataReport).not.toHaveBeenCalled()
+    // The read now belongs to the background send: closing does not abort it.
+    view.unmount()
+    expect((readRawLabRows as jest.Mock).mock.calls[0][1].signal.aborted).toBe(false)
     await act(async () => { finish({ ok: true, extract, expiresAt: Date.now() + 60_000, producerVersion: '0.12.19' }) })
     const payload = await sent()
     expect(payload.rawSource.rows).toHaveLength(2)
     expect(readRawLabRows).toHaveBeenCalledTimes(1)
+  })
+
+  it('abandons the raw read when the dialog closes before 確定送出', async () => {
+    ;(readRawLabRows as jest.Mock).mockReturnValue(new Promise(() => {}))
+    const view = await renderDialog()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
+    await screen.findByRole('alertdialog')
+    const { signal } = (readRawLabRows as jest.Mock).mock.calls[0][1]
+    expect(signal.aborted).toBe(false)
+    view.unmount()
+    expect(signal.aborted).toBe(true)
+    expect(toast.loading).not.toHaveBeenCalled()
+    expect(submitLabDataReport).not.toHaveBeenCalled()
   })
 
   it('previews the raw rows on request, before anything is sent', async () => {

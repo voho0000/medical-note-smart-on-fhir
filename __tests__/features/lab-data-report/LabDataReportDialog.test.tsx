@@ -165,7 +165,7 @@ describe('LabDataReportDialog', () => {
     const first = (submitLabDataReport as jest.Mock).mock.calls[0][0]
     expect(first.scope.flaggedCategories).toEqual(['urine'])
     // 重試 sends the very same report (the Function dedupes a resend).
-    await act(async () => { (toast.error as jest.Mock).mock.calls[0][1].action.onClick() })
+    await act(async () => { (toast.error as jest.Mock).mock.calls[0][1].action.onClick({ preventDefault: jest.fn() }) })
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
     expect((submitLabDataReport as jest.Mock).mock.calls[1][0]).toBe(first)
   })
