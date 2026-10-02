@@ -1,65 +1,45 @@
 // Dev harness: what a physician sees in the CDSS panel. Exposed as window.__cdssMeasure().
 
-// The decision map (layout `map`): the queue rows, the every-visit asks, the
-// map cells and the plan, read from the data-visit-* / data-dp attributes the
-// screen carries for exactly this. Null when the map is not on screen.
+// The decision map (決策地圖 v2): every point's entry with its mark in the map
+// rail, the every-visit asks and today's plan, read from the data-book-* /
+// data-visit-* attributes the page carries. Null when the map is not on screen.
 function measureVisit(panel, clean) {
   const screen = panel.querySelector('[data-testid="cdss-visit-screen"]')
   if (!screen) return null
   const y = (el) => Math.round(el.getBoundingClientRect().top + window.scrollY)
-  const queue = [...screen.querySelectorAll('[data-visit-queue-row]')].map((row) => {
-    const primary = row.querySelector('[data-visit-primary]')
+  const markOf = (dp) => screen.querySelector(`[data-book-map-dp="${dp}"]`)?.dataset.bookMark ?? null
+  const points = [...screen.querySelectorAll('[data-book-dp]')].map((entry) => {
+    const primary = entry.querySelector('[data-visit-primary]')
     return {
-      dp: row.dataset.visitQueueDp,
-      currentDp: row.dataset.visitCurrentDp || null,
-      state: row.dataset.visitQueueState,
-      decided: row.dataset.decided === 'true',
+      dp: entry.dataset.bookDp,
+      mark: markOf(entry.dataset.bookDp),
       primary: primary ? clean(primary.textContent) : null,
-      headline: clean(row.querySelector('[data-visit-headline]')?.textContent) || null,
-      why: clean(row.querySelector('[data-visit-why]')?.textContent) || null,
-      decidedText: clean(row.querySelector('[data-visit-decided]')?.textContent) || null,
-      y: y(row),
+      decidedText: clean(entry.querySelector('[data-visit-decided]')?.textContent) || null,
+      text: clean(entry.textContent).slice(0, 160),
+      y: y(entry),
     }
   })
-  const asks = [...screen.querySelectorAll('button[data-visit-ask]')].map((button) => ({
-    ask: button.dataset.visitAsk,
-    value: button.dataset.value,
-    label: clean(button.textContent),
-    pressed: button.getAttribute('aria-pressed') === 'true',
-    prefilled: button.dataset.prefilled === 'true',
-    y: y(button),
-  }))
-  const cells = [...screen.querySelectorAll('[data-testid="cdss-visit-map"] button[data-dp]')].map((cell) => ({
-    dp: cell.dataset.dp,
-    state: cell.dataset.state,
-    source: cell.dataset.source,
-    decided: cell.dataset.decided === 'true',
-    inQueue: cell.dataset.inQueue === 'true',
-    block: cell.closest('[data-block]')?.dataset.block ?? null,
-    text: clean(cell.textContent).slice(0, 120),
-  }))
-  const plan = screen.querySelector('[data-testid="cdss-visit-plan"]')
-  const asksDetail = screen.querySelector('[data-testid="cdss-visit-asks-detail"]')
+  const asks = [...screen.querySelectorAll('[data-book-ask]')].flatMap((row) => (
+    [...row.querySelectorAll('button[data-book-ask-option]')].map((button) => ({
+      ask: row.dataset.bookAsk,
+      value: button.dataset.bookAskOption,
+      label: clean(button.textContent),
+      pressed: button.getAttribute('aria-pressed') === 'true',
+      prefilled: button.dataset.prefilled === 'true',
+      y: y(button),
+    }))
+  ))
+  const plan = screen.querySelector('[data-testid="cdss-book-end"]')
   return {
     stage: screen.dataset.stage,
     pack: screen.dataset.pack,
     headline: clean(screen.querySelector('#cdss-visit-headline')?.textContent),
-    triggers: [...screen.querySelectorAll('[data-trigger]')].map((el) => clean(el.textContent)),
-    progress: clean(screen.querySelector('[data-testid="cdss-visit-progress"]')?.textContent) || null,
-    queue,
+    pending: clean(screen.querySelector('[data-testid="cdss-book-pending"]')?.textContent) || null,
+    points,
     asks,
-    cells,
-    foldedColumns: [...screen.querySelectorAll('[data-block][data-folded="true"]')].map((el) => el.dataset.block),
-    // DP-03's fuller questions under the asks: whether they opened, and why.
-    asksDetail: asksDetail ? {
-      open: asksDetail.open,
-      label: clean(asksDetail.querySelector('summary')?.textContent),
-      reason: clean(asksDetail.querySelector('[data-testid="cdss-visit-asks-detail-reason"]')?.textContent) || null,
-      y: y(asksDetail),
-    } : null,
     plan: plan ? {
-      returnVisit: clean(plan.querySelector('[data-testid="cdss-visit-plan-return"]')?.textContent) || null,
-      items: [...plan.querySelectorAll('[data-plan-item]')].map((el) => ({ dp: el.dataset.dp, text: clean(el.textContent) })),
+      text: clean(plan.textContent).slice(0, 600),
+      waiting: clean(plan.querySelector('[data-testid="cdss-book-plan-waiting"]')?.textContent) || null,
     } : null,
     timings: typeof window.__cdssDecisionTimings === 'function' ? window.__cdssDecisionTimings() : [],
   }

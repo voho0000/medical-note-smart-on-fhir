@@ -31,11 +31,12 @@ describe('guidance layout preference', () => {
     expect(defaultLayoutFor('some-future-pack')).toBe('sections')
   })
 
-  it('offers only the decision map, 決策地圖 v2 and 三區塊 (lipid: 三區塊 and 健保表一)', () => {
+  it('offers only 決策地圖 v2 and 三區塊 (lipid: 三區塊 and 健保表一)', () => {
     // `flow`, `board`, `c` and `classic` stay in the type and in the view for
     // what still reads them; none is a face a pilot user can be sent back to.
-    expect(CDSS_SWITCHABLE_LAYOUTS).toEqual(['map', 'book', 'sections'])
-    expect(AF_SWITCHABLE_LAYOUTS).toEqual(['map', 'book', 'sections'])
+    // The first decision map is retired: `map` draws v2 (owner, 2026-10-01).
+    expect(CDSS_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections'])
+    expect(AF_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections'])
     expect(LIPID_SWITCHABLE_LAYOUTS).toEqual(['sections', 'nhi'])
   })
 
@@ -56,6 +57,16 @@ describe('guidance layout preference', () => {
     localStorage.removeItem(CDSS_LAYOUT_STORAGE_KEY)
     useCdssLayoutStore.persist.rehydrate()
     expect(useCdssLayoutStore.getState().layout).toBeNull()
+  })
+
+  it('reads a browser that stored 決策地圖 v2 (`book`) as the decision map, which v2 now is', () => {
+    localStorage.setItem(CDSS_LAYOUT_STORAGE_KEY, JSON.stringify({ state: { layout: 'book' }, version: 0 }))
+    useCdssLayoutStore.persist.rehydrate()
+    expect(useCdssLayoutStore.getState().layout).toBe('map')
+
+    localStorage.setItem(CDSS_LAYOUT_STORAGE_KEY, JSON.stringify({ state: { layout: 'map' }, version: 0 }))
+    useCdssLayoutStore.persist.rehydrate()
+    expect(useCdssLayoutStore.getState().layout).toBe('map')
   })
 
   it('reads a browser that stored the retired direction C as three sections', () => {

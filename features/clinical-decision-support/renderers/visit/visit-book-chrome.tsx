@@ -3,9 +3,11 @@
 import { createContext, type ReactNode } from 'react'
 
 /**
- * What the page around the CDSS lends the pocket-handbook page (`?visit=book`),
- * which draws its own header over the whole window: the disease tabs, so the
- * clinician switches page there as on the prototype.
+ * What the page around the CDSS lends the decision map (決策地圖 v2, the
+ * pocket-handbook page). Over the whole window (`?visit=book`, or 全螢幕 from
+ * the panel) it draws its own header, and the disease tabs go into it, so the
+ * clinician switches page there as on the prototype. Without one it stays in
+ * the panel, unless the address asks for the whole window.
  */
 export interface VisitBookChrome {
   tabs?: ReactNode
@@ -23,7 +25,7 @@ export interface VisitBookChrome {
 
 export const VisitBookChromeContext = createContext<VisitBookChrome | null>(null)
 
-/** Whether this page was opened as the pocket-handbook experiment (`?visit=book`). */
+/** Whether this page was opened with the decision map over the whole window (`?visit=book`). */
 export function isVisitBookMode(): boolean {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('visit') === 'book'
 }
