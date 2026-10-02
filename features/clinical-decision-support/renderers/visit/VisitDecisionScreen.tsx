@@ -33,7 +33,7 @@ import type {
   VisitAsk,
   VisitDecisionModel,
 } from '../../types'
-import { BookAsks } from './BookAsks'
+import { BookAsks, examAsksOf } from './BookAsks'
 import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookMark } from './VisitBookLayout'
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
@@ -68,6 +68,12 @@ export interface VisitDecisionScreenProps {
    * withdraws it.
    */
   onPointAnswer?: (answers: string, id: string, value: boolean | undefined, terms?: readonly string[]) => void
+  /**
+   * Writes what the clinician grades today beside the asks (the pack's
+   * `examAsks`: HF's NYHA) where the host keeps the clinic examination;
+   * `null` withdraws it.
+   */
+  onGrade?: (id: string, value: string | null) => void
 }
 
 /**
@@ -95,6 +101,7 @@ export function VisitDecisionScreen({
   modules,
   onPhysicianInput,
   onPointAnswer,
+  onGrade,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -182,6 +189,8 @@ export function VisitDecisionScreen({
       onAnswer={onAnswer}
       pagePackId={model.packId}
       {...(answerSources ? { sources: answerSources } : {})}
+      examAsks={examAsksOf(model)}
+      {...(onGrade ? { onGrade } : {})}
     />
   )
   // A point answered in its classification table (HF DP-01's phenotype).
