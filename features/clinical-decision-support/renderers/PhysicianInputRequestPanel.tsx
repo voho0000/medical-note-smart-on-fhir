@@ -64,6 +64,10 @@ function HfSuspicionRequest({
   const selected = (answer?.diagnosis ? diagnosisOptionOf(answer) : undefined)
     ?? request.recordedOptionId
     ?? answer?.hfSuspicion
+  // A lone choice (HFrEF where the LVEF rules HFpEF out) is a press to
+  // answer, not a radio with nothing beside it: the circle hides, the choice
+  // reads as the button it is and ticks once chosen.
+  const lone = request.options?.length === 1
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="mb-1.5 text-xs font-semibold text-foreground">
@@ -83,16 +87,19 @@ function HfSuspicionRequest({
                 'focus-within:ring-2 focus-within:ring-ring',
                 isSelected
                   ? 'border-primary bg-primary/[0.06] text-foreground'
-                  : 'border-border bg-card text-foreground hover:bg-muted/40',
+                  : lone
+                    ? 'border-primary/60 bg-card text-primary shadow-sm hover:bg-primary/[0.06]'
+                    : 'border-border bg-card text-foreground hover:bg-muted/40',
               )}
             >
+              {lone && isSelected ? <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" /> : null}
               <input
                 id={inputId}
                 type="radio"
                 name={groupId}
                 value={option.id}
                 checked={isSelected}
-                className="h-3.5 w-3.5 shrink-0 accent-primary"
+                className={lone ? 'sr-only' : 'h-3.5 w-3.5 shrink-0 accent-primary'}
                 onChange={() => {
                   const next = diagnosisAnswer(option.id, answer, now)
                   if (next) onAnswer(next)

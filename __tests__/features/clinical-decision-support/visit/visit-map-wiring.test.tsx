@@ -69,17 +69,26 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
     visitModel?: { packId: string }
     companionResults?: readonly { packId: string }[]
     onVisitAnswer?: (id: string, value: string | null) => void
-  }) => (
-    <div
-      data-testid="mock-cdss-result"
-      data-pack={result.packId}
-      data-layout={layout}
-      data-model={visitModel?.packId ?? ''}
-      data-companion={(companionResults ?? []).map((companion) => companion.packId).join(',')}
-    >
-      <button type="button" onClick={() => onVisitAnswer?.('dyspnoea-trend', 'worse')}>answer</button>
-    </div>
-  ),
+  }) => {
+    // The handbook page reads its chrome from the context the host lends it.
+    const { useContext } = jest.requireActual<typeof import('react')>('react')
+    const { VisitBookChromeContext } = jest.requireActual<typeof import('@/features/clinical-decision-support/renderers/visit/visit-book-chrome')>('@/features/clinical-decision-support/renderers/visit/visit-book-chrome')
+    const bookChrome = useContext(VisitBookChromeContext)
+    return (
+      <div
+        data-testid="mock-cdss-result"
+        data-pack={result.packId}
+        data-layout={layout}
+        data-book={bookChrome ? (bookChrome.inline ? 'inline' : 'window') : 'no'}
+        data-model={visitModel?.packId ?? ''}
+        data-companion={(companionResults ?? []).map((companion) => companion.packId).join(',')}
+      >
+        <button type="button" onClick={() => onVisitAnswer?.('dyspnoea-trend', 'worse')}>answer</button>
+        {bookChrome?.onExpand ? <button type="button" onClick={bookChrome.onExpand}>expand book</button> : null}
+        {bookChrome?.onCollapse ? <button type="button" onClick={bookChrome.onCollapse}>collapse book</button> : null}
+      </div>
+    )
+  },
 }))
 
 const ICD10 = 'http://hl7.org/fhir/sid/icd-10-cm'
@@ -148,10 +157,14 @@ describe('decision map wiring', () => {
     expect(input.companions?.['atrial-fibrillation-cdss']?.packId).toBe('atrial-fibrillation-cdss')
     expect(input.locale).toBe('zh-TW')
 
+    // The map is 決策地圖 v2, in this panel; the first decision map is gone
+    // (owner, 2026-10-01: 「原本的決策地圖就可以整個拿掉了，留著v2跟三區塊」).
+    expect(view()).toHaveAttribute('data-book', 'inline')
     expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveTextContent('決策地圖')
+    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveTextContent('決策地圖 v2')
     expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
-    for (const retired of ['flow', 'board']) {
+    expect(screen.getByTestId('cdss-layout-switch').querySelectorAll('button')).toHaveLength(2)
+    for (const retired of ['flow', 'board', 'book']) {
       expect(screen.queryByTestId(`cdss-layout-switch-${retired}`)).not.toBeInTheDocument()
     }
     // Nothing in the header is hidden by the map: the module counts stay.
@@ -171,10 +184,48 @@ describe('decision map wiring', () => {
     expect(view()).toHaveAttribute('data-layout', 'map')
   })
 
+  it('switches between 決策地圖 v2, beside the patient\'s record, and the three sections', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
+    expect(useCdssLayoutStore.getState().layout).toBe('sections')
+    expect(view()).toHaveAttribute('data-layout', 'sections')
+    expect(view()).toHaveAttribute('data-book', 'no')
+
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-map'))
+    expect(useCdssLayoutStore.getState().layout).toBe('map')
+    expect(view()).toHaveAttribute('data-layout', 'map')
+    expect(view()).toHaveAttribute('data-model', 'heart-failure-cdss')
+    // Beside the patient's record, under this header's own switches.
+    expect(view()).toHaveAttribute('data-book', 'inline')
+    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('opens 決策地圖 v2 for a browser that chose it while it sat beside the first map', () => {
+    window.localStorage.setItem('cdss-layout-preference', JSON.stringify({ state: { layout: 'book' }, version: 0 }))
+    useCdssLayoutStore.persist.rehydrate()
+    render(<LiveClinicalDecisionSupportFeature />)
+    expect(useCdssLayoutStore.getState().layout).toBe('map')
+    expect(view()).toHaveAttribute('data-layout', 'map')
+    expect(view()).toHaveAttribute('data-book', 'inline')
+  })
+
+  it('opens 決策地圖 v2 over the whole window from the panel, and returns to the panel', () => {
+    useCdssLayoutStore.setState({ layout: 'map' })
+    render(<LiveClinicalDecisionSupportFeature />)
+    expect(view()).toHaveAttribute('data-book', 'inline')
+    fireEvent.click(screen.getByRole('button', { name: 'expand book' }))
+    // The same page, over the window with its own disease tabs; the stored layout stays the map.
+    expect(view()).toHaveAttribute('data-book', 'window')
+    expect(useCdssLayoutStore.getState().layout).toBe('map')
+    fireEvent.click(screen.getByRole('button', { name: 'collapse book' }))
+    expect(view()).toHaveAttribute('data-book', 'inline')
+  })
+
   it('falls back to three sections, and stops offering the map, when the model cannot be built', () => {
     mockBuildVisitModel.mockReturnValue(undefined)
     render(<LiveClinicalDecisionSupportFeature />)
     expect(view()).toHaveAttribute('data-layout', 'sections')
+    expect(view()).toHaveAttribute('data-book', 'no')
     expect(screen.queryByTestId('cdss-layout-switch-map')).not.toBeInTheDocument()
     expect(screen.getByTestId('cdss-layout-switch-sections')).toHaveAttribute('aria-pressed', 'true')
   })

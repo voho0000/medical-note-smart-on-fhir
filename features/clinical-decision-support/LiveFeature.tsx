@@ -21,6 +21,7 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
+import { VisitBookChromeContext, isVisitBookMode } from './renderers/visit/visit-book-chrome'
 import {
   useNhiLipidReview,
   useNhiLipidReviewProvenance,
@@ -30,6 +31,7 @@ import { selectNhiLipidAiCriteria } from './ai/nhi-lipid-ai-assist'
 import { useNhiLipidAiAssist } from './hooks/use-nhi-lipid-ai-assist.hook'
 import {
   useEvidenceOverrides,
+  useEvidenceOverridesHydrated,
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
 import {
@@ -149,7 +151,9 @@ function DiseaseSwitcher({
       className="flex flex-wrap items-center gap-2"
       data-testid="cdss-disease-switch"
     >
-      <span className="text-xs font-medium text-muted-foreground">
+      {/* The switch itself names the diseases, and dims the ones this record
+          does not activate; the count is read out, not printed. */}
+      <span className="sr-only">
         {isEnglish
           ? `Disease (${applicablePackIds.size} applicable)`
           : `疾病（${applicablePackIds.size} 項適用）`}
@@ -230,11 +234,12 @@ function LayoutSwitcher({
 }) {
   const isEnglish = locale === 'en'
   const labels: Record<'map' | 'sections' | 'nhi', { label: string; title: string }> = {
+    // The first decision map was retired on 2026-10-01; v2 kept its name.
     map: {
-      label: isEnglish ? 'Decision map' : '決策地圖',
+      label: isEnglish ? 'Decision map v2' : '決策地圖 v2',
       title: isEnglish
-        ? "Today's decisions first, then the three sections as the map's three columns"
-        : '今天要決定的事在最上面；三區塊就是地圖的三欄',
+        ? 'The decision map as a pocket-handbook page: the map on the left, each point once on the right'
+        : '口袋手冊版面：左邊決策地圖，右邊每個決策點寫一次',
     },
     sections: {
       label: isEnglish ? 'Three sections' : '三區塊',
@@ -256,7 +261,7 @@ function LayoutSwitcher({
   const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
-      <span className="text-xs font-medium text-muted-foreground">
+      <span className="sr-only">
         {isEnglish ? 'View' : '畫面'}
       </span>
       <div
@@ -306,6 +311,10 @@ export default function LiveClinicalDecisionSupportFeature({
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
+  // `?visit=book` opens the decision map over the whole window, where the map is the layout.
+  const [urlBookMode] = useState(isVisitBookMode)
+  // 決策地圖 v2 opened over the whole window from the panel; a new page load opens it in the panel.
+  const [bookFullWindow, setBookFullWindow] = useState(false)
   const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
@@ -365,10 +374,11 @@ export default function LiveClinicalDecisionSupportFeature({
     usePhenotypeAnswerHydrated(patientId),
     useVisitAnswersHydrated(patientId),
     useAfAnswersHydrated(patientId),
+    useEvidenceOverridesHydrated(patientId),
   ].every(Boolean)
 
-  // The switches this physician set on this chart survive a reload, so they are
-  // read back before the pack runs rather than after.
+  // The switches this physician set on this chart survive a reload of the tab,
+  // so they are read back before the cards are shown rather than after.
   useEffect(() => {
     if (patientId) hydrateEvidenceOverrides(patientId)
   }, [hydrateEvidenceOverrides, patientId])
@@ -438,8 +448,12 @@ export default function LiveClinicalDecisionSupportFeature({
   // follows what the physician left standing. Nothing patches a rendered card.
   // The vitals measured in the room travel the same way: as facts on the
   // profile, so every module that reads them recomputes.
+  // Nothing answer-dependent is built until every answer has been read back:
+  // the loading state hides it anyway, and a pack run on the record's defaults
+  // while the answers decrypt would be thrown away when they land. The record
+  // half above does not wait; it needs no answer, and is ready when they are.
   const answeredProfile = useMemo(() => (
-    recordProfile
+    recordProfile && answersHydrated
       ? { ...applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
@@ -459,7 +473,7 @@ export default function LiveClinicalDecisionSupportFeature({
         ),
       }
       : null
-  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
+  ), [afAnswers, answersHydrated, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -688,15 +702,17 @@ export default function LiveClinicalDecisionSupportFeature({
   // The switch offers the map wherever the package can build one; only a map
   // that was asked for and could not be built is withdrawn from it.
   const mapOffered = hasVisitMap(result.packId) && (!wantsMap || mapAvailable)
-  const effectiveLayout: CdssLayout = result.packId === LIPID_PACK_ID
-    ? preferredLayout === 'flow' || preferredLayout === 'map' ? 'sections' : preferredLayout
-    : preferredLayout === 'nhi' || (preferredLayout === 'map' && !mapAvailable) ? 'sections' : preferredLayout
+  const prefersMap = preferredLayout === 'map'
+  const chosenLayout: CdssLayout = result.packId === LIPID_PACK_ID
+    ? preferredLayout === 'flow' || prefersMap ? 'sections' : preferredLayout
+    : preferredLayout === 'nhi' || (prefersMap && !mapAvailable) ? 'sections' : preferredLayout
+  const effectiveLayout: CdssLayout = chosenLayout
   const isMap = effectiveLayout === 'map'
   const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
   const isNhiTable = effectiveLayout === 'nhi' && result.packId === LIPID_PACK_ID
   // Atrial fibrillation has two faces: the map, and its own three-section flow,
   // which is what every other stored layout has always shown there.
-  const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : effectiveLayout
+  const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : chosenLayout
   const showLayoutSwitcher = result.packId === HEART_FAILURE_PACK_ID
     || result.packId === LIPID_PACK_ID
     || mapOffered
@@ -734,13 +750,14 @@ export default function LiveClinicalDecisionSupportFeature({
           ? `Clinical rules ${result.packVersion}`
           : `臨床規則版本 ${result.packVersion}`}
       >
-        {/* One line: the title, the disease and the layout side by side, so
-            the page's own content starts near the top (clinician feedback
-            2026-09-28: 「集中一行，不然資訊都一半的頁高才出現」). */}
-        <h2 className="shrink-0 truncate text-base font-semibold tracking-tight text-foreground">
+        {/* One line: the disease and the layout, so the page's own content
+            starts near the top (clinician feedback 2026-09-28: 「集中一行，不然
+            資訊都一半的頁高才出現」). The selected disease names the page; the
+            title is read out, not printed (owner feedback 2026-09-30). */}
+        <h2 className="sr-only">
           {result.title}
         </h2>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 [&>[data-testid=cdss-layout-switch]]:ml-auto">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}
@@ -770,9 +787,9 @@ export default function LiveClinicalDecisionSupportFeature({
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
             </Button>
           ) : null}
-          {/* The map's 今天要決定 says what needs the clinician, item by item;
-              these two counts would repeat it less exactly, so the map leaves
-              them out. */}
+          {/* The map's 今天待決定 and its rail say what needs the clinician,
+              point by point; these two counts would repeat it less exactly,
+              so the map leaves them out. */}
           {isMap ? null : (
             <div className="flex shrink-0 items-center gap-1.5">
               <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
@@ -790,13 +807,33 @@ export default function LiveClinicalDecisionSupportFeature({
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy
         button for it sits beside the one for this visit's summary.
       */}
-      {/* The map carries the handoff at its foot, beside the visit summary. */}
+      {/* The decision map draws no handoff card (owner decision 2026-09-30,
+          docs/LAUNCH-ROUTE-GATES.md); the three sections carry it. */}
       {result.clinicalHandoff && !isVisitFlow && !isNhiTable && !isMap ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
+      {/* The decision map (決策地圖 v2, the pocket-handbook page) stays in this
+          panel, under the header above. Opened by `?visit=book`, or 全螢幕
+          from the panel, it draws its own header over the whole window, and
+          the disease tabs go into it. */}
+      <VisitBookChromeContext.Provider value={!isMap ? null : !urlBookMode && !bookFullWindow ? {
+        inline: true,
+        onExpand: () => setBookFullWindow(true),
+      } : {
+        tabs: (
+          <DiseaseSwitcher
+            locale={cdssLocale}
+            packs={guidelinePacks}
+            applicablePackIds={applicablePackIds}
+            selectedPackId={selectedPack.id}
+            onSelect={setRequestedPackId}
+          />
+        ),
+        // Opened from the panel, it goes back there; opened by `?visit=book`, it leaves by its link.
+        ...(urlBookMode ? {} : { onCollapse: () => setBookFullWindow(false) }),
+      }}>
       <ClinicalDecisionSupportView
-        calculatorAutofill={autofill}
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}
@@ -838,8 +875,9 @@ export default function LiveClinicalDecisionSupportFeature({
           ? (id, value) => answerVisitAsk(patientId, id, value, undefined, { packId: result.packId })
           : undefined}
       />
+      </VisitBookChromeContext.Provider>
       </PreventReadingContext.Provider>
-      {/* On the map, the reset sits at the foot, after the summary: it clears
+      {/* On the map, the reset sits at the foot, after today's plan: it clears
           every answer and decision on the page, and has no business beside
           the first things a clinician reads. */}
       {isMap && patientId ? (

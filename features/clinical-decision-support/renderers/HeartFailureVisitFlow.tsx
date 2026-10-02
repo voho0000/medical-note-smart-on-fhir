@@ -49,8 +49,6 @@ import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { EchoReportButton } from './EchoReportButton'
-import { HeartRhythmInline } from './HeartRhythmPanel'
-import { displayDate } from './visit/VisitStatusHeader'
 import { RecordMetricEditor } from './RecordMetricEditor'
 import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
 import { DiagnosisReading } from './DiagnosisReading'
@@ -440,244 +438,6 @@ function useRecordValueEditing({
   return { editingMetric, setEditingMetric, recordValuesOpen, setRecordValuesOpen, allEditableMetrics, saveMetrics, saveMetric }
 }
 
-/** Letters and digits only, lower-cased: `ntProBnp`, `NTproBNP` and `nt-probnp` are one key. */
-function metricKeyOf(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
-/** A question's name in one or two words, for a line that lists what is still open. */
-const QUESTION_SHORT_NAMES: Partial<Record<VisitQuestionId, [string, string]>> = {
-  symptoms: ['症狀', 'Symptoms'],
-  signs: ['徵象', 'Signs'],
-  nyha: ['NYHA', 'NYHA'],
-  compensation: ['代償狀態', 'Compensation'],
-  'hf-suspicion': ['診斷', 'Diagnosis'],
-}
-
-/** What the decision map places from the heart-failure page's own surfaces. */
-export interface HeartFailureMapSurfaceSlots {
-  /** Opens the clinical-values editor with every value. */
-  editValues?: () => void
-  /** Opens the editor for one value, by the key the status line printed it under. */
-  editValue?: (key: string) => void
-  /** 本次評估 without the diagnostic questions: symptoms, signs, NYHA, compensation. */
-  followUpQuestions: ReactNode
-  /** How many of those questions are still open. */
-  followUpOpenCount: number
-  /** Their short names, in order (症狀、徵象、NYHA、代償). */
-  followUpPendingLabels: readonly string[]
-  /**
-   * Physician-input requests the follow-up questions ask themselves — 懷疑
-   * HF？ before a diagnosis, as their question 1 — so the map does not list
-   * the same question again in 今天要決定.
-   */
-  followUpRequests: readonly string[]
-  /** The chief-complaint and weight follow-up, once the diagnosis is established. */
-  followUpPriorities?: ReactNode
-  /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
-  diagnosticAssessment: ReactNode
-  /**
-   * What the map's status line adds beside the pack's values: the rhythm, the
-   * record's other values (Na, Hb, SpO₂, BMI) and what it lacks, given the
-   * keys the line already shows so none is printed twice.
-   */
-  statusExtras: (shownKeys: readonly string[]) => ReactNode
-  /** The echo report, opened from LVEF on the status line. */
-  lvefReport?: ReactNode
-  /** The care timeline, where the record has one. */
-  careTimeline?: ReactNode
-}
-
-/**
- * The heart-failure page's input surfaces, for the decision map to place.
- *
- * These are the same components the visit flow and the three sections draw —
- * the clinical-values editor, 本次評估 split into its follow-up and diagnostic
- * halves, the diagnosis confirmation, the HFpEF calculator, the rhythm panel
- * and the care timeline — over the same stores. The map decides where each
- * sits; nothing here is new clinical content. The dialogs are rendered once,
- * here, whichever slot opened them.
- */
-export function HeartFailureMapSurfaces({
-  flow,
-  board,
-  isEnglish,
-  now,
-  recommendations,
-  clinicVitals,
-  onSaveClinicVitals,
-  phenotypeAnswer,
-  onAnswerPhenotype,
-  hfpefReading,
-  onSaveHfpefInputs,
-  followUpHistory,
-  assessmentAsksSuspicion = false,
-  children,
-}: {
-  flow: VisitFlowModel
-  board: HeartFailureBoardModel
-  isEnglish: boolean
-  now: Date
-  /**
-   * Before a diagnosis (the model carries no every-visit asks) 懷疑 HF？ is the
-   * assessment's question 1; once the pack is following a diagnosis it stays
-   * with the diagnosis points' cards.
-   */
-  assessmentAsksSuspicion?: boolean
-  /** The pack's modules, for the diagnosis context the confirmation reads. */
-  recommendations: readonly CdssRecommendation[]
-  clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
-  phenotypeAnswer?: PhenotypeAnswer
-  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
-  hfpefReading?: HfpefReading
-  onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
-  /** Unused on the map: the rhythm sits on the status line (HeartRhythmInline). */
-  rhythmPanel?: ReactNode
-  followUpHistory?: HfFollowUpHistory
-  children: (slots: HeartFailureMapSurfaceSlots) => ReactNode
-}) {
-  const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
-  const [calculatorOpen, setCalculatorOpen] = useState(false)
-  const editing = useRecordValueEditing({ flow, isEnglish, now, clinicVitals, onSaveClinicVitals, phenotypeAnswer, onAnswerPhenotype, onSaveHfpefInputs })
-  const diagnosisContext = recommendations.map(diagnosisContextOf).find(Boolean)
-  const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
-  const diagnosticIds: VisitQuestionId[] = ['hf-suspicion', 'lvef-phenotype', 'hfpef-confirmation']
-  // Before a diagnosis the whole diagnostic step is one card, and it asks only
-  // what the diagnosis needs, renumbered in reasoning order: HFrEF 還是
-  // HFpEF？ first — one press for a clinician already sure — and, on 「還不確定」,
-  // the HFpEF criteria under it, then symptoms → signs. The verdict is
-  // question 1 again, which stays open while it reads 「還不確定」: no separate
-  // 「確認 HFpEF」 at the foot (clinician feedback 2026-09-28: 「症狀填一填覺得
-  // 是 HFpEF 直接回填第一題就好了」). NYHA and compensation grade a diagnosis
-  // rather than make one, so they wait for 追蹤; questions still locked behind
-  // question 1 are not drawn at all.
-  // After a diagnosis the follow-up questions and the diagnostic ones part.
-  const subset = (questions: VisitQuestion[], renumber = false): VisitFlowModel => ({
-    ...flow,
-    questions: renumber ? questions.map((question, index) => ({ ...question, number: String(index + 1) })) : questions,
-    openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length,
-  })
-  const inDiagnosisCard = (question: VisitQuestion) => question.state !== 'locked'
-    && question.id !== 'nyha' && question.id !== 'compensation' && question.id !== 'hfpef-confirmation'
-  const followUpFlow = assessmentAsksSuspicion
-    ? subset(flow.questions.filter(inDiagnosisCard), true)
-    : subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)), true)
-  const diagnosticFlow = subset(assessmentAsksSuspicion ? [] : flow.questions.filter((question) => diagnosticIds.includes(question.id)))
-  const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
-  const questionsCard = (questionFlow: VisitFlowModel) => (
-    <QuestionsCard
-      flow={questionFlow} isEnglish={isEnglish} now={now} clinicVitals={clinicVitals}
-      onSaveClinicVitals={onSaveClinicVitals} phenotypeAnswer={phenotypeAnswer}
-      onAnswerPhenotype={onAnswerPhenotype} board={board} hfpefReading={hfpefReading}
-      onOpenCalculator={openCalculator}
-      compact
-      // HFrEF 還是 HFpEF？ is DP-01's question (DP-00 folded into it).
-      diagnosisPoint={{ dp: 'DP-01', label: isEnglish ? 'Diagnosis and phenotype' : '確診與分型' }}
-    />
-  )
-  const canEdit = Boolean(onSaveClinicVitals)
-  const lvefMetric = editing.allEditableMetrics.find((metric) => metric.factKey === 'LVEF')
-  // The physician-input requests the map's own questions ask, so a decision
-  // point whose answer is one of them is not asked again beside them.
-  const askedRequests = flow.questions.flatMap((question) => (
-    question.id === 'hf-suspicion' ? ['hf-suspicion'] : question.id === 'hfpef-confirmation' ? ['hfpef-diagnosis-confirmation'] : []
-  ))
-  const asksHfpef = flow.questions.some((question) => question.id === 'hfpef-confirmation')
-  // A diagnosis the record carries (an I50 code), not one written by a
-  // confirmation on this page.
-  const recordHoldsDiagnosis = !phenotypeAnswer?.diagnosisConfirmation && recommendations
-    .some((recommendation) => recommendation.patientEvidence.some((evidence) => evidence.factKeys.includes('heartFailureDiagnosis')))
-  const slots: HeartFailureMapSurfaceSlots = {
-    ...(canEdit ? {
-      editValues: () => editing.setRecordValuesOpen(true),
-      editValue: (key: string) => {
-        const metric = editing.allEditableMetrics.find((candidate) => metricKeyOf(candidate.factKey) === metricKeyOf(key))
-        if (metric) editing.setEditingMetric(metric)
-        else editing.setRecordValuesOpen(true)
-      },
-    } : {}),
-    followUpQuestions: followUpFlow.questions.length ? questionsCard(followUpFlow) : null,
-    followUpOpenCount: followUpFlow.openQuestionCount,
-    followUpPendingLabels: followUpFlow.questions
-      .filter((question) => question.counted && question.state === 'open')
-      .map((question) => QUESTION_SHORT_NAMES[question.id]?.[isEnglish ? 1 : 0] ?? question.label),
-    followUpRequests: askedRequests,
-    followUpPriorities: followUp ? (
-      <HfFollowUpPriorities
-        history={followUpHistory}
-        vitals={clinicVitals}
-        onSave={flow.readOnly ? undefined : onSaveClinicVitals}
-        now={now}
-        isEnglish={isEnglish}
-        onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })}
-        // The map asks 喘 and 體重 at the top of the screen; do not ask them again here.
-        trendAsksElsewhere
-      />
-    ) : undefined,
-    diagnosticAssessment: (
-      <div className="space-y-2" data-testid="cdss-visit-hf-diagnostic-assessment">
-        {/* One confirmation: where question 1 asks the diagnosis, or the HFpEF
-            question stands beside its criteria, that answer is it. And none
-            where the record already holds the diagnosis (clinician feedback
-            2026-09-28: 「補記診斷確認紀錄你覺得有需要留嗎？」): the pack reads
-            the code already, a confirmation beside it writes nothing, and
-            DP-01 names the diagnosis. It stays only where it changes the
-            page — HFrEF opened on an LVEF below 50% with no I50 on record,
-            whose every card carries the 「無診斷紀錄」 caveat until then. */}
-        {!asksHfpef && !flow.questions.some((question) => question.id === 'hf-suspicion') && !recordHoldsDiagnosis ? <HfDiagnosisConfirmation
-          answer={phenotypeAnswer}
-          onConfirm={flow.readOnly ? undefined : onAnswerPhenotype}
-          now={now}
-          isEnglish={isEnglish}
-          followUp={followUp}
-          basis={diagnosisContext?.basis ?? (isEnglish ? 'Heart failure; phenotype requires review of diagnostic evidence.' : '心衰竭；分型請參照診斷依據。')}
-        /> : null}
-        {diagnosticFlow.questions.length ? questionsCard(diagnosticFlow) : null}
-      </div>
-    ),
-    statusExtras: (shownKeys) => (
-      <HfStatusExtras
-        metrics={editing.allEditableMetrics}
-        shownKeys={shownKeys}
-        isEnglish={isEnglish}
-        now={now}
-        rhythm={hfpefReading?.inputs.find((input) => input.key === 'rhythm')}
-        {...(canEdit ? { onEditValue: (key: string) => {
-          const metric = editing.allEditableMetrics.find((candidate) => candidate.factKey === key)
-          if (metric) editing.setEditingMetric(metric)
-          else editing.setRecordValuesOpen(true)
-        } } : {})}
-      />
-    ),
-    ...(lvefMetric?.value ? { lvefReport: <EchoReportButton variant="link" metric={lvefMetric} isEnglish={isEnglish} /> } : {}),
-    ...(board.timeline ? { careTimeline: <CareTimeline timeline={board.timeline} isEnglish={isEnglish} /> } : {}),
-  }
-  return (
-    <>
-      {children(slots)}
-      {editing.editingMetric ? <RecordMetricEditor key={editing.editingMetric.factKey} metric={editing.editingMetric} isEnglish={isEnglish} now={now}
-        onSave={(values, date) => editing.saveMetric(editing.editingMetric!, values, date)}
-        onRestore={() => editing.saveMetric(editing.editingMetric!, null, todayIsoDate(now))}
-        onClose={() => editing.setEditingMetric(null)} /> : null}
-      {editing.recordValuesOpen ? <RecordValuesEditor rhythm={hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value} onSaveRhythm={onSaveHfpefInputs} metrics={editing.allEditableMetrics} isEnglish={isEnglish} now={now}
-        onSave={editing.saveMetrics} onClose={() => editing.setRecordValuesOpen(false)} /> : null}
-      {hfpefReading && onSaveHfpefInputs ? (
-        <HfpefInputsDialog
-          key={`${calculatorTab}-${calculatorOpen}`}
-          initialTab={calculatorTab}
-          open={calculatorOpen}
-          onOpenChange={setCalculatorOpen}
-          reading={hfpefReading}
-          isEnglish={isEnglish}
-          now={now}
-          onApply={onSaveHfpefInputs}
-        />
-      ) : null}
-    </>
-  )
-}
-
 /**
  * The row that would order an NT-proBNP, where the pack raised one.
  *
@@ -847,80 +607,6 @@ function metricSourceLine(
   }
   if (!day) return undefined
   return day
-}
-
-/**
- * The map's status line, continued: the rhythm, then the record's values the
- * pack's line does not carry (Na, Hb, SpO₂, BMI), then one 「未取得」 for what
- * the record lacks — each a way into the editor where the page can edit. In
- * the line's own grammar, so the values sit in one compact place instead of a
- * second grid at 01's foot (clinician feedback 2026-09-28: 「跟最上面整合吧…
- * 我傾向最上面這種最不佔空間的擺法」).
- */
-function HfStatusExtras({
-  metrics,
-  shownKeys,
-  isEnglish,
-  now,
-  rhythm,
-  onEditValue,
-}: {
-  metrics: readonly HeartFailureMetric[]
-  shownKeys: readonly string[]
-  isEnglish: boolean
-  now: Date
-  rhythm?: HfpefReading['inputs'][number]
-  onEditValue?: (factKey: string) => void
-}) {
-  const shown = new Set(shownKeys)
-  const weight = Number.parseFloat(metrics.find((item) => item.factKey === 'bodyWeight')?.value ?? '')
-  const height = Number.parseFloat(metrics.find((item) => item.factKey === 'bodyHeight')?.value ?? '')
-  const bmi = Number.isFinite(weight) && weight > 0 && Number.isFinite(height) && height > 0
-    ? (weight / (height / 100) ** 2).toFixed(1)
-    : undefined
-  const rest = metrics
-    .filter((metric) => !shown.has(metric.factKey) && metric.factKey !== 'LVEF')
-    .map((metric) => metric.factKey === 'bodyHeight'
-      ? { metric, label: 'BMI', value: bmi, date: undefined }
-      : { metric, label: metric.label, value: metric.value, date: metric.date })
-  const present = rest.filter((item) => item.value !== undefined)
-  const missing = rest.filter((item) => item.value === undefined)
-  const sep = isEnglish ? ', ' : '、'
-  return (
-    <>
-      <HeartRhythmInline isEnglish={isEnglish} {...(rhythm ? { reading: rhythm } : {})} dateLabel={(date) => displayDate(date, now)} />
-      {present.map(({ metric, label, value, date }) => (
-        <div key={metric.factKey} className="flex items-baseline gap-1.5" data-key={metric.factKey} data-testid={`cdss-status-extra-${metric.factKey}`}>
-          <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
-          {displayDate(date, now) ? <dd className="text-xs tabular-nums text-muted-foreground">{displayDate(date, now)}</dd> : null}
-        </div>
-      ))}
-      {missing.length ? (
-        <div className="flex items-baseline gap-1.5" data-testid="cdss-status-missing">
-          <dt className="text-xs text-muted-foreground">{isEnglish ? 'Not in record' : '未取得'}</dt>
-          <dd className="text-xs text-muted-foreground">
-            {missing.map(({ metric, label }, index) => (
-              <span key={metric.factKey}>
-                {index > 0 ? sep : ''}
-                {onEditValue ? (
-                  <button
-                    type="button"
-                    className="inline-flex min-h-8 items-center rounded px-0.5 underline decoration-dotted underline-offset-4 hover:bg-muted pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() => onEditValue(metric.factKey === 'bodyHeight' ? 'bodyHeight' : metric.factKey)}
-                    aria-label={`${isEnglish ? 'Add' : '補填'} ${label}`}
-                    data-visit-edit-value={metric.factKey}
-                  >
-                    {label}
-                  </button>
-                ) : label}
-              </span>
-            ))}
-          </dd>
-        </div>
-      ) : null}
-    </>
-  )
 }
 
 function RecordCard({
@@ -1670,6 +1356,13 @@ function QuestionsCard({
   const pointQuestion = compact && diagnosisPoint
     ? flow.questions.find((question) => question.id === 'hf-suspicion')
     : undefined
+  // Once HFpEF is the answer, what it rests on stays one press away under it:
+  // DP-34 「HFpEF 證實」 says its criteria open in 01, and a diagnosis nobody
+  // can re-read is one nobody can audit. Folded — the question is settled.
+  const hfpEfAnswered = phenotypeAnswer?.diagnosis
+    ? phenotypeAnswer.diagnosis === 'hfpEF'
+    : pointQuestion?.request?.recordedOptionId === 'hfpef'
+  const evidenceUnderAnswer = Boolean(pointQuestion && !shows(pointQuestion) && hfpEfAnswered && diagnosisSummary && diagnosisCard)
   // Drawn as DP-01, the diagnosis leaves the card; what stays numbers from 1.
   const listed = pointQuestion
     ? flow.questions.filter((question) => question !== pointQuestion).map((question, index) => ({ ...question, number: String(index + 1) }))
@@ -1702,6 +1395,22 @@ function QuestionsCard({
               {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
             />
           </div>
+        ) : undefined}
+        record={evidenceUnderAnswer && diagnosisSummary && diagnosisCard ? (
+          <HfpEfEvidenceFold summary={diagnosisSummary} isEnglish={isEnglish}>
+            <HfpEfCriteriaList
+              summary={diagnosisSummary}
+              card={diagnosisCard}
+              isEnglish={isEnglish}
+              symptomsHint={isEnglish ? 'record them under Follow-up' : '可在「追蹤」補記'}
+            />
+            <HfpEfScoreLine
+              compact
+              reading={hfpefReading}
+              isEnglish={isEnglish}
+              {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+            />
+          </HfpEfEvidenceFold>
         ) : undefined}
       />
     ) : null}
@@ -2007,6 +1716,7 @@ function MapDiagnosisPoint({
   onEdit,
   onCollapse,
   evidence,
+  record,
 }: {
   question: VisitQuestion
   point: { dp: string; label: string }
@@ -2019,6 +1729,8 @@ function MapDiagnosisPoint({
   /** Closes an answer reopened by 修改 without changing it. */
   onCollapse?: () => void
   evidence?: ReactNode
+  /** What the answer rests on, folded under it once it is given. */
+  record?: ReactNode
 }) {
   const ask = question.label.replace(/^診斷：|^Diagnosis:\s*/, '')
   const state: DecisionPointState = !open ? 'done' : question.state === 'answered' ? 'confirm' : 'act'
@@ -2078,7 +1790,34 @@ function MapDiagnosisPoint({
         </div>
       ) : null}
       {open && evidence ? <div className="mt-2 border-t border-border/60 pt-2">{evidence}</div> : null}
+      {!open && record ? <div className="mt-1.5">{record}</div> : null}
     </div>
+  )
+}
+
+/**
+ * The HFpEF criteria and scores under an answered 「HFpEF」, folded: its line
+ * says how many criteria hold, and DP-34 — the confirmation it answers — is
+ * where a press on that point lands and opens it.
+ */
+function HfpEfEvidenceFold({ summary, isEnglish, children }: {
+  summary: DiagnosticSummary
+  isEnglish: boolean
+  children: ReactNode
+}) {
+  const met = summary.criteria.filter((criterion) => criterion.state === 'met').length
+  return (
+    <details className="group rounded-md border border-border/60" data-dp="DP-34" data-testid="cdss-hf-hfpef-evidence-fold">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 px-2 text-xs font-medium text-foreground pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <span className="font-mono text-[11px] font-semibold text-muted-foreground">DP-34</span>
+        <span>{isEnglish ? 'HFpEF criteria' : 'HFpEF 診斷依據'}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {isEnglish ? `${met}/${summary.criteria.length} met` : `${met}/${summary.criteria.length} 成立`}
+        </span>
+        <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="space-y-1.5 border-t border-border/60 px-2 pb-2 pt-1.5">{children}</div>
+    </details>
   )
 }
 

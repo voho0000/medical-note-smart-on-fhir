@@ -1,9 +1,10 @@
 /**
  * Where every CDSS store keeps what the clinician said about a patient.
  *
- * Six stores hold answers about one person's chart — the every-visit asks,
+ * Seven stores hold answers about one person's chart — the every-visit asks,
  * the clinic vitals and signs, the AF page's structured answers, the HF
- * phenotype gate, the HFpEF inputs, and the physician's decisions. Each keeps
+ * phenotype gate, the HFpEF inputs, the physician's decisions, and the
+ * evidence rows the physician switched on or off. Each keeps
  * its own shape and its own validation; none of them decides where its data
  * lives. That is this file's one job, so the day answers are carried to the
  * next visit, one backing is replaced here and every store follows.
@@ -36,10 +37,15 @@ export type PatientAnswerKind =
   | 'phenotype-answer'
   | 'hfpef-inputs'
   | 'physician-decisions'
+  | 'evidence-overrides'
 
 /**
  * The key prefix each kind has always been stored under. Unchanged, so what an
  * open tab already holds is read back as before.
+ *
+ * The evidence-row switches are the one exception: they used to be kept as
+ * plaintext under `cdss-evidence-overrides:`, so their sealed copy has a prefix
+ * of its own, and the store removes whatever is left under the old one.
  */
 const STORAGE_PREFIXES: Readonly<Record<PatientAnswerKind, string>> = {
   'visit-answers': 'cdss-visit-answers:',
@@ -48,6 +54,7 @@ const STORAGE_PREFIXES: Readonly<Record<PatientAnswerKind, string>> = {
   'phenotype-answer': 'cdss-phenotype-answer:',
   'hfpef-inputs': 'cdss-hfpef-inputs:',
   'physician-decisions': 'cdss-physician-decisions:',
+  'evidence-overrides': 'cdss-evidence-row-overrides:',
 }
 
 /** The browser key one patient's answers of one kind are kept under. */

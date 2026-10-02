@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/src/shared/utils/cn.utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { tr } from '../types'
 import { CALCULATORS } from '../calculators'
@@ -38,23 +37,11 @@ const CHIP = 'inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded bg
  * others open their data checklist and references, and say their formula is
  * not connected yet.
  */
-/** A host's one-line row frame (the decision map's 一行式): the models then sit in its columns. */
-export interface PrognosisRowClasses {
-  list: string
-  row: string
-  lead: string
-  state: string
-  main: string
-  link: string
-}
-
-export function HfPrognosisModels({ locale, evidence = {}, autofill, rowClasses }: {
+export function HfPrognosisModels({ locale, evidence = {}, autofill }: {
   locale: string
   evidence?: PrognosisEvidence
   /** The page's patient data, for a linked calculator's result or empty inputs on its row. */
   autofill?: Autofill
-  /** Draw the models in the host's row columns, one frame split by hairlines, rather than a box each. */
-  rowClasses?: PrognosisRowClasses
 }) {
   const [selected, setSelected] = useState<HfPrognosisModelId | null>(null)
   const { isFavorite, toggleFavorite } = useCalcFavorites()
@@ -66,7 +53,7 @@ export function HfPrognosisModels({ locale, evidence = {}, autofill, rowClasses 
   const calcOf = (calculatorId: string | undefined) => (calculatorId ? CALCULATORS.find((calc) => calc.id === calculatorId) : undefined)
   const selectedCalc = calcOf(model?.calculatorId)
   return <div data-testid="hf-prognosis-models" className="min-w-0 space-y-1.5">
-    <ul className={rowClasses ? rowClasses.list : 'space-y-1.5'}>
+    <ul className="space-y-1.5">
       {models.map(item => {
         const calc = calcOf(item.calculatorId)
         const computed = calc && autofill ? computeAutofilledResult(calc, autofill) : null
@@ -94,20 +81,6 @@ export function HfPrognosisModels({ locale, evidence = {}, autofill, rowClasses 
           {calc ? (en ? 'Calculator' : '計算機') : (en ? 'Data & references' : '資料與引用')}
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </>
-        if (rowClasses) return <li key={item.id} className="min-w-0" data-testid={`hf-prognosis-model-${item.id}`}>
-          <button
-            type="button"
-            onClick={() => setSelected(item.id)}
-            title={title}
-            className={cn(rowClasses.row, 'hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring')}
-            data-testid={`open-prognosis-calculator-${item.id}`}
-          >
-            <span className={cn(rowClasses.lead, 'truncate text-sm font-medium text-foreground')}>{rowName(item.name)}</span>
-            <span className={rowClasses.state}>{status}</span>
-            <span className={cn(rowClasses.main, 'truncate text-sm text-foreground')}>{tr(locale, item.outcome)}</span>
-            <span className={cn(rowClasses.link, 'gap-0.5 text-xs font-medium text-primary')}>{opens}</span>
-          </button>
-        </li>
         return <li key={item.id} className="min-w-0" data-testid={`hf-prognosis-model-${item.id}`}>
           <button
             type="button"

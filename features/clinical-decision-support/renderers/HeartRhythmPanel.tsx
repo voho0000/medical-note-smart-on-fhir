@@ -25,24 +25,6 @@ function useRhythmReading(isEnglish: boolean, reading?: HfpefInputReading) {
   return { label, shownDate, report, reportMetric, documented: Boolean(report || override) }
 }
 
-/**
- * The rhythm as one entry of the map's status line (「心律 Sinus rhythm 09-20
- * 報告」), in the line's own grammar, so the values the decisions read sit in
- * one place (clinician feedback 2026-09-28: 「跟最上面整合…最不佔空間的擺法」).
- */
-export function HeartRhythmInline({ isEnglish, reading, dateLabel }: { isEnglish: boolean; reading?: HfpefInputReading; dateLabel: (date: string | undefined) => string | undefined }) {
-  const { label, shownDate, reportMetric, documented } = useRhythmReading(isEnglish, reading)
-  if (!documented) return null
-  return (
-    <div className="flex items-baseline gap-1.5" data-key="rhythm" data-testid="cdss-status-rhythm">
-      <dt className="text-xs text-muted-foreground">{isEnglish ? 'Rhythm' : '心律'}</dt>
-      <dd className="font-semibold text-foreground">{label}</dd>
-      {dateLabel(shownDate) ? <dd className="text-xs tabular-nums text-muted-foreground">{dateLabel(shownDate)}</dd> : null}
-      {reportMetric ? <dd><EchoReportButton ecg variant="link" isEnglish={isEnglish} metric={reportMetric} /></dd> : null}
-    </div>
-  )
-}
-
 export function HeartRhythmPanel({ isEnglish, reading }: { isEnglish: boolean; reading?: HfpefInputReading; onSave?: (patch: HfpefInputsPatch) => void }) {
   const { label, shownDate, report, reportMetric } = useRhythmReading(isEnglish, reading)
   return <>

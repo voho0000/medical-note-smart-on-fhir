@@ -2,6 +2,7 @@ import {
   DEMO_CLINICAL_INSIGHT_GENERATION,
   DEMO_MEDICAL_SUMMARY_GENERATION,
   DEMO_SAFETY_SCAN_GENERATION,
+  DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY,
   demoClinicalInsightSnapshots,
   demoMedicalSummarySnapshots,
   demoSafetyScanSnapshots,
@@ -21,6 +22,8 @@ import {
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { enrichBundleWithNhiDrugTerminology } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
 import {
+  ALL_DATA_FILTERS,
+  ALL_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
   DEFAULT_DATA_SELECTION,
 } from '@/src/shared/constants/data-selection.constants'
@@ -330,4 +333,84 @@ describe('demo medical-summary snapshots', () => {
         .toBe(remappedDocumentProblem?.sourceKeys[0])
     },
   )
+})
+
+describe('demo snapshot citation keys', () => {
+  const citedKeys = () => {
+    const cited = new Set<string>()
+    const walk = (value: unknown, field?: string): void => {
+      if (Array.isArray(value)) {
+        if (field === 'sources' || field === 'sourceKeys') {
+          value.forEach((item) => { if (typeof item === 'string') cited.add(item) })
+          return
+        }
+        value.forEach((item) => walk(item, field))
+        return
+      }
+      if (value && typeof value === 'object') {
+        Object.entries(value).forEach(([key, item]) => walk(item, key))
+        return
+      }
+      if ((field === 'ref' || field === 'source') && typeof value === 'string') cited.add(value)
+    }
+    for (const locale of ['zh-TW', 'en'] as const) {
+      for (const audience of ['medical', 'patient'] as const) {
+        walk(demoMedicalSummarySnapshots[locale][audience])
+        walk(demoSafetyScanSnapshots[locale][audience])
+      }
+    }
+    return [...cited].filter((key) => /^[A-Z]+\d+$/.test(key)).sort()
+  }
+
+  const demoCollection = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const enriched = await enrichBundleWithNhiDrugTerminology(bundle)
+    return LocalBundleService.parse(enriched.bundle)!.collection
+  }
+
+  it('pins every cited key to a stable resource id', () => {
+    // An unpinned key keeps its raw catalog position, so appending records to
+    // the demo silently points it at a newer resource of the same type.
+    expect(citedKeys().filter((key) => !DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key])).toEqual([])
+  })
+
+  it.each(['default', 'all-data'] as const)(
+    'resolves every cited key to its own record in the %s demo scope',
+    async (scope) => {
+      // The demo loads with the whole record selected (it is small enough),
+      // while a retained 初診 selection gives the default scope. Both must map
+      // each citation back to the resource it was written against.
+      const collection = await demoCollection()
+      const documents = listClinicalDocuments(collection)
+      const scoped = scope === 'default'
+        ? scopeClinicalDataForAi(
+            collection,
+            DEFAULT_DATA_SELECTION,
+            DEFAULT_DATA_FILTERS,
+            resolveSelectedDocuments(documents, 'latestAdmission', []).map((document) => document.id),
+            DEMO_DATA_AS_OF_MS,
+          )
+        : scopeClinicalDataForAi(
+            collection,
+            ALL_DATA_SELECTION,
+            ALL_DATA_FILTERS,
+            documents.map((document) => document.id),
+            DEMO_DATA_AS_OF_MS,
+          )
+      const catalog = getSourceCatalog(scoped, 'zh-TW')
+      const resolved = citedKeys().map((key) => {
+        const remapped = remapDemoSnapshotSourceKeys({ sources: [key] }, catalog).sources[0]
+        return [key, catalog.find((source) => source.key === remapped)?.resourceId]
+      })
+      expect(resolved).toEqual(citedKeys().map((key) => [key, DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key]]))
+    },
+  )
+
+  it('leaves a citation unresolved rather than reusing a renumbered key', () => {
+    const [key, resourceId] = Object.entries(DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY)[0]
+    const catalog = [{ key, resourceId: `${resourceId}-other`, resourceType: 'MedicationRequest', display: 'other' }] as any
+    const remapped = remapDemoSnapshotSourceKeys({ sources: [key] }, catalog).sources[0]
+    expect(catalog.some((source: { key: string }) => source.key === remapped)).toBe(false)
+  })
 })
