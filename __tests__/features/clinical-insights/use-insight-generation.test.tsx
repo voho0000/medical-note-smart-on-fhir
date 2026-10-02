@@ -253,6 +253,12 @@ describe("useInsightGeneration provenance", () => {
         contextAdaptation: null,
         inputSignature: "input-icd",
       }))
+    const pendingDownload = () => {
+      let finish!: (value: typeof crosswalk) => void
+      mockLoadIcdCrosswalk.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+      return (value: typeof crosswalk) => finish(value)
+    }
+
     beforeEach(() => {
       mockQuery.mockResolvedValue("generated summary")
       mockLoadIcdCrosswalk.mockResolvedValue(crosswalk)
@@ -293,6 +299,66 @@ describe("useInsightGeneration provenance", () => {
       expect(mockBuildMessages.mock.calls[0][0]).not.toHaveProperty("icdCodeReference")
       expect(useInsightResponsesStore.getState().responses.soap?.text).toBe("generated summary")
       warn.mockRestore()
+    })
+
+    it("sends nothing for a patient who was switched away during the crosswalk download", async () => {
+      const finishDownload = pendingDownload()
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block")
+      let generation!: Promise<void>
+      act(() => { generation = result.current.runPanel("soap", { force: true }) })
+      expect(useInsightResponsesStore.getState().panelStatus.soap).toMatchObject({ isLoading: true })
+
+      // ClinicalInsightsRuntimeProvider's patient switch: stopAll, then a new owner.
+      act(() => {
+        result.current.stopAll()
+        useInsightResponsesStore.getState().resetForPatient("patient-2")
+      })
+      await act(async () => {
+        finishDownload(crosswalk)
+        await generation
+      })
+
+      expect(mockBuildMessages).not.toHaveBeenCalled()
+      expect(mockQuery).not.toHaveBeenCalled()
+      expect(useInsightResponsesStore.getState().ownerPatientId).toBe("patient-2")
+      expect(useInsightResponsesStore.getState().responses).toEqual({})
+      expect(useInsightResponsesStore.getState().panelStatus).toEqual({})
+    })
+
+    it("sends nothing when the run is stopped during the crosswalk download", async () => {
+      const finishDownload = pendingDownload()
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block")
+      let generation!: Promise<void>
+      act(() => { generation = result.current.runPanel("soap", { force: true }) })
+
+      act(() => { result.current.stopPanel("soap") })
+      await act(async () => {
+        finishDownload(crosswalk)
+        await generation
+      })
+
+      expect(mockQuery).not.toHaveBeenCalled()
+      expect(useInsightResponsesStore.getState().panelStatus.soap).toEqual({ isLoading: false, error: null })
+      expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
+    })
+
+    it("lets only the newer batch query when a second batch starts during the download", async () => {
+      const finishDownload = pendingDownload()
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block", undefined, ["soap", "plan"])
+      let first!: Promise<void>
+      let second!: Promise<void>
+      act(() => { first = result.current.runPanel("soap", { force: true }) })
+      act(() => { second = result.current.runPanel("plan", { force: true }) })
+      await act(async () => {
+        finishDownload(crosswalk)
+        await Promise.all([first, second])
+      })
+
+      expect(mockQuery).toHaveBeenCalledTimes(1)
+      expect(mockQuery.mock.calls[0][1]).toMatchObject({ operationKey: "clinical-insight:patient-1:plan" })
+      expect(useInsightResponsesStore.getState().responses.plan?.text).toBe("generated summary")
+      expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
+      expect(useInsightResponsesStore.getState().panelStatus.soap).toEqual({ isLoading: false, error: null })
     })
   })
 })

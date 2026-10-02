@@ -87,24 +87,7 @@ export function useInsightGeneration({
     async (panelIds: string[], options?: { force?: boolean }) => {
       const force = options?.force ?? false
       const uniquePanelIds = [...new Set(panelIds)]
-      const promptFor = (panelId: string) =>
-        prompts[panelId] ?? panels.find((item) => item.id === panelId)?.prompt ?? ''
-      // Local models given an ICD-9 template (HMC SOAP) but only ICD-10 billing
-      // codes enumerate ICD-9 codes from memory until truncation. Translate
-      // the billed codes instead; see icd-code-reference.utils.ts.
-      let icdCodeReference = ''
-      if (
-        isCustomOpenAiModelId(model) &&
-        uniquePanelIds.some((panelId) => templateRequestsIcd9(promptFor(panelId))) &&
-        extractBilledIcd10Codes(context).size > 0
-      ) {
-        try {
-          icdCodeReference = buildIcdCodeReference(context, await loadIcdCrosswalk())
-        } catch (error) {
-          console.warn('ICD code reference unavailable; generating without it.', error)
-        }
-      }
-      const prepared = uniquePanelIds.flatMap((panelId) => {
+      const selected = uniquePanelIds.flatMap((panelId) => {
         const panel = panels.find((item) => item.id === panelId)
         if (!panel) return []
 
@@ -121,16 +104,15 @@ export function useInsightGeneration({
           locale: locale === 'zh-TW' ? 'zh-TW' as const : 'en' as const,
           outputFormat: panel.outputFormat,
           languagePolicy: panel.languagePolicy,
-          ...(icdCodeReference && templateRequestsIcd9(promptFor(panelId)) ? { icdCodeReference } : {}),
         }
         const validation = generateInsight.validate(input)
         if (!validation.valid) {
           console.warn(`Validation failed: ${validation.error}`)
           return []
         }
-        return [{ panel, messages: generateInsight.buildMessages(input) }]
+        return [{ panel, input }]
       })
-      if (prepared.length === 0) return
+      if (selected.length === 0) return
       if (contextAdaptation) {
         toast.info(
           formatClinicalContextAdaptationNotice(contextAdaptation, locale),
@@ -149,10 +131,13 @@ export function useInsightGeneration({
       const owner = useInsightResponsesStore.getState().ownerPatientId
       const ownerChanged = () => useInsightResponsesStore.getState().ownerPatientId !== owner
       // Custom summaries are intentionally single-batch. Starting another run
-      // cancels the prior transport and invalidates every pending write.
+      // cancels the prior transport and invalidates every pending write. The
+      // run is claimed before anything is awaited, so a stop, a patient switch
+      // or a newer batch during the first await is never overwritten by it.
       ai.stop()
       const runId = ++runIdRef.current
-      const activePanelIds = prepared.map(({ panel }) => panel.id)
+      const isStale = () => runIdRef.current !== runId || ownerChanged()
+      const activePanelIds = selected.map(({ panel }) => panel.id)
       useAiExecutionDiagnosticsStore.getState().clearFeature('clinical-insights')
 
       // Keep any previous complete result in place while regenerating. For a
@@ -170,6 +155,31 @@ export function useInsightGeneration({
         ),
       }))
 
+      // Local models given an ICD-9 template (HMC SOAP) but only ICD-10 billing
+      // codes enumerate ICD-9 codes from memory until truncation. Translate
+      // the billed codes instead; see icd-code-reference.utils.ts.
+      let icdCodeReference = ''
+      if (
+        isCustomOpenAiModelId(model) &&
+        selected.some(({ input }) => templateRequestsIcd9(input.prompt)) &&
+        extractBilledIcd10Codes(context).size > 0
+      ) {
+        try {
+          icdCodeReference = buildIcdCodeReference(context, await loadIcdCrosswalk())
+        } catch (error) {
+          console.warn('ICD code reference unavailable; generating without it.', error)
+        }
+        // The first use downloads the crosswalk. This run may have been
+        // stopped, superseded or left behind by a patient switch meanwhile.
+        if (isStale()) return
+      }
+      const prepared = selected.map(({ panel, input }) => ({
+        panel,
+        messages: generateInsight.buildMessages(
+          icdCodeReference && templateRequestsIcd9(input.prompt) ? { ...input, icdCodeReference } : input,
+        ),
+      }))
+
       const entries: Record<string, ResponseEntry> = {}
       const errors: Record<string, Error> = {}
 
@@ -177,7 +187,7 @@ export function useInsightGeneration({
       // but stage every completed result locally. completeBatch publishes the
       // whole set through one store update only after the final call settles.
       for (const { panel, messages } of prepared) {
-        if (runIdRef.current !== runId || ownerChanged()) return
+        if (isStale()) return
         const startedAt = Date.now()
         const activeGenerationId = `${runId}:${panel.id}`
         setPanelStatus((prev) => ({
@@ -221,7 +231,7 @@ export function useInsightGeneration({
             operationKey: `clinical-insight:${owner}:${panel.id}`,
             diagnosticFeature: 'clinical-insights',
           })
-          if (runIdRef.current !== runId || ownerChanged()) return
+          if (isStale()) return
           const generatedAt = Date.now()
           entries[panel.id] = {
             text: fullText,
@@ -239,14 +249,14 @@ export function useInsightGeneration({
             },
           }
         } catch (error) {
-          if (runIdRef.current !== runId || ownerChanged()) return
+          if (isStale()) return
           const errorMessage = getUserErrorMessage(error)
           console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
           // No text is available for this failure; keep its original type for
           // the localized error message instead of publishing an empty result.
           errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
         } finally {
-          if (runIdRef.current === runId && !ownerChanged()) {
+          if (!isStale()) {
             setPanelStatus((prev) => {
               const status = prev[panel.id]
               if (status?.activeGeneration?.id !== activeGenerationId) return prev
@@ -259,7 +269,7 @@ export function useInsightGeneration({
         }
       }
 
-      if (runIdRef.current !== runId || ownerChanged()) return
+      if (isStale()) return
       completeBatch(activePanelIds, entries, errors)
     },
     [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, modelName, panels, piiLiterals, prompts, setPanelStatus],
