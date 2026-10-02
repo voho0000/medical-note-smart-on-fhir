@@ -1,6 +1,6 @@
 /**
  * An anticoagulant known only from an unconfirmed hospital prescription, from
- * the imported bundle to the AF decision map — the old map and 決策地圖 v2.
+ * the imported bundle to the AF decision map (決策地圖 v2; the first map is retired).
  *
  * Safety checks read the prescription as possible exposure (an earlier review
  * of this policy: never 「未使用口服抗凝」, never a second OAC offered); the map
@@ -227,16 +227,16 @@ describe('applyHospitalMedicationVisitReview', () => {
   })
 })
 
-describe('the AF decision maps with an unconfirmed hospital apixaban order', () => {
+describe('決策地圖 v2 with an unconfirmed hospital apixaban order', () => {
   beforeAll(() => {
     Element.prototype.scrollIntoView = jest.fn()
   })
   afterEach(() => window.history.pushState({}, '', '/'))
 
-  function Page({ medications, v2 }: { medications: readonly Medication[]; v2: boolean }) {
+  function Page({ medications }: { medications: readonly Medication[] }) {
     const { result, model, profile } = afPage(medications)
     return (
-      <VisitBookChromeContext.Provider value={v2 ? { inline: true } : null}>
+      <VisitBookChromeContext.Provider value={{ inline: true }}>
         <ClinicalDecisionSupportView
           result={result}
           locale="zh-TW"
@@ -248,20 +248,11 @@ describe('the AF decision maps with an unconfirmed hospital apixaban order', () 
       </VisitBookChromeContext.Provider>
     )
   }
-  const tile = () => document.querySelector<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp="DP-07"][data-source="af"]')!
   const bookEntry = () => document.querySelector<HTMLElement>('[data-book-dp="DP-07"]')!
   const bookMapLine = () => document.querySelector<HTMLElement>('[data-book-map-dp="DP-07"]')!
 
-  it('shows DP-07 待核對 on the old map, never 「已抗凝／已定」', () => {
-    render(<Page medications={[unconfirmed('unknown')]} v2={false} />)
-    expect(tile()).toHaveAttribute('data-state', 'info')
-    expect(tile()).toHaveAttribute('title', expect.stringContaining('apixaban 5 mg bid：使用待核對'))
-    expect(tile()).not.toHaveTextContent('已定')
-    expect(document.body).not.toHaveTextContent('已抗凝')
-  })
-
-  it('shows DP-07 and its CHA₂DS₂-VA 待核對 on 決策地圖 v2, never 「已定」 or 「已在用」', () => {
-    render(<Page medications={[unconfirmed('unknown')]} v2 />)
+  it.each(['unknown', 'active'] as const)('shows DP-07 and its CHA₂DS₂-VA 待核對 for a %s order, never 「已定」 or 「已在用」', (status) => {
+    render(<Page medications={[unconfirmed(status)]} />)
     expect(bookMapLine()).toHaveAttribute('data-book-mark', 'info')
     expect(bookEntry()).toHaveAttribute('data-book-mark', 'info')
     expect(bookMapLine()).not.toHaveTextContent('已定')
@@ -276,12 +267,8 @@ describe('the AF decision maps with an unconfirmed hospital apixaban order', () 
     expect(within(bookEntry()).queryByRole('button', { name: /開始抗凝/ })).toBeNull()
   })
 
-  it('still settles DP-07 for a confirmed MedicationStatement on both maps', () => {
-    const old = render(<Page medications={[confirmedStatement]} v2={false} />)
-    expect(tile()).toHaveAttribute('data-state', 'done')
-    expect(tile()).toHaveTextContent('已定')
-    old.unmount()
-    render(<Page medications={[confirmedStatement]} v2 />)
+  it('still settles DP-07 for a confirmed MedicationStatement', () => {
+    render(<Page medications={[confirmedStatement]} />)
     expect(bookEntry()).toHaveAttribute('data-book-mark', 'done')
     expect(bookEntry()).toHaveTextContent('已定')
     expect(within(bookEntry()).getByTestId('cdss-book-score')).toHaveTextContent('≥2 建議抗凝 · 已在用')
