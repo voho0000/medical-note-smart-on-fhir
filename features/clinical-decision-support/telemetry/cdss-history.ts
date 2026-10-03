@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { isCollectorSite } from '@/src/application/telemetry/collector'
-import { captureCollectorAuth } from '@/src/application/telemetry/cdss-auth'
+import { fhirAccessToken } from './fhir-auth'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
 import { cdssPatientIdentity } from './patient-identity'
 import { cdssEndpoint } from './cdss-gateway'
@@ -22,9 +22,7 @@ async function request(patient: PatientEntity, path: string, saveId: string | un
   if (!url || !isCollectorSite()) throw new Error('cdss_history_unavailable')
   const identity = await cdssPatientIdentity(patient)
   const key = { site: 'vghtpe' as const, patient_key_version: 1 as const, patient_key_sha256: identity.patient_key_sha256 }
-  const pilot = process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot'
-  const token = pilot ? null : await (await captureCollectorAuth())?.getToken()
-  if (!pilot && !token) throw new Error('cdss_auth_unavailable')
+  const token = await fhirAccessToken()
   if (signal.aborted || !isCollectorSite()) throw new Error('cdss_site_changed')
   const response = await fetch(url, { method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },

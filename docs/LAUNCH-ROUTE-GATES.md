@@ -150,6 +150,8 @@ AF is listed alongside HF and lipid in the HMC host, including production builds
 
 ## Optional private integrations (all routes)
 
+2026-10-04，使用者授權新增獨立FHIR/OAuth。site=vghtpe 的有效CDSS結果保留人工儲存／歷史控制；oauth2設定額外提供「登入 FHIR 授權／斷開 FHIR 授權」。其餘臨床surface與既有Beta／院別規則保留，FHIR不經Gateway；詳見CDSS-FHIR-PILOT.md。
+
 | Surface | Behaviour | Owner decision |
 |---|---|---|
 | CDSS「個人化照護指引」與 CDSS 試辦 pack 控制，在 `/`、`/app/`、`/app-hmc/` 及各啟動參數 | Build without the complete CDSS package group: omit the tab and pack controls. With the packages installed: retain all existing Beta, audience and hospital-launch rules. Main clinical reports, AI summary, calculators and FHIR imports remain available. | Explicit owner clarification in chat, 2026-09-30 |

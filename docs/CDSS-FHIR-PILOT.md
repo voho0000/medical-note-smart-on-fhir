@@ -1,38 +1,48 @@
-# CDSS FHIR 儲存與歷史調閱
+# CDSS 獨立 FHIR 儲存與 OAuth
 
-2026-10-03。由最新master的隔離分支實作；原工作目錄的合併衝突／未提交變更保留。Gateway整合分支與獨立FHIR仍需審查及院內部署；本輪未發布App、未改pilot/hmc與HMC發布鏈。
+2026-10-04 依使用者釐清：Gateway 只做 log／回報資料。App 直接呼叫獨立 FHIR API，沒有 Gateway／Collector FHIR fallback。原工作區衝突保留；未發布 App、未改 pilot/hmc 或 HMC 發布鏈。
 
-## 使用流程
+## 儲存與歷史
 
-在唯一site=vghtpe、已有有效CDSS結果的頁面，醫師按「儲存 CDSS 紀錄」才送POST /cdss/v1/saves。收到201、status=stored與相同save_id後才成功。profile/result、人工輸入（包含本次visitAnswers）、醫師決策、來源與記憶體事件以v2快照保存。未改內容的失敗重試保留UUID；事件成功才清除，關頁／切病人時取消及清理。既有名稱、生日、遮罩證號只用於瀏覽器內version1假名hash與文字遮蔽，原始全名／生日不送Gateway；這不是EMR病人對應。
+唯一 site=vghtpe 且有效 CDSS 結果，人工按「儲存 CDSS 紀錄」才送 POST /cdss/v1/saves。201、status=stored、相同UUID才成功。保存當下profile/result、visitAnswers等輸入、決策、來源與事件。凍結按下時的輸入，未改內容重試保留UUID；準備階段也可取消，切病人／關頁清理。原始全名／生日留在瀏覽器內作文字遮蔽與既有v1假名hash，不等於EMR病人對應。
 
-「CDSS 歷史紀錄」按需POST查最近10筆，hasMore表示上限。單筆讀回前核對schema、UUID、病人hash、pack和資料大小；歷史視窗呈現原summary／建議、人工輸入與醫師決策。清楚標示歷史快照／医師身分未驗證；不重新跑當前規則、不回填或寫入當次answer stores。關視窗／切病人會abort，過期回覆不能落入新病人畫面。內容只在記憶體，不另存localStorage或IndexedDB歷史快照，不當HTML執行。
+歷史清單最近10筆／hasMore，單筆驗UUID、病人hash、pack與大小；唯讀原快照，不重新評估或寫回當次answer stores。標示醫師身分未驗證；不另存localStorage/IndexedDB、不執行HTML。可見臨床tab／卡片／既有控制保留。
 
 ## 建置設定
 
-```dotenv
-NEXT_PUBLIC_COLLECTOR_ORIGIN=https://collector.mediprisma.tw
+```text
+NEXT_PUBLIC_CDSS_API_ORIGIN=https://<核准FHIR專屬主機>
 NEXT_PUBLIC_CDSS_ADMISSION=intranet-pilot
 ```
 
-這是建置時設定，不能只修改變數而不重建。明確pilot模式不取Firebase token，不把缺醫師身份當成不能儲存；Gateway仍須按實際院內CIDR／Origin准入，App site與query不是授權。未設定pilot仍保留原Firebase傳輸路徑，歷史按鈕僅在新pilot設定提供。/app同步workflow只新增讀取此公開variable，未設定GitHub variable或執行發布；HMC workflow／guide原樣保留。
+院內模式不取Firebase、沒有醫師登入前置條件；獨立 API仍須按實際CIDR／Origin准入。NEXT_PUBLIC_COLLECTOR_ORIGIN只用於log／回報，不能當FHIR URL。
 
-來源origin必須是根HTTPS、或本機HTTP，無帳密／query／fragment。所有傳輸credentials=omit、no-referrer、redirect=error、no-store；patient hash／UUID置於body而非URL。save4MiB、15秒逾時；history讀回最多5MiB、15秒，列表最多10筆。查不到／故障使用固定畫面，不把upstream或病人資料印console。
+啟用可選OAuth：
 
-## 驗證與重現
+```text
+NEXT_PUBLIC_CDSS_ADMISSION=oauth2
+NEXT_PUBLIC_FHIR_OAUTH_ISSUER=https://<核准IdP>/realms/<realm>
+NEXT_PUBLIC_FHIR_OAUTH_CLIENT_ID=mediprisma-app
+```
 
-- Jest：儲存／hash／遮蔽／重試、來源院所、history malformed／錯病人／錯UUID／取消／大小與既有LiveFeature回歸。
-- Typecheck、針對修改檔lint、production build。
-- 真實Chromium→本機臨時Gateway→本機HAPI/PostgreSQL：人工儲存才送資料，201確認、history／detail相同原snapshot/version1。320/390/430/768/1024/1440與橫向截圖檢查，手機無橫向溢出、控制44px。
+Public client使用Authorization Code + S256 PKCE，state、issuer及精確popup來源核對。callback註冊為`https://mediprisma.tw/app/fhir-auth/callback`（其他artifact使用自己的origin/basePath），Keycloak webOrigin亦精確註冊。不能放client secret進公開變數。新「登入 FHIR 授權」按鈕不會自動存病歷或清掉當次病人／評估；授權失敗、過期或未登入不能退回Firebase／匿名FHIR。授權、verifier、token僅記憶體，300秒token提前30秒停用；不使用refresh token。斷開FHIR授權清除本Apptoken，IdP SSO仍可能有效，已簽token可用至到期。
 
-需要先完成FHIR初始化，並在Gateway隔離分支啟動其scripts/start-fhir-smoke.ts。然後在本repo執行：
+API需要RS256、opaque sub、正確issuer/audience、300秒以下期限、client ID及read/write scope；read/write不能取得bootstrap。Keycloak要配置basic scope或oidc-sub-mapper；登入帳號尚未對應院內醫師，不推定Practitioner／病人consent。FHIR repo的INDEPENDENT-API.md列出完整權限與受信任主機界線。
+
+所有設定皆在建置時固定，變數更改需重建。/app workflow只讀新增公開設定，未設定GitHub variables或部署；HMC鏈原樣保留。所有傳輸omit cookies、no-referrer、no-store、redirect=error，patient key／UUID在POST body；save4MiB/15秒、history5MiB/15秒、最多10筆。
+
+## 本機重現
+
+先啟動FHIR repo的本機HAPI/PG、獨立intranet API28098。OAuth測試另啟動私有Keycloak28080與API8098；Collector origin刻意設定為無法使用的127.0.0.1:1，確認臨床流獨立。
 
 ```powershell
 node node_modules/@playwright/test/cli.js test --config playwright.fhir.config.ts
+# 真實本機Keycloak PKCE（路徑只指向本機新建的合成秘密檔）：
+$env:FHIR_E2E_AUTH_MODE='oauth2'
+$env:FHIR_E2E_SECRETS_FILE='<FHIR repo>\runtime\oauth-local\secrets.json'
+node node_modules/@playwright/test/cli.js test --config playwright.fhir.config.ts
 ```
 
-此設定只跑合成fixture、localhost3007／Gateway28787。預設e2e跳過需真實FHIR的這一項，不借用已運行的devserver。院內驗收及備份還原／>72h由FHIR VM-ACCEPTANCE.md記錄；本機通過不宣稱正式VM可用。
+專用profile使用localhost3007，不借用devserver；關閉trace/video以免記錄token/帳密。只有成功授權後的App與歷史快照畫面截圖，不截登入密碼或callback URL。預設e2e跳過本機專用測試。
 
-## 可見行為
-
-vghtpe有效CDSS結果新增人工儲存與pilot歷史按鈕，未隱藏現有臨床tab／卡片／控制；其他site不送CDSS臨床資料。來源遍歷僅在按儲存時執行，失敗只回未儲存，不影響主CDSS評估。完整病人正式對應、醫師綁定與EMR寫回繼續延後。
+Jest驗hash/遮蔽/retry/準備中取消、來源、history錯病人/UUID/size及LiveFeature；真實Chromium在兩模式儲存→201→history→同snapshot/version1，手機320/390/430、平板768、桌面1024/1440與橫向檢查。VM容量、專屬HTTPS、開機/登出/>72h/備份還原仍待FHIR VM-ACCEPTANCE.md實機執行。正式病人、醫師綁定與EMR寫回延後。

@@ -28,7 +28,7 @@ test('intranet history uses a body lookup with no Firebase prerequisite and no p
   expect((await listCdssHistory(patient, new AbortController().signal)).records).toEqual([index])
   expect(captureCollectorAuth).not.toHaveBeenCalled()
   const [url, request] = jest.mocked(fetch).mock.calls[0]
-  expect(url).toBe('http://127.0.0.1:8787/cdss/v1/history')
+  expect(url).toBe('http://127.0.0.1:8098/cdss/v1/history')
   expect(request).toMatchObject({ method: 'POST', credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer' })
   expect(request?.headers).toEqual({ 'Content-Type': 'application/json' })
   expect(request?.body).not.toContain('測試病人')

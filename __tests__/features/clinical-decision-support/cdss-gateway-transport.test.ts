@@ -33,11 +33,13 @@ beforeEach(() => {
     const body = JSON.parse(init?.body as string)
     return { status: 201, json: async () => ({ status: 'stored', save_id: body.save_id }) } as Response
   })
-  delete process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN
+  delete process.env.NEXT_PUBLIC_CDSS_API_ORIGIN
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet-pilot'
+  process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN = 'https://collector.must-not-receive-clinical.invalid'
   window.history.replaceState({}, '', '/app/?site=vghtpe')
 })
 
-afterEach(() => cancelCdssGatewayRequests())
+afterEach(() => { cancelCdssGatewayRequests(); delete process.env.NEXT_PUBLIC_CDSS_ADMISSION; delete process.env.NEXT_PUBLIC_CDSS_API_ORIGIN })
 
 test('explicit intranet pilot saves without a Firebase identity or an invented clinician', async () => {
   process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet-pilot'
@@ -56,11 +58,12 @@ test('records clicks locally and sends all used data only on explicit save', asy
   expect(cdssGatewayStatus().pending_events).toBe(1)
   await saveCdssSnapshot(input)
   expect(fetch).toHaveBeenCalledTimes(1)
-  expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8787/cdss/v1/saves', expect.objectContaining({
+  expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8098/cdss/v1/saves', expect.objectContaining({
     credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store',
   }))
   const request = jest.mocked(fetch).mock.calls[0][1]!
-  expect(request.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer synthetic-firebase-token' }))
+  expect(request.headers).toEqual({ 'Content-Type': 'application/json' })
+  expect(mockGetToken).not.toHaveBeenCalled()
   const body = JSON.parse(request.body as string)
   expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
   expect(body.profile.facts.ldl.numericValue).toBe(92)
@@ -131,17 +134,18 @@ test.each(['/', '/app/?site=hmc', '/app/?site=VGHTPE', '/app/?site=vghtpe&site=v
   expect(fetch).not.toHaveBeenCalled()
 })
 
-test('rechecks site after authentication and refuses unsafe origin', async () => {
-  let resolveToken: (value: string) => void = () => {}
-  mockGetToken.mockReturnValueOnce(new Promise<string>((resolve) => { resolveToken = resolve }))
+test('rechecks site after preparation and refuses unsafe dedicated FHIR origin', async () => {
+  let resolveDigest: (value: ArrayBuffer) => void = () => {}
+  Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: {
+    digest: () => new Promise<ArrayBuffer>(resolve => { resolveDigest = resolve }),
+  } })
   const save = saveCdssSnapshot(input)
-  await Promise.resolve()
   window.history.replaceState({}, '', '/app/?site=hmc')
-  resolveToken('late-token')
+  resolveDigest(new ArrayBuffer(32))
   await expect(save).rejects.toThrow('cdss_site_changed')
   expect(fetch).not.toHaveBeenCalled()
 
-  process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN = 'http://remote.example:8787'
+  process.env.NEXT_PUBLIC_CDSS_API_ORIGIN = 'http://remote.example:8098'
   window.history.replaceState({}, '', '/app/?site=vghtpe')
   await expect(saveCdssSnapshot(input)).rejects.toThrow('cdss_endpoint_unavailable')
   expect(fetch).not.toHaveBeenCalled()
@@ -153,6 +157,13 @@ test('patient key stays stable when the imported FHIR Patient.id changes', async
   const bodies = jest.mocked(fetch).mock.calls.map((call) => JSON.parse(call[1]?.body as string))
   expect(bodies[0].patient_key_sha256).toBe(bodies[1].patient_key_sha256)
   expect(bodies[0].patient_session_id).not.toBe(bodies[1].patient_session_id)
+})
+
+test('OAuth mode refuses a missing FHIR authorization without falling back to Firebase or the Gateway', async () => {
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'oauth2'
+  await expect(saveCdssSnapshot(input)).rejects.toThrow('cdss_auth_unavailable')
+  expect(mockGetToken).not.toHaveBeenCalled()
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 test('opaque numeric Patient IDs do not erase equal clinical values or other resource IDs', async () => {

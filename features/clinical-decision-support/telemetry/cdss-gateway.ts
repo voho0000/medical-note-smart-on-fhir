@@ -4,7 +4,7 @@ import type { CdssPatientProfile, CdssResult } from '@voho0000/personalized-care
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { cdssAssessmentSchema, cdssGatewaySaveSchema, cdssInteractionSchema, type CdssAssessmentChange, type CdssGatewayEvent, type CdssSource } from '@/src/shared/contracts/cdss-gateway-event'
 import { isCollectorSite } from '@/src/application/telemetry/collector'
-import { captureCollectorAuth } from '@/src/application/telemetry/cdss-auth'
+import { fhirAccessToken } from './fhir-auth'
 import { buildPatientTextLiterals, scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { cdssPatientIdentity } from './patient-identity'
 
@@ -22,7 +22,7 @@ const active = new Set<AbortController>()
 
 export function cdssEndpoint(path = '/cdss/v1/saves'): string | null {
   try {
-    const origin = new URL(process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN || 'http://127.0.0.1:8787')
+    const origin = new URL(process.env.NEXT_PUBLIC_CDSS_API_ORIGIN || 'http://127.0.0.1:8098')
     if (origin.username || origin.password || origin.search || origin.hash || origin.pathname !== '/') return null
     if (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname))) return null
     return `${origin.origin}${path}`
@@ -119,10 +119,7 @@ export async function saveCdssSnapshot(input: {
     const body = JSON.stringify(parsed)
     if (new TextEncoder().encode(body).length > MAX_BYTES) throw new Error('cdss_payload_too_large')
     retryable.set(patientId, receipt)
-    const pilot = process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot'
-    const auth = pilot ? null : await cancellable(captureCollectorAuth(), controller.signal)
-    const token = pilot || !auth ? null : await cancellable(auth.getToken(), controller.signal)
-    if (!pilot && !token) throw new Error('cdss_auth_unavailable')
+    const token = await cancellable(fhirAccessToken(), controller.signal)
     if (!isCollectorSite() || controller.signal.aborted) throw new Error('cdss_site_changed')
     const response = await fetch(url, {
       method: 'POST',

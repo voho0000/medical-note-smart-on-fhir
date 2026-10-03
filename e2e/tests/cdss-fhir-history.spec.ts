@@ -4,7 +4,7 @@ import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
 
 // Run only with playwright.fhir.config.ts against the real local FHIR stack.
-test('App saves and retrieves a synthetic historical snapshot through the real Gateway and FHIR', async ({ page }, info) => {
+test('App saves and retrieves a synthetic snapshot through the independent FHIR API without a Gateway', async ({ page }, info) => {
   test.skip(info.project.name !== 'fhir-local', 'Requires the explicit local FHIR integration profile')
   test.setTimeout(180_000)
   const fixture = JSON.parse(readFileSync(SYNTHETIC_BUNDLE, 'utf8'))
@@ -27,9 +27,32 @@ test('App saves and retrieves a synthetic historical snapshot through the real G
   const save = page.getByTestId('cdss-save-record')
   await expect(save).toBeVisible()
   expect(writes).toHaveLength(0)
+  if (process.env.FHIR_E2E_AUTH_MODE === 'oauth2') {
+    const secretsPath = process.env.FHIR_E2E_SECRETS_FILE
+    if (!secretsPath) throw new Error('Private local OAuth test configuration required')
+    const credentials = JSON.parse(readFileSync(secretsPath, 'utf8'))
+    const popupEvent = page.waitForEvent('popup')
+    await page.getByTestId('cdss-fhir-authorize').click()
+    const popup = await popupEvent
+    await popup.locator('#username').fill('fhir-test-user')
+    await popup.locator('#password').fill(credentials.testUser)
+    await popup.locator('#kc-login').click()
+    await expect(page.getByTestId('cdss-fhir-authorize')).toHaveText('斷開 FHIR 授權')
+    for (const width of [320, 390, 430, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: width >= 768 ? 900 : 844 })
+      await openFeaturePanel(page)
+      await page.getByRole('tab', { name: /個人化照護指引/ }).click()
+      const control = page.getByTestId('cdss-fhir-authorize')
+      await expect(control).toBeVisible()
+      expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+      await page.screenshot({ path: info.outputPath(`fhir-authorized-${width}.png`) })
+    }
+  }
   const stored = page.waitForResponse(response => response.url().endsWith('/cdss/v1/saves') && response.request().method() === 'POST')
   await save.click()
-  expect((await stored).status()).toBe(201)
+  const saveResponse = await stored
+  expect(saveResponse.status()).toBe(201)
+  expect(new URL(saveResponse.url()).port).toBe(process.env.FHIR_E2E_AUTH_MODE === 'oauth2' ? '8098' : '28098')
   await expect(page.getByText('CDSS 紀錄已儲存。')).toBeVisible()
   expect(writes).toHaveLength(1)
   expect(JSON.stringify(writes[0])).not.toContain(patient.name[0].text)
@@ -55,4 +78,13 @@ test('App saves and retrieves a synthetic historical snapshot through the real G
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
   expect(writes).toHaveLength(1)
+  if (process.env.FHIR_E2E_AUTH_MODE === 'oauth2') {
+    await openFeaturePanel(page)
+    await page.getByRole('tab', { name: /個人化照護指引/ }).click()
+    await page.getByTestId('cdss-fhir-authorize').click()
+    await expect(page.getByTestId('cdss-fhir-authorize')).toHaveText('登入 FHIR 授權')
+    await save.click()
+    await expect(page.getByText('紀錄未儲存，請稍後重試。')).toBeVisible()
+    expect(writes).toHaveLength(1)
+  }
 })

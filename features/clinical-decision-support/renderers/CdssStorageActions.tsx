@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '../telemetry/cdss-gateway'
 import { listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
+import { authorizeFhir, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
 
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
@@ -37,6 +38,8 @@ export function CdssStorageActions({ input, sourceRecords, english = false }: {
   sourceRecords: () => Parameters<typeof saveCdssSnapshot>[0]['sourceRecords']; english?: boolean
 }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
+  const authorized = useSyncExternalStore(subscribeFhirAuth, fhirAuthStatus, () => false)
+  const [authorizing, setAuthorizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -79,11 +82,18 @@ export function CdssStorageActions({ input, sourceRecords, english = false }: {
   const result = object(selected?.save.result)
   const recommendations = Array.isArray(result.recommendations) ? result.recommendations : []
   return <div className="flex flex-wrap gap-2">
+    {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={authorizing}
+      data-testid="cdss-fhir-authorize" onClick={() => {
+        if (authorized) { disconnectFhir(); return }
+        setAuthorizing(true)
+        void authorizeFhir().catch(() => { if (mounted.current) toast.error(english ? 'FHIR authorization failed. Please try again.' : 'FHIR 授權未完成，請重試。') })
+          .finally(() => { if (mounted.current) setAuthorizing(false) })
+      }}>{authorizing ? english ? 'Authorizing…' : '授權中…' : authorized ? english ? 'Disconnect FHIR' : '斷開 FHIR 授權' : english ? 'Authorize FHIR' : '登入 FHIR 授權'}</Button>}
     <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={saving} aria-busy={saving} data-testid="cdss-save-record">
       {saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
     </Button>
-    {process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot' && <Button type="button" variant="outline" className="min-h-[44px] shadow-none"
-      onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>}
+    <Button type="button" variant="outline" className="min-h-[44px] shadow-none"
+      onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
     <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) controller.current?.abort() }}>
       <DialogContent className="sm:max-w-3xl" showCloseButton={false}>
         <DialogHeader><DialogTitle>{label}</DialogTitle>
