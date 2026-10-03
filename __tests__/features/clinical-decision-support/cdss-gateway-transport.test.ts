@@ -159,7 +159,7 @@ test('opaque numeric Patient IDs do not erase equal clinical values or other res
   await saveCdssSnapshot({ ...input, patient: { ...input.patient, id: '92' },
     profile: { id: '92', facts: { ldl: { zh: '92', en: '92', numericValue: 92,
       sources: [{ resourceType: 'Observation', resourceId: '92' }] },
-      age: { sources: [{ resourceType: 'Patient', resourceId: '92' }] } } } as CdssPatientProfile })
+      age: { zh: '68', en: '68', sources: [{ resourceType: 'Patient', resourceId: '92' }] } } } as CdssPatientProfile })
   const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
   expect(body.profile.facts.ldl.zh).toBe('92')
   expect(body.profile.facts.ldl.sources[0].resourceId).toBe('92')
