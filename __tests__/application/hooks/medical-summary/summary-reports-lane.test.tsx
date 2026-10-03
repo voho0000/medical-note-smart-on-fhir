@@ -433,3 +433,48 @@ describe('on-prem latency budget', () => {
     expect(mockResult.reportHighlights.groups[0].points[0].sources).toHaveLength(2)
   })
 })
+
+// PR #237 review (2026-10-03): the three fixed cases through the real hook,
+// on both harnesses — a severity moved onto another finding, the two sides of
+// one study written as a trend, and a CT and an ultrasound in reverse order.
+test.each([120_000, 1_000_000])('fixed severity and trend cases hold through the summary hook; window %d', async (limit) => {
+  const quote = 'Severe tricuspid regurgitation. Moderate pulmonary hypertension.'
+  const data: any = {
+    diagnosticReports: [
+      { ...REPORTS[0], id: 'echo', code: { text: 'Echocardiography' }, conclusion: quote },
+      { ...REPORTS[0], id: 'pwv', code: { text: 'baPWV' }, conclusion: 'Right baPWV 1200 cm/s; left baPWV 1300 cm/s.' },
+      { ...REPORTS[0], id: 'ct', code: { text: 'CT abdomen' }, effectiveDateTime: '2026-01-01', conclusion: 'Mass measures 5 x 4 cm.' },
+      { ...REPORTS[0], id: 'us', code: { text: 'Abdominal ultrasound' }, effectiveDateTime: '2026-02-01', conclusion: 'Mass measures 3 x 2 cm.' },
+    ],
+  }
+  const catalog = buildSourceCatalog(data)
+  const key = (id: string) => catalog.find((entry) => entry.resourceId === id)!.key
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const reply = isReportsRequest(messages)
+      ? block('reports', {
+          groups: [{ organ: 'heart', points: [{ text: 'Moderate tricuspid regurgitation and pulmonary hypertension', sources: [key('echo')], quotes: [{ source: key('echo'), quote }] }] }],
+          unremarkable: [],
+        })
+      : [
+          OVERVIEW_BLOCK,
+          block('problems', {
+            problems: [
+              { label: 'baPWV', metric: '1200 → 1300 cm/s', metricSources: [key('pwv')] },
+              { label: 'Mass', metric: '3 x 2 cm (2026-02-01) → 5 x 4 cm (2026-01-01)', metricSources: [key('us'), key('ct')] },
+            ],
+          }),
+          block('safety', { scannedCount: 0, alerts: [] }),
+        ].join('\n')
+    options.onChunk(reply)
+    return reply
+  })
+  renderHook(() => useMedicalSummary())
+  await act(async () => runGeneration({ clinicalData: data, catalog, contextLimit: limit }))
+
+  expect(mockResult.reportHighlights.groups[0].points[0].displayAs).toBe('quote')
+  expect(mockResult.problems[0]).toEqual(expect.objectContaining({ metricNeedsReview: true }))
+  expect(mockResult.problems[0].metric).not.toContain('→')
+  expect(mockResult.problems[1].metricNeedsReview).toBe(true)
+  expect(mockResult.problems[1].metric.indexOf('2026-01-01')).toBeLessThan(mockResult.problems[1].metric.indexOf('2026-02-01'))
+  expect(mockResult.cardErrors).toBeUndefined()
+})

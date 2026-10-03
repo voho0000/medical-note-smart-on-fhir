@@ -41,6 +41,9 @@ const SUMMARY_BATCH_MARKDOWN = [
   }),
   moduleBlock('problems', { problems: [] }),
   moduleBlock('safety', SAFETY_RESULT),
+  // 影像與病理重點 runs as its own lane; the mock answers every request with
+  // the same text, so the reports lane finds its module here too.
+  moduleBlock('reports', { groups: [], unremarkable: [] }),
 ].join('\n')
 
 async function mockUnifiedSummary(page: Page, autoGenerate = false) {
@@ -60,7 +63,7 @@ async function mockUnifiedSummary(page: Page, autoGenerate = false) {
 }
 
 test.describe('safety alerts (mocked)', () => {
-  test('manual summary generation folds safety into 初診快覽', async ({ page }) => {
+  test('manual summary generation lists safety under 開藥注意', async ({ page }) => {
     await mockUnifiedSummary(page)
     await importBundle(page)
     await openFeaturePanel(page)
@@ -76,16 +79,18 @@ test.describe('safety alerts (mocked)', () => {
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByRole('heading', { name: '初診快覽' })).toBeVisible()
 
-    // High severity stays visible in the overview card, not a card of its own.
-    await expect(summaryPanel.getByText('主動安全警示 · 高危')).toBeVisible()
-    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-
-    // Medium/low fold into the closed disclosure at the very bottom.
-    await expect(summaryPanel.getByText('重複用藥')).toHaveCount(0)
-    await summaryPanel.getByRole('button', { name: /其他警示（1）/ }).click()
-    await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
-    await expect(summaryPanel.getByText('中危', { exact: true })).toBeVisible()
-    await expect(summaryPanel.getByText(/僅供臨床參考/)).toBeVisible()
+    // One neutral list, most important first (owner, 2026-10-02): no
+    // high-alert banner, no severity badges, no fold for two alerts.
+    const safety = summaryPanel.getByRole('region', { name: '開藥注意' })
+    const rows = safety.locator('[data-safety-alerts] > li')
+    await expect(rows).toHaveCount(2)
+    await expect(rows.nth(0)).toContainText('藥物過敏衝突')
+    await expect(rows.nth(1)).toContainText('重複用藥')
+    await expect(summaryPanel.getByText(/主動安全警示/)).toHaveCount(0)
+    await expect(safety.getByText('高危', { exact: true })).toHaveCount(0)
+    await expect(safety.getByText('中危', { exact: true })).toHaveCount(0)
+    await expect(summaryPanel.getByRole('button', { name: /其他警示/ })).toHaveCount(0)
+    await expect(safety.getByText(/僅供臨床參考/)).toBeVisible()
   })
 
   test('model picker lists gated models and persists the unified summary choice', async ({ page }) => {
@@ -124,7 +129,7 @@ test.describe('safety alerts (mocked)', () => {
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-    await expect(summaryPanel.getByRole('button', { name: /其他警示（1）/ })).toBeVisible()
+    await expect(summaryPanel.getByRole('region', { name: '開藥注意' }).getByText('重複用藥')).toBeVisible()
   })
 
   test('the 自動產生 switch turns background generation on', async ({ page }) => {
@@ -152,7 +157,9 @@ test.describe('safety alerts (mocked)', () => {
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-    expect(await getChatCallCount(page)).toBe(1)
+    // One generation is three lane requests on this compact-harness model:
+    // the overview, problems + safety, and 影像與病理重點.
+    expect(await getChatCallCount(page)).toBe(3)
 
     // The unified result comes back from encrypted cache. The mock counter
     // resets per navigation, so 0 proves the batch was not billed again.
@@ -160,7 +167,7 @@ test.describe('safety alerts (mocked)', () => {
     await openFeaturePanel(page)
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-    await expect(summaryPanel.getByRole('button', { name: /其他警示（1）/ })).toBeVisible()
+    await expect(summaryPanel.getByRole('region', { name: '開藥注意' }).getByText('重複用藥')).toBeVisible()
     expect(await getChatCallCount(page)).toBe(0)
   })
 })

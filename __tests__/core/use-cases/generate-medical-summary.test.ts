@@ -1448,7 +1448,7 @@ describe('finalizeResult', () => {
         // Two ultrasounds on different dates, in order: a real trend.
         { label: 'Pelvic cyst (US)', kind: 'other', basisSources: [key('us')], metric: '5.5×4.5 → 4.0×3.0 cm', metricSources: [key('us'), key('us-2')] },
       ],
-    }, trendCatalog)
+    }, trendCatalog, { clinicalData: trendData })
 
     expect(result.problems[0]).toEqual(expect.objectContaining({ metric: 'baPWV 1544；1547 cm/s', metricNeedsReview: true }))
     expect(result.problems[1]).toEqual(expect.objectContaining({
@@ -1479,7 +1479,7 @@ describe('finalizeResult', () => {
         { label: 'Pelvic cyst (US)', kind: 'other', metric: '5.5×4.5 → 4.0×3.0 cm', sources: [key('us'), key('us-2'), key('visit')] },
         { label: 'Pelvic cyst', kind: 'other', metric: '6.4×5.9 → 5.5×4.5 cm', sources: [key('ct'), key('us'), key('visit')] },
       ],
-    }, legacyCatalog)
+    }, legacyCatalog, { clinicalData: legacyData })
 
     expect(result.problems[0].metric).toBe('5.5×4.5 → 4.0×3.0 cm')
     expect(result.problems[0].metricNeedsReview).toBeUndefined()

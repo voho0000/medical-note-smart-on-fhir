@@ -33,6 +33,7 @@ import {
 } from './generate-medical-summary.use-case'
 import {
   durationToDays,
+  isLapsedDispensing,
   isMedicationCurrentlyInUse,
   procedureDate,
 } from '@/src/core/utils/clinical-context-selection.utils'
@@ -368,7 +369,8 @@ function collectMedications(
   const lapsed = new Map<string, MedGroup>()
   if (groups.size < MIN_CURRENT_MEDICINES) {
     for (const medication of input.clinicalData.medications ?? []) {
-      if (isMedicationCurrentlyInUse(medication, nowMs)) continue
+      // Dispensed and run out only — the same rule as the full lane's floor.
+      if (!isLapsedDispensing(medication, nowMs)) continue
       const entry = medication.id ? entryByResourceId.get(medication.id) : undefined
       const display = medicationDisplay(medication, entry?.display)
       const identity = normalizeName(display)

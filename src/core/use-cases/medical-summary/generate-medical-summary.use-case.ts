@@ -64,6 +64,7 @@ import {
   type SummaryCoverageStats,
   type SummaryProblem,
   type SummarySourceCatalogEntry,
+  metricReviewCarryKey,
 } from '@/src/core/entities/medical-summary.entity'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
@@ -74,6 +75,7 @@ import {
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
+import { reportNarrative } from '@/src/core/utils/report-narrative.utils'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
@@ -1510,6 +1512,11 @@ function composeLabMetric(
     const label = series[0].label
     const ordered = [...series].sort((a, b) => a.date.localeCompare(b.date))
     const units = new Set(ordered.map((value) => value.unit ?? ''))
+    // Values in different units (90 mg/dL, then 5 mmol/L) are not converted
+    // here, so they are not a trend: each stands with its own unit and date.
+    if (new Set(ordered.map((value) => (value.unit ?? '').toLowerCase())).size > 1) {
+      return `${label} ${ordered.map((value) => value.date ? `${value.value} (${value.date})` : value.value).join('；')}`
+    }
     // One shared unit is written once, after the last value.
     const sharedUnit = units.size === 1 && ordered.length > 1 ? ordered[0].unit : undefined
     const text = (value: (typeof ordered)[number]) => sharedUnit && value.value.endsWith(sharedUnit)
@@ -1714,33 +1721,77 @@ function metricModality(entry: SummarySourceCatalogEntry): string {
   return classifyEvidenceType(entry.display) ?? (entry.resourceType === 'DiagnosticReport' ? 'report' : entry.resourceType)
 }
 
+const METRIC_DATE_GLOBAL = new RegExp(METRIC_DATE.source, 'g')
+
+/** The numbers a text states, dates left out ("5.5×4.5 cm (12/24/2025)" →
+ *  5.5, 4.5). */
+function statedNumbers(text: string): number[] {
+  return (text.replace(METRIC_DATE_GLOBAL, ' ').match(/\d+(?:\.\d+)?/g) ?? []).map(Number)
+}
+
+/** What a cited record says, for finding a metric's numbers in it. */
+function metricRecordText(
+  entry: SummarySourceCatalogEntry,
+  clinicalData: SummaryCatalogInput | undefined,
+): string {
+  if (!clinicalData) return ''
+  if (entry.resourceType === 'Observation') {
+    const observation = (clinicalData.observations ?? []).find((obs) => obs.id === entry.resourceId)
+    return observation ? labValueText(observation) ?? '' : ''
+  }
+  if (entry.resourceType === 'DiagnosticReport') {
+    const report = (clinicalData.diagnosticReports ?? []).find((item) => item.id === entry.resourceId)
+    if (!report) return ''
+    const values = observationsForReport(report, reportObservationMap(clinicalData.observations))
+      .map((obs) => labValueText(obs) ?? '')
+    return [reportNarrative(report), ...values].join('\n')
+  }
+  return ''
+}
+
 /**
- * A model-written metric may draw an arrow only where its cited records can
- * carry one: the same kind of record on at least two different dates. Two
- * sides of one study (baPWV right 1544 / left 1547), two values of one day,
- * or a CT size beside an ultrasound size are not a trend; written as one
- * ("5.5×4.5 cm (12/24) → 6.4×5.9 cm (11/25)") the line invents a direction.
- * Such a line keeps its parts, loses the arrows, runs oldest first when every
- * part carries a date, and is marked for review.
+ * A model-written metric may draw an arrow only where its cited records carry
+ * one: each part of the line is tied to one record's date — the date the part
+ * writes, or else the one cited record of this kind whose text states the
+ * part's numbers — and those dates run strictly forward. Two sides of one
+ * study (baPWV right 1544 / left 1547), two values of one day, a CT size
+ * beside an ultrasound size, or undated parts no record ties to a date are not
+ * a trend; written as one ("Size 2 → 5 cm" over a 5 cm and a later 2 cm CT)
+ * the line invents a direction. Such a line keeps its parts, loses the
+ * arrows, runs oldest first when every part has a date, and is marked for
+ * review.
  */
 function reviewModelMetric(
   metric: string | undefined,
   keys: readonly string[],
   byKey: ReadonlyMap<string, SummarySourceCatalogEntry>,
+  clinicalData?: SummaryCatalogInput,
 ): { metric?: string; metricNeedsReview?: true } {
   if (!metric || !METRIC_ARROW.test(metric)) return { metric }
   const entries = keys.map((key) => byKey.get(key)).filter((entry): entry is SummarySourceCatalogEntry => Boolean(entry))
-  const dates = new Set(entries.map((entry) => entry.date).filter(Boolean))
   const modalities = new Set(entries.map(metricModality))
   const parts = metric.split(METRIC_ARROW)
-  const partDates = parts.map((part) => {
+  const writtenDate = (part: string) => {
     const match = METRIC_DATE.exec(part)
     if (!match) return undefined
     const [y, m, d] = match[1] ? [match[1], match[2], match[3]] : [match[6], match[4], match[5]]
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  const recordNumbers = entries.map((entry) => ({ date: entry.date, numbers: new Set(statedNumbers(metricRecordText(entry, clinicalData))) }))
+  const partDates = parts.map((part) => {
+    const written = writtenDate(part)
+    if (written) return written
+    const numbers = statedNumbers(part)
+    if (numbers.length === 0) return undefined
+    const dates = new Set(recordNumbers
+      .filter((record) => record.date && numbers.every((number) => record.numbers.has(number)))
+      .map((record) => record.date!))
+    return dates.size === 1 ? [...dates][0] : undefined
   })
-  const datedInOrder = partDates.every((date, index) => !date || index === 0 || !partDates[index - 1] || partDates[index - 1]! <= date)
-  if (dates.size >= 2 && modalities.size === 1 && datedInOrder) return { metric }
+  const trend = modalities.size === 1 &&
+    partDates.every(Boolean) &&
+    partDates.every((date, index) => index === 0 || partDates[index - 1]! < date!)
+  if (trend) return { metric }
   const ordered = partDates.every(Boolean)
     ? parts.map((part, index) => ({ part, date: partDates[index]! })).sort((a, b) => a.date.localeCompare(b.date)).map(({ part }) => part)
     : parts
@@ -2249,6 +2300,13 @@ export class GenerateMedicalSummaryUseCase {
         sources: item.sourceKeys,
         ...evidenceFor(item),
       })),
+      ...(result.problems.some((item) => item.metricNeedsReview && item.metric)
+        ? {
+            problemsCarriedMetricReview: result.problems
+              .filter((item) => item.metricNeedsReview && item.metric)
+              .map((item) => metricReviewCarryKey(item.label, item.metric!)),
+          }
+        : {}),
       // Only a summarized module round-trips; the footer and the fallback are
       // rebuilt from the digest by the finalizer. The quotes stored are the
       // source-faithful ones, so they verify exactly again on the next pass,
@@ -2293,7 +2351,7 @@ export class GenerateMedicalSummaryUseCase {
       }
       case 'problems': {
         const value = moduleResult as MedicalSummaryModuleResultMap['problems']
-        return { ...draft, problems: value.problems }
+        return { ...draft, problems: value.problems, problemsCarriedMetricReview: undefined }
       }
       case 'reports': {
         // A fresh reports module replaces the retained one entirely; its
@@ -2409,6 +2467,7 @@ export class GenerateMedicalSummaryUseCase {
     // Counter for the medication-inference rule (guard discipline: a rule
     // without a count cannot be reviewed or retired).
     const medicationInference = { inferred: 0, atcClasses: new Set<string>() }
+    const carriedMetricReview = new Set(ai.problemsCarriedMetricReview ?? [])
     const problems = (ai.problems ?? []).flatMap((p): SummaryProblem[] => {
       const basisKeys = uniqueKeys(p.basisSources ?? [])
       const metricKeys = uniqueKeys(p.metricSources ?? [])
@@ -2506,26 +2565,33 @@ export class GenerateMedicalSummaryUseCase {
         options.audience === 'patient' ? 'patient' : 'medical',
         locale,
       )
+      const metricView: { metric?: string; metricNeedsReview?: true } = labMetric
+        ? { metric: labMetric }
+        : reviewModelMetric(
+            isPlaceholderText(p.metric) || namesMedication(p.metric, medicationDisplays) || isCodeOrVisitMetric(p.metric)
+              ? undefined
+              : p.metric?.trim(),
+            // A legacy row cites once for the whole row: its lab and report
+            // records are what the metric can rest on.
+            hasColumns
+              ? metricKeys
+              : rawSources.filter((key) => {
+                const type = byKey.get(normaliseSummarySourceKey(key))?.resourceType
+                return type === 'Observation' || type === 'DiagnosticReport'
+              }),
+            byKey,
+            options.clinicalData,
+          )
+      // A row retained across another card's retry keeps the 需核對 the
+      // finalizer gave its metric the first time (its arrows are gone now).
+      const carriedReview = Boolean(metricView.metric) &&
+        carriedMetricReview.has(metricReviewCarryKey(p.label, metricView.metric!))
       return [{
         label: p.label,
         basis,
         kind,
-        ...(labMetric
-          ? { metric: labMetric }
-          : reviewModelMetric(
-              isPlaceholderText(p.metric) || namesMedication(p.metric, medicationDisplays) || isCodeOrVisitMetric(p.metric)
-                ? undefined
-                : p.metric?.trim(),
-              // A legacy row cites once for the whole row: its lab and
-              // report records are what the metric can rest on.
-              hasColumns
-                ? metricKeys
-                : rawSources.filter((key) => {
-                  const type = byKey.get(normaliseSummarySourceKey(key))?.resourceType
-                  return type === 'Observation' || type === 'DiagnosticReport'
-                }),
-              byKey,
-            )),
+        ...metricView,
+        ...(carriedReview ? { metricNeedsReview: true as const } : {}),
         metricMeta: metricSpan ?? (p.metricMeta?.trim() || undefined),
         managedBy,
         ...(managedByDate ? { managedByDate } : {}),
@@ -2617,33 +2683,74 @@ const REPORT_UNCERTAINTY_MARKER = new RegExp([
 const REPORT_TEXT_HEDGE =
   /疑似|可能|不排除|待排除|待確認|時間不明|性質未定|suspect|suspicious|possibl|probabl|likely|favou?r|\br\/o\b|rule\s+out|ruled\s+out|cannot exclude|can(?:not| not) be excluded|to be determined|undetermined|uncertain|\bmay\b|differential|\bddx\b/i
 
-const SEVERITY_WORD = /\b(trivial|trace|minimal|mild|moderate|severe|marked|massive)\b/gi
 const SEVERITY_IN_TEXT = /\b(trivial|trace|minimal|mild|moderate|severe|marked|massive)\b/i
-const SEVERITY_SKIP = new Set(['to', 'and', 'or', 'degree', 'degrees', 'of', 'the', 'a', 'an', 'grade', 'mild', 'moderate', 'severe'])
+const SEVERITY_TERMS = new Set(['trivial', 'trace', 'minimal', 'mild', 'moderate', 'severe', 'marked', 'massive'])
+/** Words that end the phrase a severity qualifies ("severe TR and moderate PH"). */
+const SEVERITY_PHRASE_BREAK = new Set(['and', 'or', 'with', 'but', 'plus', 'without', 'also', 'while', 'whereas'])
+/** Words that carry no finding of their own inside such a phrase. */
+const SEVERITY_FILLER = new Set(['to', 'degree', 'degrees', 'of', 'the', 'a', 'an', 'grade', 'is', 'are', 'was', 'were', 'be', 'been', 'appears', 'seems', 'noted', 'seen', 'in', 'at', 'on'])
+
+type SeverityBinding = { severity: string; words: Set<string> }
+
+/**
+ * Each severity word in a sentence with the finding words it qualifies: the
+ * words after it up to the next break ("severe tricuspid regurgitation"), or,
+ * when nothing follows ("tricuspid regurgitation (moderate)", "TR is
+ * moderate"), the words before it back to the previous break. A severity whose
+ * finding cannot be found carries an empty set.
+ */
+function severityBindings(text: string): SeverityBinding[] {
+  const tokens = text.toLowerCase().match(/[a-z][a-z'-]*|[.;,:()\n/]/g) ?? []
+  const isBreak = (token: string) => !/^[a-z]/.test(token) || SEVERITY_PHRASE_BREAK.has(token)
+  const isFinding = (token: string) => token.length >= 3 && !SEVERITY_FILLER.has(token) && !SEVERITY_TERMS.has(token) && !isBreak(token)
+  const bindings: SeverityBinding[] = []
+  tokens.forEach((token, index) => {
+    if (!SEVERITY_TERMS.has(token)) return
+    const words = new Set<string>()
+    for (let i = index + 1; i < tokens.length && !isBreak(tokens[i]); i++) {
+      if (isFinding(tokens[i])) words.add(tokens[i])
+    }
+    if (words.size === 0) {
+      let i = index - 1
+      // Step over what sits between the finding and a trailing severity:
+      // "(", ":", ",", "is", or another severity ("mild to moderate").
+      while (i >= 0 && (tokens[i] === '(' || tokens[i] === ':' || tokens[i] === ',' || SEVERITY_TERMS.has(tokens[i]) || SEVERITY_FILLER.has(tokens[i]))) i--
+      for (; i >= 0 && !isBreak(tokens[i]); i--) {
+        if (isFinding(tokens[i])) words.add(tokens[i])
+      }
+    }
+    bindings.push({ severity: token, words })
+  })
+  return bindings
+}
+
+const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((word) => b.has(word)).length
 
 /**
  * Whether the line attaches a severity to a different finding than the report
- * does. "Severe tricuspid regurgitation. Moderate pulmonary hypertension."
+ * does. "Severe tricuspid regurgitation and moderate pulmonary hypertension"
  * summarised as "Moderate tricuspid regurgitation and pulmonary hypertension"
- * moves "moderate" onto the regurgitation: every severity word in the line
- * must share a clause of some verified quote with the word it qualifies in the
- * line, in either order ("mitral valve with moderate regurgitation" carries
- * "moderate mitral regurgitation"). A quote in another language (a Chinese
- * pathology report) cannot be checked word by word and is left to its own
- * quote.
+ * moves "moderate" onto the regurgitation; so does "Tricuspid regurgitation
+ * (moderate)". Each severity in the line is paired with the finding it
+ * qualifies, and a verified quote must pair the same severity with that
+ * finding, with no other severity in the quotes pairing with it more closely
+ * ("mitral valve with moderate regurgitation" carries "moderate mitral
+ * regurgitation"). A severity whose finding cannot be paired falls back to
+ * the quote. A quote in another language (a Chinese pathology report) cannot
+ * be checked word by word and is left to its own quote.
  */
 export function reportTextMovesSeverity(text: string, quotes: readonly string[]): boolean {
-  const clauses = quotes
+  const quoteBindings = quotes
     .filter((quote) => SEVERITY_IN_TEXT.test(quote))
-    .flatMap((quote) => quote.toLowerCase().split(/[.;,\n]+/))
-  if (clauses.length === 0) return false
-  const hasWord = (clause: string, word: string) => new RegExp(`\\b${word}`).test(clause)
-  for (const match of text.matchAll(SEVERITY_WORD)) {
-    const severity = match[1].toLowerCase()
-    const after = text.slice((match.index ?? 0) + match[0].length).toLowerCase()
-    const target = after.match(/[a-z][a-z-]*/g)?.find((word) => word.length >= 3 && !SEVERITY_SKIP.has(word))
-    if (!target) continue
-    if (!clauses.some((clause) => hasWord(clause, `${severity}\\b`) && hasWord(clause, target))) return true
+    .flatMap((quote) => severityBindings(quote))
+  if (quoteBindings.length === 0) return false
+  for (const line of severityBindings(text)) {
+    if (line.words.size === 0) return true
+    const best = (same: boolean) => Math.max(0, ...quoteBindings
+      .filter((quote) => (quote.severity === line.severity) === same)
+      .map((quote) => overlap(line.words, quote.words)))
+    const matched = best(true)
+    if (matched === 0 || best(false) > matched) return true
   }
   return false
 }

@@ -257,7 +257,15 @@ export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema
     droppedQuoteCount: number
     hiddenPointCount: number
   }
+  /** App-only carry-over for retained problem rows whose metric the finalizer
+   *  marked 需核對: the draft holds the cleaned line (arrows removed), which
+   *  would pass the check again unmarked. Keys from `metricReviewCarryKey`.
+   *  Never model output; a fresh problems module clears it. */
+  problemsCarriedMetricReview?: string[]
 }
+
+/** The identity of a problem row's reviewed metric across a card retry. */
+export const metricReviewCarryKey = (label: string, metric: string): string => `${label}\u0000${metric}`
 
 // The fixed summary is generated as independently validated modules. Keeping
 // these ids in the domain layer lets generation, cache, orchestration, and UI

@@ -162,9 +162,14 @@ export function selectMedicationRecords(
   const floorStart = new Date(Date.parse(newest) - MILESTONE_ENCOUNTER_FLOOR_DAYS * 86_400_000).toISOString().slice(0, 10)
   const present = new Set(selected)
   const seenNames = new Set(selected.map(medicationDisplayName))
+  // Only what was dispensed and has run out may be presented as lapsed: a
+  // current medicine the 急慢性 filter left out stays out, and a record with no
+  // supply estimate is unknown, not ended.
   const lapsed = medications
     .filter((medication) => !present.has(medication)
-      && !NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))
+      && !(chronic === 'chronic' && !isChronicMedicationRecord(medication))
+      && !(chronic === 'acute' && isChronicMedicationRecord(medication))
+      && isLapsedDispensing(medication, nowMs)
       && String(medication?.authoredOn || medication?.effectiveDateTime || '').slice(0, 10) >= floorStart)
     .sort((a, b) => String(b?.authoredOn || b?.effectiveDateTime || '').localeCompare(String(a?.authoredOn || a?.effectiveDateTime || '')))
   const floor: any[] = []
@@ -196,6 +201,18 @@ export function filterMedicationRecords(
  * `stopped`/`completed`/`ended` are absent on purpose: those orders did run.
  */
 const NEVER_DISPENSED_STATUSES = new Set(['draft', 'on-hold', 'cancelled', 'entered-in-error'])
+
+/**
+ * A record that reached the patient and whose estimated supply has run out —
+ * the only kind a latest-known fill may present as "supply ended". A never-
+ * dispensed order is not one, and neither is a record with no supply estimate
+ * (its state is unknown, not ended).
+ */
+export function isLapsedDispensing(medication: any, nowMs: number): boolean {
+  if (NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))) return false
+  const end = medicationExpectedEnd(medication)
+  return Boolean(end) && !isMedicationSupplyWindowOpen(end!, nowMs)
+}
 
 /** Below this many current medicines the recent-medicine floor engages. */
 export const MEDICATION_FLOOR_MIN_CURRENT = 5
