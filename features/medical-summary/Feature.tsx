@@ -52,11 +52,9 @@ import {
 import { formatApproxTokenCount, type ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 import { formatClinicalContextAdaptationNotice } from "@/src/core/utils/adaptive-clinical-context.utils"
 import { OverviewHeroCard } from "./components/OverviewHeroCard"
-import { FocusCard } from "./components/FocusCard"
 import { ProblemsCard } from "./components/ProblemsCard"
-import { RecentEventsCard } from "./components/RecentEventsCard"
 import { ReportHighlightsCard } from "./components/ReportHighlightsCard"
-import { OtherAlertsDisclosure } from "./components/OtherAlertsDisclosure"
+import { MedicationSafetySection } from "./components/MedicationSafetySection"
 import { MedicationEducationCard } from "./components/MedicationEducationCard"
 import { CoverageCard } from "./components/CoverageCard"
 import { SummaryStatusStrip } from "./components/SummaryStatusStrip"
@@ -85,7 +83,6 @@ import { useClinicalInsightsRuntime } from "@/features/clinical-insights/Clinica
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
 import { MEDICAL_SUMMARY_CARD_IDS } from "@/src/core/entities/medical-summary.entity"
 import type {
-  EncounterClass,
   MedicalSummaryModuleId,
   MedicalSummaryCardId,
   ResolvedSourceRef,
@@ -277,9 +274,7 @@ export default function MedicalSummaryFeature() {
   )
   const cardLabels = useMemo<Record<MedicalSummaryCardId, string>>(() => ({
     overview: ms.overviewTitle,
-    focus: ms.focusTitle,
     problems: ms.problemsTitle,
-    recent: ms.recentTitle,
     reports: ms.reportsTitle,
     safety: ms.otherAlertsSectionLabel,
   }), [ms])
@@ -360,11 +355,6 @@ export default function MedicalSummaryFeature() {
     if (!isPatient) return resourceType
     return (base.patient.sourceTypes as Record<string, string>)[resourceType] ?? resourceType
   }, [base.patient.sourceTypes, isPatient])
-  const encounterClassLabel = useCallback(
-    (encounterClass: EncounterClass) => ms.encounterClasses[encounterClass],
-    [ms.encounterClasses],
-  )
-
   // Navigate the LEFT panel to a cited resource. Switching to the right tab
   // always works; the pinpoint scroll is best-effort — if no anchor claims
   // the request in time (virtualised list, pivot view without per-resource
@@ -451,18 +441,15 @@ export default function MedicalSummaryFeature() {
     [cardErrors, isBusy, moduleReady],
   )
 
-  // High-severity alerts join 開藥前必看; everything else folds into the closed
-  // disclosure at the very bottom. The safety scan settles independently of the
-  // summary modules, so the hero legitimately gains rows mid-stream.
-  const { highAlerts, otherAlerts } = useMemo(() => {
-    const sorted = [...(safetyResult?.alerts ?? [])].sort(
+  // 開藥注意 sits after 影像與病理重點: every alert in one neutral list,
+  // most important first. The safety scan settles independently of the
+  // summary modules, so the section legitimately gains rows mid-stream.
+  const orderedAlerts = useMemo(
+    () => [...(safetyResult?.alerts ?? [])].sort(
       (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity],
-    )
-    return {
-      highAlerts: sorted.filter((alert) => alert.severity === "high"),
-      otherAlerts: sorted.filter((alert) => alert.severity !== "high"),
-    }
-  }, [safetyResult])
+    ),
+    [safetyResult],
+  )
 
   const heroDataRange = coverage?.end
     ? ms.overviewDataRange.replace("{end}", coverage.end)
@@ -866,29 +853,15 @@ export default function MedicalSummaryFeature() {
                 result={result}
                 title={ms.overviewTitle}
                 dataRange={heroDataRange}
-                mustKnowTitle={ms.mustKnowTitle}
-                showMustKnow={!isPatient}
-                highAlerts={isPatient ? [] : highAlerts}
-                renderSafetySources={renderSafetySources}
                 copyLabel={t.common.copy}
                 copiedLabel={t.common.copied}
                 copyFailedLabel={t.common.copyFailed}
-                typeLabel={typeLabel}
-                unverifiedLabel={ms.unverified}
-                allergyRow={{
-                  label: ms.allergyRowLabel,
-                  noRecordText: ms.allergyRowNoRecord,
-                  badgeLabel: ms.allergyRowBadge,
-                  badgeHint: ms.allergyRowBadgeHint,
-                  separator: ms.allergyRowSeparator,
-                }}
-                onNavigate={navigateToResource}
               />
             ) : null,
           )}
 
-          {/* Patients get 用藥說明 where clinicians get 開藥前必看 — same module,
-              different audience contract (see the overview prompt). */}
+          {/* Patients get 用藥說明 under the headline — same module, the
+              patient audience contract (see the overview prompt). */}
           {isPatient && result && moduleReady("overview") ? (
             <MedicationEducationCard
               result={result}
@@ -905,23 +878,6 @@ export default function MedicalSummaryFeature() {
           ) : null}
 
           {renderSection(
-            "focus",
-            ms.focusTitle,
-            result && moduleReady("focus") ? (
-              <FocusCard
-                result={result}
-                title={ms.focusTitle}
-                subtitle={ms.focusSubtitle}
-                countLabel={ms.focusCount}
-                verifyLabel={ms.verifyFlag}
-                typeLabel={typeLabel}
-                unverifiedLabel={ms.unverified}
-                onNavigate={navigateToResource}
-              />
-            ) : null,
-          )}
-
-          {renderSection(
             "problems",
             ms.problemsTitle,
             result && moduleReady("problems") ? (
@@ -931,6 +887,11 @@ export default function MedicalSummaryFeature() {
                 subtitle={ms.problemsSubtitle}
                 metaLabel={ms.problemsMeta}
                 basisLabel={ms.problemBasisLabel}
+                organizationLatestLabel={ms.problemManagedByOrganizationLatest}
+                metricNeedsReviewLabel={ms.problemMetricNeedsReview}
+                inferredLabel={ms.problemManagedByInferred}
+                medicationInferredLabel={ms.problemInferredFromMedication}
+                singleValueLabel={ms.problemSingleUnassessedLab}
                 verifyLabel={ms.verifyFlag}
                 legendLabel={ms.problemsLegend}
                 showAllLabel={ms.problemsShowAll}
@@ -954,14 +915,16 @@ export default function MedicalSummaryFeature() {
                 highlights={result.reportHighlights}
                 labels={{
                   title: ms.reportsTitle,
-                  subtitle: ms.reportsSubtitle,
                   kindLabels: ms.reportsKindLabels,
-                  showMore: ms.reportsShowMore,
-                  showLess: ms.reportsShowLess,
+                  originalTag: ms.reportsOriginalTag,
+                  showQuotes: ms.reportsShowQuotes,
+                  hideQuotes: ms.reportsHideQuotes,
+                  othersSummarized: ms.reportsOthers,
+                  othersAll: ms.reportsAll,
+                  unavailable: ms.reportsUnavailable,
+                  hiddenPoints: ms.reportsHiddenPoints,
                   conclusionTag: ms.reportsConclusionTag,
                   openingTag: ms.reportsOpeningTag,
-                  droppedQuotes: ms.reportsDroppedQuotes,
-                  fallbackCount: ms.reportsFallbackCount,
                 }}
                 onNavigate={navigateToResource}
               />
@@ -969,33 +932,14 @@ export default function MedicalSummaryFeature() {
             { renderOnError: true },
           ) : null}
 
-          {renderSection(
-            "recent",
-            ms.recentTitle,
-            result && moduleReady("recent") ? (
-              <RecentEventsCard
-                result={result}
-                title={ms.recentTitle}
-                subtitle={ms.recentSubtitle}
-                encounterClassLabel={encounterClassLabel}
-                earlierLabel={ms.recentShowEarlier}
-                collapseLabel={ms.recentShowLess}
-                droppedNote={
-                  result.droppedRecentCount > 0
-                    ? ms.recentDropped.replace("{count}", String(result.droppedRecentCount))
-                    : null
-                }
-                onNavigate={navigateToResource}
-              />
-            ) : null,
-          )}
-
           {isSafetyGenerating && !safetyResult ? (
             <SummarySectionPending title={ms.otherAlertsSectionLabel} label={safetyText.scanning} />
           ) : (
-            <OtherAlertsDisclosure
-              alerts={otherAlerts}
-              title={ms.otherAlerts}
+            <MedicationSafetySection
+              alerts={orderedAlerts}
+              title={ms.otherAlertsSectionLabel}
+              moreLabel={ms.otherAlerts}
+              lessLabel={ms.showLessItems}
               disclaimer={safetyText.disclaimer}
               renderSources={renderSafetySources}
             />

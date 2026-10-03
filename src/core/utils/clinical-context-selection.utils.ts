@@ -238,8 +238,7 @@ export function filterProcedureRecords(
 /** Admissions and emergency visits stay citable for this long however narrow
  *  the saved visit window is. The default 6-month window exists to keep routine
  *  outpatient/pharmacy rows out of the prompt; it was silently dropping the
- *  one admission whose claim codes carried the anticoagulant history, and the
- *  最近 90 天 rule ("older events only if admission/procedure") could never fire. */
+ *  one admission whose claim codes carried the anticoagulant history. */
 export const MILESTONE_ENCOUNTER_FLOOR_DAYS = 730
 
 function isMilestoneEncounter(encounter: any): boolean {

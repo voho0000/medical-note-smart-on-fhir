@@ -39,7 +39,7 @@ describe('buildOverviewSnapshot', () => {
     expect(snapshot.clinicalContext).toContain('female, 67 y')
   })
 
-  it('marks Encounter.reasonCode diagnoses as 申報碼 with a visit count and the latest date', () => {
+  it('lists Encounter.reasonCode diagnoses as the visits\' primary diagnosis with a count and the latest date', () => {
     const input: SummaryCatalogInput = {
       encounters: [
         { id: 'e1', class: { code: 'AMB' }, period: { start: '2026-04-20' }, reasonCode: [{ text: '第二型糖尿病' }] },
@@ -49,7 +49,7 @@ describe('buildOverviewSnapshot', () => {
     }
     const snapshot = build(input)
     expect(snapshot.clinicalContext).toContain('- 慢性腎臟病 (2026-03-01) [C1]')
-    expect(snapshot.clinicalContext).toContain('- 第二型糖尿病 — 申報碼, 2 visits, last 2026-04-20 [E1]')
+    expect(snapshot.clinicalContext).toContain('- 第二型糖尿病 — primary diagnosis, 2 visits, last 2026-04-20 [E1]')
   })
 
   it('lists a claims-feed medicine whose only evidence is a live supply window', () => {

@@ -4,19 +4,10 @@ import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.en
 // safety-alert.entity.ts). The AI may ONLY cite data via reference keys taken
 // from an app-built source catalog; dates / organizations / resource types are
 // never AI output — they are resolved app-side from the FHIR bundle, which is
-// what makes the recent-events list and source chips hallucination-proof.
+// what makes the source chips and report chips hallucination-proof.
 import { z } from 'zod'
+import { clampLine } from '@/src/core/utils/clamp-line.utils'
 import type { SafetyScanResult } from './safety-alert.entity'
-
-export const TIMELINE_CATEGORIES = [
-  'diagnosis',
-  'procedure',
-  'medication',
-  'encounter',
-  'lab',
-  'followup',
-] as const
-export type TimelineCategory = (typeof TIMELINE_CATEGORIES)[number]
 
 // What KIND of evidence an inferred problem rests on — drives the card badge.
 // 'diagnosis' = coded on a claim; the rest are cross-referenced inferences
@@ -32,19 +23,6 @@ export const PROBLEM_KINDS = [
 ] as const
 export type ProblemKind = (typeof PROBLEM_KINDS)[number]
 
-// 開藥前必看 slots. A fixed enum (rather than free text) is what lets the app
-// keep at most one row per prescribing concern and render them in a stable
-// order regardless of the order the model happened to emit.
-export const MUST_KNOW_SLOTS = [
-  'renal',
-  'anticoagulation',
-  'hematology',
-  'high-risk-meds',
-  'endocrine-pending',
-  'other',
-] as const
-export type MustKnowSlot = (typeof MUST_KNOW_SLOTS)[number]
-
 // ---------------------------------------------------------------------------
 // AI output schema (validated with Zod; malformed replies are rejected)
 //
@@ -57,8 +35,10 @@ export type MustKnowSlot = (typeof MUST_KNOW_SLOTS)[number]
 
 const clampedText = (max: number) =>
   z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
-const optionalClampedText = (max: number) =>
-  z.string().transform((s) => (s.length > max ? s.slice(0, max) : s)).optional()
+const clampedLineText = (max: number) =>
+  z.string().min(1).transform((s) => clampLine(s.trim(), max))
+const optionalClampedLineText = (max: number) =>
+  z.string().transform((s) => clampLine(s.trim(), max)).optional()
 /** A free-text list field some models emit as a JSON array of strings
  * (Qwen 3.6 writes problems.medications as ["A", "B"]). Both shapes carry the
  * same content; join instead of rejecting the whole card. */
@@ -71,6 +51,12 @@ const optionalClampedTextOrList = (max: number) =>
     .optional()
 const clampedRequiredKeys = (max: number) =>
   z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, max))
+/** An optional citation list some models write as a bare string ("L3"). */
+const optionalKeyList = (max: number) => z.unknown()
+  .transform((value) => (Array.isArray(value) ? value : typeof value === 'string' ? [value] : [])
+    .filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+    .slice(0, max))
+  .optional()
 
 // Verification-only metadata for claims translated or paraphrased from a
 // free-text clinical document. The quote must remain in the document's
@@ -87,42 +73,6 @@ export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema> & {
 const optionalDocumentEvidence = () =>
   z.array(DocumentEvidenceSchema).max(4).optional()
 
-// One 開藥前必看 row: `label` is the number or the fact ("eGFR 32"), `text` is
-// the single sentence of consequence for prescribing today. Lenient on slot
-// (off-list → coerced) like safety-alert categories.
-//
-// EVERY row cites at least one key. The one exception this schema used to make
-// — the allergy row, which reported an ABSENT record and so had nothing to
-// cite — is gone: the allergy row is now rendered by the app from the bundle's
-// own AllergyIntolerance records, not asked of the model.
-export const SummaryMustKnowSchema = z.object({
-  slot: z.string().optional(),
-  label: clampedText(40),
-  text: clampedText(200),
-  critical: z.boolean().optional(),
-  sources: clampedRequiredKeys(6),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
-// One 最可能的就診主因 row. `flag` marks a concrete contradiction or gap the
-// clinician has to verify — never mere uncertainty.
-export const SummaryFocusSchema = z.object({
-  title: clampedText(120),
-  text: clampedText(400),
-  flag: z.boolean().optional(),
-  sources: clampedRequiredKeys(6),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
-// Recent-event pick: the model only CHOOSES an event (by catalog key) and
-// labels it. Lenient on category (off-list → coerced).
-export const TimelinePickSchema = z.object({
-  ref: z.string().min(1),
-  label: clampedText(200),
-  category: z.string().optional(),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
 // Inferred active-problem list: the model synthesises problems from ALL data
 // types (coded diagnoses, abnormal labs, dispensed meds, care plans, discharge
 // summaries) — not just claim ICD codes — and cites the records via catalog keys.
@@ -130,25 +80,36 @@ export const TimelinePickSchema = z.object({
 // (N18 / N18.3 / N18.9 for the same patient) and unverifiable codes must not
 // look authoritative. The problem NAME + navigable sources are the product.
 export const SummaryProblemSchema = z.object({
-  label: clampedText(120),
+  label: clampedLineText(120),
   /** Short human-readable basis, e.g. "5 次檢驗異常" / "藥局調劑". */
-  basis: optionalClampedText(80),
+  basis: optionalClampedLineText(80),
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
   /** Data-first key indicator, e.g. "eGFR 33 → 32 ▼". */
-  metric: optionalClampedText(120),
+  metric: optionalClampedLineText(120),
   /** Dates/units belonging to `metric`, rendered as its meta line. */
-  metricMeta: optionalClampedText(120),
+  metricMeta: optionalClampedLineText(120),
   /** Organization + specialty as visible in the data (never invented). */
-  managedBy: optionalClampedText(80),
+  managedBy: optionalClampedLineText(80),
   /** Catalog key of the latest encounter at that organization. The APP reads
    *  its date — the model never writes a date for this row. */
   managedByRef: z.string().optional(),
+  /** Legacy free text. When `medicationSources` resolve, the APP writes the
+   *  names from those records instead. */
   medications: optionalClampedTextOrList(160),
   flag: z.boolean().optional(),
-  sources: clampedRequiredKeys(6),
+  // Each column cites its own records, so every claim on the row is one click
+  // from its source: the condition (label/basis), the values (metric), and the
+  // medicines. `sources` is the legacy single list (demo snapshots, caches).
+  basisSources: optionalKeyList(6),
+  metricSources: optionalKeyList(6),
+  medicationSources: optionalKeyList(8),
+  sources: optionalKeyList(8),
   documentEvidence: optionalDocumentEvidence(),
-})
+}).refine(
+  (p) => [p.basisSources, p.metricSources, p.medicationSources, p.sources].some((keys) => (keys?.length ?? 0) > 0),
+  { message: 'a problem must cite at least one source key' },
+)
 
 // Patient-facing medication education. This intentionally describes how a
 // recorded medicine may support the patient's care before offering one calm,
@@ -162,51 +123,140 @@ export const SummaryMedicationEducationSchema = z.object({
   documentEvidence: optionalDocumentEvidence(),
 })
 
-// 影像與病理重點: the model only PICKS sentences from a listed report (by its
-// catalog key). The app verifies every quote character-for-character against
-// the report text before anything is shown, and writes the title, date,
-// organization and modality itself. Lenient by construction: a malformed
-// entry is skipped rather than costing the other reports their quotes, and a
-// bare string is read as a one-quote list.
-export const ReportPickSchema = z.object({
-  ref: z.string().min(1),
-  quotes: z.union([z.string(), z.array(z.unknown())])
+// 影像與病理重點: the model groups the reports' findings by organ and states
+// each one in a short line, citing the reports it comes from and quoting each
+// verbatim. The app verifies every quote against the report's full text, hides
+// any point no quote survives for, and writes the dates, modality, titles and
+// organizations itself. Lenient by construction (clamp, never reject): a
+// malformed group, point or quote is skipped rather than costing its
+// neighbours, and oversize lists are cut to the bounds the prompt states.
+export const REPORT_ORGANS = [
+  'brain',
+  'head-neck',
+  'chest-lung',
+  'heart',
+  'breast',
+  'abdomen-liver-biliary',
+  'abdomen-other',
+  'kidney-urinary',
+  'gynecologic',
+  'prostate',
+  'musculoskeletal',
+  'vascular',
+  'hematologic-lymph',
+  'other',
+] as const
+export type ReportOrgan = (typeof REPORT_ORGANS)[number]
+
+/** Labels the app writes for each organ group; the model only names the enum. */
+export const REPORT_ORGAN_LABELS: Record<'en' | 'zh-TW', Record<ReportOrgan, string>> = {
+  'zh-TW': {
+    brain: '腦部',
+    'head-neck': '頭頸部',
+    'chest-lung': '肺部',
+    heart: '心臟',
+    breast: '乳房',
+    'abdomen-liver-biliary': '肝膽',
+    'abdomen-other': '腹部',
+    'kidney-urinary': '腎臟泌尿',
+    gynecologic: '婦科',
+    prostate: '攝護腺',
+    musculoskeletal: '骨骼肌肉',
+    vascular: '血管',
+    'hematologic-lymph': '血液淋巴',
+    other: '其他',
+  },
+  en: {
+    brain: 'Brain',
+    'head-neck': 'Head & neck',
+    'chest-lung': 'Lungs',
+    heart: 'Heart',
+    breast: 'Breast',
+    'abdomen-liver-biliary': 'Liver & biliary',
+    'abdomen-other': 'Abdomen',
+    'kidney-urinary': 'Kidney & urinary',
+    gynecologic: 'Gynecologic',
+    prostate: 'Prostate',
+    musculoskeletal: 'Musculoskeletal',
+    vascular: 'Vascular',
+    'hematologic-lymph': 'Blood & lymph',
+    other: 'Other',
+  },
+}
+
+/** Off-list or missing organ values land in `other`. */
+export function normaliseReportOrgan(raw?: unknown): ReportOrgan {
+  const value = typeof raw === 'string' ? raw.toLowerCase().trim() : ''
+  return (REPORT_ORGANS as readonly string[]).includes(value) ? (value as ReportOrgan) : 'other'
+}
+
+/** Bounds the prompt states; anything past them is a looping reply. */
+export const REPORT_MAX_GROUPS = 8
+export const REPORT_MAX_POINTS_PER_GROUP = 4
+export const REPORT_MAX_QUOTES_PER_POINT = 2
+export const REPORT_POINT_TEXT_MAX_CHARS = 120
+/** A quote longer than this is not one sentence; it is clamped (a clamped
+ *  prefix still verifies verbatim if the original did). */
+const REPORT_QUOTE_MAX_CHARS = 400
+
+/** Keep the entries of an unknown array that parse; drop the rest. */
+const lenientArray = <T extends z.ZodTypeAny>(item: T, max: number) =>
+  z.unknown()
     .optional()
-    .transform((value) => (Array.isArray(value) ? value : value === undefined ? [] : [value])
-      .filter((quote): quote is string => typeof quote === 'string' && quote.trim().length > 0)
-      .slice(0, 5)),
+    .transform((value): Array<z.infer<T>> => (Array.isArray(value) ? value : [])
+      .flatMap((entry) => {
+        const parsed = item.safeParse(entry)
+        return parsed.success ? [parsed.data] : []
+      })
+      .slice(0, max))
+
+const reportKeyList = (max: number) => z.unknown()
+  .optional()
+  .transform((value) => (Array.isArray(value) ? value : typeof value === 'string' ? [value] : [])
+    .filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+    .slice(0, max))
+
+export const ReportPointQuoteSchema = z.object({
+  source: z.string().min(1),
+  quote: z.string().min(1).transform((s) => (s.length > REPORT_QUOTE_MAX_CHARS ? s.slice(0, REPORT_QUOTE_MAX_CHARS) : s)),
 })
-export type ReportPick = z.infer<typeof ReportPickSchema>
-const reportPicks = () => z.array(z.unknown()).transform((entries) => entries
-  .flatMap((entry) => {
-    const parsed = ReportPickSchema.safeParse(entry)
-    return parsed.success ? [parsed.data] : []
-  })
-  // 30 reports in the digest by default; anything past a generous bound is a
-  // looping reply, not more reports.
-  .slice(0, 60))
+export const ReportPointSchema = z.object({
+  text: clampedText(REPORT_POINT_TEXT_MAX_CHARS),
+  sources: reportKeyList(12),
+  quotes: lenientArray(ReportPointQuoteSchema, REPORT_MAX_QUOTES_PER_POINT),
+})
+export const ReportGroupSchema = z.object({
+  organ: z.unknown().optional(),
+  points: lenientArray(ReportPointSchema, REPORT_MAX_POINTS_PER_GROUP),
+})
+export type ReportPointDraft = z.infer<typeof ReportPointSchema>
+export type ReportGroupDraft = z.infer<typeof ReportGroupSchema>
+
+export const MedicalSummaryReportsModuleSchema = z.object({
+  groups: lenientArray(ReportGroupSchema, REPORT_MAX_GROUPS),
+  // 30 reports in the digest at most; a generous bound stops a loop.
+  unremarkable: reportKeyList(60),
+})
+export type ReportsModuleDraft = z.infer<typeof MedicalSummaryReportsModuleSchema>
 
 export const MedicalSummaryAiResultSchema = z.object({
-  headline: clampedText(240),
-  mustKnow: z.array(SummaryMustKnowSchema).default([]).transform((a) => a.slice(0, 8)),
-  // Patient audience only; clinicians get mustKnow instead.
+  headline: clampedLineText(240),
+  // Patient audience only; the clinician overview is the headline alone.
   medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
-  focus: z.array(SummaryFocusSchema).default([]).transform((a) => a.slice(0, 3)),
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
-  // Patient complexity varies too much for an editorial cap — the prompt asks
-  // the model to scale its picks to the case and the UI folds/scrolls any
-  // count, so 50 exists purely to stop a degenerate (looping) reply.
-  recent: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
   // Requested on its own lane (never in the one-shot schema), so it is
   // optional here: demo snapshots and legacy objects simply have none.
-  reports: reportPicks().optional(),
+  reports: MedicalSummaryReportsModuleSchema.optional(),
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema> & {
-  /** App-only carry-over: quotes the finalizer already dropped for the
-   *  retained `reports` module. A retry of ANOTHER card rebuilds the draft from
-   *  the verified result, which no longer holds the dropped strings, so the
-   *  count rides along here instead. Never model output. */
-  reportsDroppedQuoteCount?: number
+  /** App-only carry-over for the retained `reports` module. A retry of
+   *  ANOTHER card rebuilds the draft from the verified result, which no longer
+   *  holds the quotes or points the finalizer dropped, so their counts ride
+   *  along here instead. Never model output. */
+  reportsCarriedCounts?: {
+    droppedQuoteCount: number
+    hiddenPointCount: number
+  }
 }
 
 // The fixed summary is generated as independently validated modules. Keeping
@@ -215,10 +265,8 @@ export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema
 // Order here is the streaming/presentation order of 初診快覽.
 export const MEDICAL_SUMMARY_MODULE_IDS = [
   'overview',
-  'focus',
   'problems',
   'reports',
-  'recent',
 ] as const
 export type MedicalSummaryModuleId = (typeof MEDICAL_SUMMARY_MODULE_IDS)[number]
 
@@ -227,36 +275,21 @@ export type MedicalSummaryModuleId = (typeof MEDICAL_SUMMARY_MODULE_IDS)[number]
  *  audience only) and never joins the narrative batch prompt. */
 export const MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS = [
   'overview',
-  'focus',
   'problems',
-  'recent',
 ] as const satisfies readonly MedicalSummaryModuleId[]
 export type MedicalSummaryNarrativeModuleId = (typeof MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS)[number]
 
 export const MedicalSummaryOverviewModuleSchema = z.object({
-  headline: clampedText(240),
-  mustKnow: z.array(SummaryMustKnowSchema).default([]).transform((a) => a.slice(0, 8)),
+  headline: clampedLineText(240),
   medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
-})
-export const MedicalSummaryFocusModuleSchema = z.object({
-  items: z.array(SummaryFocusSchema).default([]).transform((a) => a.slice(0, 3)),
 })
 export const MedicalSummaryProblemsModuleSchema = z.object({
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
 })
-export const MedicalSummaryRecentModuleSchema = z.object({
-  recent: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
-})
-
-export const MedicalSummaryReportsModuleSchema = z.object({
-  reports: reportPicks().default([]),
-})
 
 export interface MedicalSummaryModuleResultMap {
   overview: z.infer<typeof MedicalSummaryOverviewModuleSchema>
-  focus: z.infer<typeof MedicalSummaryFocusModuleSchema>
   problems: z.infer<typeof MedicalSummaryProblemsModuleSchema>
-  recent: z.infer<typeof MedicalSummaryRecentModuleSchema>
   reports: z.infer<typeof MedicalSummaryReportsModuleSchema>
 }
 
@@ -327,40 +360,6 @@ export interface ResolvedSourceRef {
   evidenceWarning?: 'missing' | 'mismatch' | 'unchecked'
 }
 
-export interface SummaryMustKnowItem {
-  slot: MustKnowSlot
-  label: string
-  text: string
-  critical: boolean
-  sourceKeys: string[]
-  documentEvidence?: DocumentEvidence[]
-}
-
-export interface SummaryFocusItem {
-  title: string
-  text: string
-  flag: boolean
-  sourceKeys: string[]
-  documentEvidence?: DocumentEvidence[]
-}
-
-export interface SummaryRecentEvent {
-  key: string
-  date: string
-  /** Deterministic Encounter.period.end; omitted for point-in-time events. */
-  endDate?: string
-  label: string
-  category: TimelineCategory
-  organization?: string
-  resourceType: string
-  /** Bundle id of the underlying resource — lets the row navigate the left
-   *  panel to the raw resource (second evidence layer). */
-  resourceId: string
-  /** For category 'encounter': 住院/急診/門診, derived from Encounter.class. */
-  encounterClass?: EncounterClass
-  documentEvidence?: DocumentEvidence[]
-}
-
 export interface SummaryProblem {
   label: string
   basis?: string
@@ -372,7 +371,30 @@ export interface SummaryProblem {
   managedByDate?: string
   medications?: string
   flag?: boolean
+  /** Every record the row stands on is a medicine: the problem is inferred
+   *  from medication, which the row says. */
+  inferredFromMedication?: true
+  /** A lab problem resting on one value with no reference range or flag:
+   *  whether it is abnormal is the model's reading, which the row says. */
+  singleUnassessedLab?: true
+  /** Every key the row cites (all columns), for consumers that need one list. */
   sourceKeys: string[]
+  /** Per-column citations. Absent on legacy results, which render the single
+   *  row-level `sourceKeys` list instead. */
+  basisSourceKeys?: string[]
+  metricSourceKeys?: string[]
+  medicationSourceKeys?: string[]
+  /** The record behind "managedBy · date". */
+  managedBySourceKey?: string
+  /** 'organization': no visit for this problem or the named specialty was
+   *  found, so the date is the organization's latest record — the row says so.
+   *  'inferred': the row cites only pharmacy refills; the visit is the latest
+   *  same-diagnosis visit before them (see prescriberFromRefills). */
+  managedByScope?: 'organization' | 'inferred'
+  /** The model's metric drew a trend its cited records cannot carry (one
+   *  day, two sides, two modalities, or dates out of order): shown without
+   *  arrows and marked for review. */
+  metricNeedsReview?: true
   /** Cited keys whose report type contradicts the evidence type the basis
    *  names (e.g. 依據:心電圖紀錄 citing a chest X-ray). Detected app-side at
    *  finalize; rendered amber — shown, not hidden — so the clinician knows to
@@ -406,81 +428,95 @@ export interface MedicalSummaryResult {
   completedCardIds?: MedicalSummaryCardId[]
   /** Safety is a first-class generated card in the same briefing artifact,
    * not a separately validated or cached pipeline. High-severity alerts render
-   * inside 開藥前必看; the rest fold into a closed disclosure. */
+   * in the overview card under the headline; the rest fold into a closed
+   * disclosure. */
   safety?: SafetyScanResult
   headline: string
-  mustKnow: SummaryMustKnowItem[]
-  focus: SummaryFocusItem[]
   problems: SummaryProblem[]
-  recent: SummaryRecentEvent[]
   medicationEducation: SummaryMedicationEducation[]
   /** Unique cited sources in first-appearance order, matching the RENDER
-   *  order (mustKnow → medication education → focus → problems) so superscript
-   *  numbers read top-to-bottom on the page. */
+   *  order (medication education → problems) so superscript numbers read
+   *  top-to-bottom on the page. */
   sourceIndex: ResolvedSourceRef[]
-  /** Recent-event picks dropped at finalize (unresolvable ref, or older than
-   *  the 90-day window without being an admission/procedure). */
-  droppedRecentCount: number
-  /** Problems dropped at finalize because 最可能的就診主因 already covers them. */
-  droppedProblemCount: number
-  /** 影像與病理重點 — one row per imaging/pathology report in the AI scope.
-   *  Everything but the excerpts is app-written from the bundle, and every
-   *  excerpt is either a model-picked sentence the app verified verbatim
-   *  against the report or a deterministic cut of the report itself. Present
-   *  for the medical audience whenever the scoped data was available at
-   *  finalize, including when the `reports` module failed or never ran. */
+  /** 影像與病理重點 — organ-grouped key findings across the imaging and
+   *  pathology reports in the AI scope, plus every report no shown point cites.
+   *  The model only selected and stated the findings; every quote was verified
+   *  verbatim against its report, and dates, modality, titles and
+   *  organizations are the app's. Present for the medical audience whenever
+   *  the scoped data was available at finalize, including when the `reports`
+   *  module failed or never ran (then `summarized` is false and every report
+   *  is listed in `others`). */
   reportHighlights?: ReportHighlights
-  /** App-derived allergy row for 開藥前必看 — never the model's. An empty list
-   *  means the bundle carries no AllergyIntolerance resource, which the UI must
-   *  render as "the cloud record holds no allergy data", NOT as "no allergy".
-   *  Optional only so a cached pre-redesign result still parses. */
-  allergyRecords?: SummaryAllergyRecord[]
+  /** Counter for medication-only problems (tagged 用藥推定): how many, and
+   *  the ATC classes (4 characters) they rest on, for periodic review. */
+  medicationInference?: { inferred: number; atcClasses: string[] }
 }
 
 /** pathology · pet · ct · mri · echo · us · ecg · xray · other */
 export type ReportHighlightKind = import('@/src/core/utils/report-narrative.utils').ReportModalityKind
 
-/** Where a row's excerpts came from: model-picked sentences that passed the
- *  verbatim check, or the app's deterministic fallback. */
-export type ReportExcerptSource = 'ai' | 'conclusion' | 'opening'
-
-export interface ReportHighlight {
+/** One report as the app knows it — never the model's words. */
+export interface ReportFindingSource {
   /** Catalog key (L#) of the report. */
   key: string
   resourceType: string
   resourceId: string
   /** Modality class, read from the report's order name by the app. */
   kind: ReportHighlightKind
-  /** Catalog display of the report — never the model's. */
-  title: string
   date?: string
+  /** Catalog display of the report. */
+  title: string
   organization?: string
-  /** 1–3 verbatim passages of the report text, in its original language. */
-  excerpts: string[]
-  excerptSource: ReportExcerptSource
-  /** A deterministic fallback stopped mid-sentence at its length cap; the UI
-   *  marks the cut. Never set on verified model quotes. */
+}
+
+/** A report listed in the collapsed footer: judged unremarkable by the model,
+ *  not cited by any shown point, or — when the key-findings summary is
+ *  unavailable — every report. */
+export interface ReportRow extends ReportFindingSource {
+  /** Deterministic conclusion section (else the opening) of the report, a
+   *  verbatim slice of its text. Shown only when the summary is unavailable. */
+  excerpt?: string
+  excerptSource?: 'conclusion' | 'opening'
+  /** The excerpt stopped mid-sentence at its length cap. */
   excerptTruncated?: boolean
 }
 
-export interface ReportHighlights {
-  /** Newest first, across every modality. */
-  items: ReportHighlight[]
-  /** Reports in the digest, including the ones past the request cap. */
-  totalReports: number
-  /** Rows whose excerpts are verified model picks. */
-  aiSummarized: number
-  /** Model quotes that failed the verbatim check (or named no listed report)
-   *  and were never shown. The counter the guard is judged on. */
-  droppedQuoteCount: number
+export interface ReportFindingPoint {
+  /** The model's one-line statement of the finding, shown as written. */
+  text: string
+  /** 'quote': a verified quote carries an uncertainty marker the text dropped,
+   *  so the UI shows the quote(s) in place of the text. */
+  displayAs: 'text' | 'quote'
+  /** Verified, source-faithful quotes (≥ 1 on every shown point). */
+  quotes: Array<{ key: string; quote: string }>
+  /** The cited reports, newest first. */
+  sources: ReportFindingSource[]
 }
 
-/** One AllergyIntolerance from the bundle, resolved to its catalog key so the
- *  row is navigable exactly like a cited source. */
-export interface SummaryAllergyRecord {
-  sourceKey: string
+export interface ReportFindingGroup {
+  organ: ReportOrgan
+  /** App-written organ label in the output locale. */
   label: string
-  date?: string
+  points: ReportFindingPoint[]
+}
+
+export interface ReportHighlights {
+  /** True when a `reports` module result was applied. False for a demo
+   *  snapshot, a failed or never-run module: the UI then lists every report
+   *  with its deterministic excerpt and says the summary is unavailable. */
+  summarized: boolean
+  groups: ReportFindingGroup[]
+  /** Newest first. */
+  others: ReportRow[]
+  /** Reports in the digest, including the ones past the request budget. */
+  totalReports: number
+  /** Quotes that failed the verbatim check or named no listed report. */
+  droppedQuoteCount: number
+  /** Points not shown because no quote of theirs survived. */
+  hiddenPointCount: number
+  /** Points shown as their quote because the text dropped an uncertainty
+   *  marker the quote carries. The counter the uncertainty guard is judged on. */
+  uncertaintyRewriteCount: number
 }
 
 export type MedicalSummaryGeneration = {
@@ -524,19 +560,9 @@ export interface SummaryCoverageStats {
   procedures: number
 }
 
-export function normaliseTimelineCategory(raw?: string): TimelineCategory {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (TIMELINE_CATEGORIES as readonly string[]).includes(c)
-    ? (c as TimelineCategory)
-    : 'encounter'
-}
-
 export function normaliseProblemKind(raw?: string): ProblemKind {
   const c = (raw ?? '').toLowerCase().trim()
   return (PROBLEM_KINDS as readonly string[]).includes(c) ? (c as ProblemKind) : 'other'
 }
 
-export function normaliseMustKnowSlot(raw?: string): MustKnowSlot {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (MUST_KNOW_SLOTS as readonly string[]).includes(c) ? (c as MustKnowSlot) : 'other'
-}
+export { clampLine }

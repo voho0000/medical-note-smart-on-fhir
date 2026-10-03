@@ -150,6 +150,16 @@ function auditDocumentEvidence(
 }
 
 /** Returns a list of grounding issues (empty = clean) for a parsed medical summary. */
+/** Every key a problem row cites, across its per-column lists. */
+function problemKeys(p: any): string[] {
+  return [...new Set([
+    ...(p.basisSources ?? []),
+    ...(p.metricSources ?? []),
+    ...(p.medicationSources ?? []),
+    ...(p.sources ?? []),
+  ])] as string[]
+}
+
 export function auditSummaryGrounding(ai: any, input: GroundingAuditInput): string[] {
   const { byKey, presentTerms, isImaging, displayOf } = makeHelpers(input)
   const issues: string[] = []
@@ -160,10 +170,7 @@ export function auditSummaryGrounding(ai: any, input: GroundingAuditInput): stri
     documentEvidence?: DocumentEvidenceEntry[]
   }> = []
   spans.push({ text: ai.headline ?? '', tag: 'headline', sources: [] })
-  for (const [i, item] of (ai.mustKnow ?? []).entries()) spans.push({ text: `${item.label} ${item.text}`, tag: `mustKnow[${i}] ${item.slot ?? ''}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
-  for (const [i, item] of (ai.focus ?? []).entries()) spans.push({ text: `${item.title} ${item.text}`, tag: `focus[${i}] ${item.title}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
-  for (const [i, p] of (ai.problems ?? []).entries()) spans.push({ text: `${p.label} ${p.basis ?? ''} ${p.metric ?? ''} ${p.metricMeta ?? ''} ${p.managedBy ?? ''} ${p.medications ?? ''}`, tag: `problem[${i}] ${p.label}`, sources: p.sources ?? [], documentEvidence: p.documentEvidence })
-  for (const [i, t] of (ai.recent ?? []).entries()) spans.push({ text: t.label, tag: `recent[${i}] ${t.label}`, sources: t.ref ? [t.ref] : [], documentEvidence: t.documentEvidence })
+  for (const [i, p] of (ai.problems ?? []).entries()) spans.push({ text: `${p.label} ${p.basis ?? ''} ${p.metric ?? ''} ${p.metricMeta ?? ''} ${p.managedBy ?? ''} ${p.medications ?? ''}`, tag: `problem[${i}] ${p.label}`, sources: problemKeys(p), documentEvidence: p.documentEvidence })
   for (const [i, item] of (ai.medicationEducation ?? []).entries()) spans.push({ text: `${item.name} ${item.benefit} ${item.attention}`, tag: `medicationEducation[${i}] ${item.name}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
   for (const { text, tag, sources, documentEvidence } of spans) {
     const citesClinicalDocument = sources.some((source) => {
@@ -187,20 +194,9 @@ export function auditSummaryGrounding(ai: any, input: GroundingAuditInput): stri
     if (POSITIONAL.test(text)) issues.push(`positional cross-ref in ${tag}`)
   }
   for (const [i, p] of (ai.problems ?? []).entries()) {
-    if (/腎|eGFR|GFR/i.test(p.label)) for (const k of p.sources ?? []) if (isImaging(k) && !/超音波/.test(displayOf(k))) issues.push(`renal claim cites imaging ${k} (${displayOf(k)}) in problem[${i}] ${p.label}`)
-    if (/息肉/.test(p.label)) for (const k of p.sources ?? []) if (/超音波|X光/.test(displayOf(k))) issues.push(`polyp cites imaging ${k} (${displayOf(k)}) in problem[${i}] ${p.label}`)
-    if (/瓣/.test(p.label)) for (const k of p.sources ?? []) if (/心電圖|ECG/i.test(displayOf(k))) issues.push(`valve claim cites ECG ${k} in problem[${i}] ${p.label}`)
-  }
-  for (const [i, item] of (ai.mustKnow ?? []).entries()) {
-    // 開藥前必看 rows lead with a value, so the same citation-relevance rule
-    // applies: a renal row must cite renal evidence, never a chest film.
-    if (/腎|eGFR|GFR|Cr\b|Creat/i.test(`${item.label} ${item.text}`)) {
-      for (const k of item.sources ?? []) {
-        if (isImaging(k) && !/超音波|肌酸酐|Creat|GFR|尿素|BUN/i.test(displayOf(k))) {
-          issues.push(`renal mustKnow cites imaging ${k} (${displayOf(k)}) in mustKnow[${i}] ${item.label}`)
-        }
-      }
-    }
+    if (/腎|eGFR|GFR/i.test(p.label)) for (const k of problemKeys(p)) if (isImaging(k) && !/超音波/.test(displayOf(k))) issues.push(`renal claim cites imaging ${k} (${displayOf(k)}) in problem[${i}] ${p.label}`)
+    if (/息肉/.test(p.label)) for (const k of problemKeys(p)) if (/超音波|X光/.test(displayOf(k))) issues.push(`polyp cites imaging ${k} (${displayOf(k)}) in problem[${i}] ${p.label}`)
+    if (/瓣/.test(p.label)) for (const k of problemKeys(p)) if (/心電圖|ECG/i.test(displayOf(k))) issues.push(`valve claim cites ECG ${k} in problem[${i}] ${p.label}`)
   }
   return issues
 }

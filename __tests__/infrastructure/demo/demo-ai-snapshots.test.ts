@@ -116,32 +116,28 @@ describe('demo medical-summary snapshots', () => {
       .toBe(demoSafetyScanSnapshots['zh-TW'].patient)
   })
 
-  it.each(['zh-TW', 'en'] as const)('keeps 開藥前必看 clinician-only in %s', (locale) => {
-    expect(demoMedicalSummarySnapshots[locale].medical.mustKnow.length).toBeGreaterThan(0)
-    expect(demoMedicalSummarySnapshots[locale].patient.mustKnow).toEqual([])
-    // The mirror rule: benefit-first education is patient-only.
+  it.each(['zh-TW', 'en'] as const)('keeps benefit-first education patient-only in %s', (locale) => {
     expect(demoMedicalSummarySnapshots[locale].medical.medicationEducation).toEqual([])
     expect(demoMedicalSummarySnapshots[locale].patient.medicationEducation.length).toBeGreaterThan(0)
   })
 
-  // Allergy is no longer a model slot: the app renders that row itself from the
-  // bundle's AllergyIntolerance records (or their absence), so the snapshots
-  // must not carry a model-written allergy row at all — and every remaining
-  // row must cite at least one key, which the keyless allergy row could not.
-  it.each(['zh-TW', 'en'] as const)('carries no model-written allergy row in %s', (locale) => {
+  // 開藥前必看, 最可能的就診主因 and 最近 90 天 were retired (2026-10-02); the
+  // problems only the focus card carried moved into the problem list.
+  it.each(['zh-TW', 'en'] as const)('carries none of the retired sections in %s', (locale) => {
     for (const audience of ['medical', 'patient'] as const) {
-      const mustKnow = demoMedicalSummarySnapshots[locale][audience].mustKnow
-      expect(mustKnow.some((item) => item.slot === 'allergy')).toBe(false)
-      for (const item of mustKnow) expect(item.sources.length).toBeGreaterThan(0)
+      const snapshot = demoMedicalSummarySnapshots[locale][audience] as Record<string, unknown>
+      for (const retired of ['mustKnow', 'focus', 'recent']) expect(snapshot).not.toHaveProperty(retired)
     }
+    const labels = demoMedicalSummarySnapshots[locale].medical.problems.map((problem) => problem.label).join(' ')
+    expect(labels).toMatch(locale === 'zh-TW' ? /慢性腎臟病/ : /Chronic kidney disease/)
+    expect(labels).toMatch(locale === 'zh-TW' ? /甲狀腺功能低下/ : /Hypothyroidism/)
   })
 
   it.each(['medical', 'patient'] as const)('ships non-empty English content for %s audience', (audience) => {
     const snapshot = demoMedicalSummarySnapshots.en[audience]
     expect(snapshot.headline).toMatch(/[A-Za-z]/)
-    expect(snapshot.focus.map((item) => `${item.title}${item.text}`).join('')).toMatch(/[A-Za-z]/)
+    expect(snapshot.problems.map((item) => item.label).join('')).toMatch(/[A-Za-z]/)
     expect(snapshot.problems.length).toBeGreaterThan(0)
-    expect(snapshot.recent.length).toBeGreaterThan(0)
     expect(demoSafetyScanSnapshots.en[audience].alerts.length).toBeGreaterThan(0)
   })
 
@@ -194,17 +190,7 @@ describe('demo medical-summary snapshots', () => {
           locale,
         })
         expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-        expect(finalized.droppedRecentCount).toBe(0)
-        // Nothing in the bundled snapshot may already be covered by a focus
-        // item — the drop counter would hide content the author intended.
-        expect(finalized.droppedProblemCount).toBe(0)
         expect(finalized.problems.find((problem) => problem.sourceKeys.includes('D1')))
-          .toEqual(expect.objectContaining({
-            documentEvidence: expect.arrayContaining([
-              expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
-            ]),
-          }))
-        expect(finalized.focus.find((item) => item.sourceKeys.includes('D1')))
           .toEqual(expect.objectContaining({
             documentEvidence: expect.arrayContaining([
               expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
@@ -309,9 +295,9 @@ describe('demo medical-summary snapshots', () => {
     // The clinician list now carries medicines on the problem rows instead of
     // a separate reconciliation card; the same records must still be cited.
     const problems = demoMedicalSummarySnapshots['zh-TW'].medical.problems
-    expect(problems.some((item) => item.sources.includes('M13'))).toBe(true)
-    expect(problems.some((item) => item.sources.includes('M5') && item.sources.includes('M11'))).toBe(true)
-    expect(problems.some((item) => item.sources.includes('M10'))).toBe(true)
+    expect(problems.some((item) => item.sources?.includes('M13'))).toBe(true)
+    expect(problems.some((item) => item.sources?.includes('M5') && item.sources?.includes('M11'))).toBe(true)
+    expect(problems.some((item) => item.sources?.includes('M10'))).toBe(true)
   })
 
   it.each(['medical', 'patient'] as const)(
@@ -344,7 +330,6 @@ describe('demo medical-summary snapshots', () => {
       )
 
       expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-      expect(finalized.droppedRecentCount).toBe(0)
       const remappedDocumentProblem = finalized.problems.find((problem) =>
         problem.documentEvidence?.some((entry) => entry.quote === 'Diebetes mellitus'),
       )

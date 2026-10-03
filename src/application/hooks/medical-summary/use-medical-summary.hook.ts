@@ -10,6 +10,7 @@
 // remains visible until an explicit regeneration succeeds.
 'use client'
 
+import { detectClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { createModelExecution, modelExecutionLabel, mergeModelExecutions } from '@/src/shared/utils/ai-model-execution'
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 import { useCallback, useMemo, useRef } from 'react'
@@ -34,17 +35,14 @@ import {
   usesCompactSummaryHarness,
 } from '@/src/core/use-cases/medical-summary/medical-summary-harness'
 import { buildOverviewSnapshot } from '@/src/core/use-cases/medical-summary/overview-snapshot'
-import {
-  buildReportDigest,
-  type ReportDigestChunk,
-} from '@/src/core/use-cases/medical-summary/report-digest'
+import { buildReportDigest } from '@/src/core/use-cases/medical-summary/report-digest'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type {
   MedicalSummaryCardErrors,
   MedicalSummaryCardId,
   MedicalSummaryModuleId,
   MedicalSummaryResult,
-  ReportPick,
+  ReportsModuleDraft,
   SummaryCoverageStats,
   SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
@@ -131,22 +129,18 @@ function localizeSafetyProse<T extends { alerts: Array<{ title: string; detail: 
 // surface card errors instead of starting an unbounded retry loop.
 const MAX_CARD_BATCH_ATTEMPTS = 3
 
-/** Digest chunks of the `reports` lane in flight at once. Two keeps the
- *  on-prem GPU busy without starving the narrative lanes running beside it. */
-const REPORT_CHUNK_CONCURRENCY = 2
-
-/** A chunk whose reply held no parseable `reports` entry at all. */
-class ReportChunkParseError extends Error {
+/** The `reports` reply held no parseable module and no complete point. */
+class ReportsParseError extends Error {
   constructor() {
     super('PARSE_FAILED')
-    this.name = 'ReportChunkParseError'
+    this.name = 'ReportsParseError'
   }
 }
 
-/** Pause before the one re-send of a reports chunk whose request failed in
- *  transport. The live run (2026-10-01) lost one of four chunks to a provider
+/** Pause before the one re-send of the `reports` request after it failed in
+ *  transport. The live run (2026-10-01) lost a reports request to a provider
  *  HTTP 429; a short wait is what a rate limit asks for. */
-export const REPORT_CHUNK_RETRY_DELAY_MS = 2_000
+export const REPORTS_RETRY_DELAY_MS = 2_000
 
 function abortError(): Error {
   const error = new Error('The medical summary run was stopped.')
@@ -154,13 +148,13 @@ function abortError(): Error {
   return error
 }
 
-/** True for a chunk REQUEST that failed (network, 429, 5xx) — worth one
+/** True for a reports REQUEST that failed (network, 429, 5xx) — worth one
  *  re-send. A stop, a context-window rejection (already shrunk inside the
  *  request), an unparseable reply and the card watchdog are not: re-sending
  *  the same prompt would not change them. */
-function isRetryableReportChunkError(error: unknown): boolean {
+function isRetryableReportsError(error: unknown): boolean {
   if (error instanceof Error && error.name === 'AbortError') return false
-  if (error instanceof ReportChunkParseError) return false
+  if (error instanceof ReportsParseError) return false
   if (error instanceof MedicalSummaryCardProgressTimeoutError) return false
   if (isContextOverflowError(error) || isProviderContextWindowExceededError(error)) return false
   return true
@@ -247,6 +241,14 @@ export interface UseMedicalSummaryReturn {
   reportDigestInput: ReportHighlightsPresentationInput | null
 }
 
+/** The clinical clock's day in Taiwan (the records' own time zone). No valid
+ *  clock means no reference date, never a failed run. */
+function taipeiDay(nowMs: number | undefined): string | undefined {
+  return typeof nowMs === 'number' && Number.isFinite(nowMs)
+    ? new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10)
+    : undefined
+}
+
 export function useMedicalSummary(): UseMedicalSummaryReturn {
   const autoGenerate = useSummaryPrefsStore((s) => s.autoGenerate)
   const setAutoGenerate = useSummaryPrefsStore((s) => s.setAutoGenerate)
@@ -330,6 +332,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const isCustomEndpoint = isCustomOpenAiModelId(ctx.modelId)
     const promptInput: GenerateMedicalSummaryInput = {
       clinicalContext,
+      ...(taipeiDay(ctx.clinicalNowMs) ? { referenceDate: taipeiDay(ctx.clinicalNowMs) } : {}),
+      dataSource: detectClinicalDataSource(ctx.clinicalData as Parameters<typeof detectClinicalDataSource>[0]),
       piiLiterals: ctx.piiLiterals,
       catalog: contextScope.catalog,
       locale: outputLocale,
@@ -676,23 +680,20 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       return outcomes
     }
 
-    // Two lanes only for a fresh compact-harness generation: the overview is
-    // asked for on its own, so the first visible section no longer waits behind
-    // the whole-chart prompt the other cards need. A module retry already
-    // targets exactly the failed cards, and the frontier harness keeps the
-    // established single batch.
+    // Two narrative lanes only for a fresh compact-harness generation: the
+    // overview (the headline) is asked for on its own, so the first visible
+    // section no longer waits behind the whole-chart prompt the problems and
+    // safety cards need. A module retry already targets exactly the failed
+    // cards, and the frontier harness keeps the established single batch.
     // 影像與病理重點 never joins a narrative lane: its input is the report
     // digest, not the clinical context, and it runs as its own lane beside
     // them — on a fresh run in both harness profiles, and alone when only the
     // reports card is being retried.
     const reportsCard = targetCards.find((card) => card.id === 'reports')
     const narrativeCards = targetCards.filter((card) => card.id !== 'reports')
-    const fastLaneCards = !retryRequest && useCompactHarness
-      ? narrativeCards.filter((card) => card.id === 'overview')
-      : []
-    const fullLaneCards = fastLaneCards.length > 0
-      ? narrativeCards.filter((card) => card.id !== 'overview')
-      : narrativeCards
+    const overviewCard = !retryRequest && useCompactHarness
+      ? narrativeCards.find((card) => card.id === 'overview')
+      : undefined
     // The fast lane does NOT reuse the fitted narrative. It is built from a
     // purpose-made snapshot whose size is bounded by per-section caps rather
     // than by the chart, because on an on-prem GPU the wait for the first
@@ -701,7 +702,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // No clinical data (still calculating) or a snapshot that cites nothing
     // would leave the lane with no evidence at all; the single batch over the
     // fitted context is better than an empty prompt.
-    const builtSnapshot = fastLaneCards.length > 0 && ctx.clinicalData
+    const builtSnapshot = overviewCard && ctx.clinicalData
       ? buildOverviewSnapshot(
           { clinicalData: ctx.clinicalData, catalog: ctx.catalog, patient: ctx.patient },
           { nowMs: ctx.clinicalNowMs, locale: outputLocale },
@@ -723,11 +724,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       input: GenerateMedicalSummaryInput
       hiddenReasoning?: 'off'
     }> =
-      overviewSnapshot && fullLaneCards.length > 0
+      overviewCard && overviewSnapshot
         ? [
             {
               id: 'fast',
-              cards: fastLaneCards,
+              cards: [overviewCard],
               input: {
                 ...promptInput,
                 clinicalContext: overviewSnapshot.clinicalContext,
@@ -738,10 +739,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               // not prompt size, and soft prompting does not shorten it.
               hiddenReasoning: 'off',
             },
-            // Off here too: Qwen 3.6 35B-A3B with thinking wrote no card in
-            // 45 s on three attempts (2026-10-01, demo), and finished in
-            // 10.6 s without it.
-            { id: 'full', cards: fullLaneCards, input: promptInput, hiddenReasoning: 'off' },
+            // Problems + safety. Off here too: Qwen 3.6 35B-A3B with thinking
+            // wrote no card in 45 s on three attempts (2026-10-01, demo), and
+            // finished in 10.6 s without it.
+            {
+              id: 'full',
+              cards: narrativeCards.filter((card) => card !== overviewCard),
+              input: promptInput,
+              hiddenReasoning: 'off',
+            },
           ]
         : narrativeCards.length > 0
           ? [{
@@ -754,134 +760,96 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           : []
 
     /**
-     * 影像與病理重點: one request per digest chunk, two in flight, merged into
-     * one `reports` module. A chunk that fails or times out costs only its own
-     * reports (the finalizer falls back for them); the card fails only when
-     * every chunk fails. Only a user stop escapes.
+     * 影像與病理重點: ONE request over the whole digest (merging the same
+     * finding across reports needs every report in the same prompt), with one
+     * re-send after a transport failure. A request cut off by the watchdog
+     * keeps the points it finished. Only a user stop escapes; every other
+     * failure is recorded on the card, and the section still lists every
+     * report from the digest.
      */
     const runReportsLane = async (card: MedicalSummaryCardDefinition): Promise<LaneOutcomes> => {
       const outcomes: LaneOutcomes = new Map()
-      const chunks: ReportDigestChunk[] = ctx.clinicalData
-        ? buildReportDigest({ clinicalData: ctx.clinicalData, catalog: ctx.catalog }).chunks
-        : []
-      if (chunks.length === 0) {
+      const digest = ctx.clinicalData
+        ? buildReportDigest({ clinicalData: ctx.clinicalData, catalog: ctx.catalog })
+        : null
+      if (!digest || digest.items.length === 0) {
         // Nothing to ask: the section renders (or stays empty) from the digest.
-        outcomes.set(card.id, { status: 'fulfilled', value: { cardId: card.id, result: { reports: [] } } })
+        outcomes.set(card.id, {
+          status: 'fulfilled',
+          value: { cardId: card.id, result: { groups: [], unremarkable: [] } satisfies ReportsModuleDraft },
+        })
         return outcomes
       }
-      // Pure extraction: hidden reasoning buys nothing and is what pushes a
-      // local MoE model past the card watchdog.
+      // Pure extraction over a bounded digest: hidden reasoning buys nothing
+      // and is what pushes a local MoE model past the card watchdog.
       const reportsHiddenReasoning = useCompactHarness ? 'off' as const : undefined
-      const chunkExecutions: AiModelExecution[] = []
 
-      const runChunk = async (chunk: ReportDigestChunk, index: number): Promise<ReportPick[]> => {
-        const laneId = `reports:${index + 1}/${chunks.length}`
-        let chunkExecution = initialExecution()
-        let completeEntries = 0
+      const requestOnce = async (): Promise<{ module: ReportsModuleDraft; execution: AiModelExecution }> => {
+        let execution = initialExecution()
+        let completePoints = 0
         const { value } = await streamModelRequest({
-          laneId,
-          clinicalContext: chunk.promptText,
+          laneId: 'reports',
+          clinicalContext: digest.promptText,
           buildMessages: (reportsText) => generateMedicalSummaryUseCase.buildReportHighlightMessages({
             locale: outputLocale,
             piiLiterals: ctx.piiLiterals,
             reportsText,
-            reportCount: chunk.items.length,
+            reportCount: digest.items.length,
           }),
           hiddenReasoning: reportsHiddenReasoning,
-          onCallStart: () => { chunkExecution = initialExecution() },
-          onModelExecution: (execution) => {
-            chunkExecution = { ...chunkExecution, ...execution }
-            aggregateExecution = chunkExecution
+          onCallStart: () => { execution = initialExecution() },
+          onModelExecution: (next) => {
+            execution = { ...execution, ...next }
+            aggregateExecution = execution
           },
-          // Progress is a newly COMPLETE report entry, not a token: one block
-          // per request would otherwise have to finish inside the watchdog.
+          // Progress is a newly COMPLETE point, not a token: the whole block
+          // would otherwise have to finish inside the watchdog.
           onChunk: (streamedText) => {
-            const count = generateMedicalSummaryUseCase.salvageReportEntries(streamedText).length
-            if (count <= completeEntries) return false
-            completeEntries = count
+            const count = generateMedicalSummaryUseCase.salvageReportsModule(streamedText).pointCount
+            if (count <= completePoints) return false
+            completePoints = count
             return true
           },
         })
-        chunkExecutions.push(chunkExecution)
-        const parsed = card.parseBatch(value.fullText, ctx.catalog) as { reports: ReportPick[] } | null
-        if (parsed && !value.timedOut) return parsed.reports
-        const salvaged = generateMedicalSummaryUseCase.salvageReportEntries(value.fullText)
-        if (salvaged.length > 0) return salvaged
-        if (parsed) return parsed.reports
+        const parsed = card.parseBatch(value.fullText, ctx.catalog) as ReportsModuleDraft | null
+        if (parsed && !value.timedOut) return { module: parsed, execution }
+        const salvaged = generateMedicalSummaryUseCase.salvageReportsModule(value.fullText)
+        if (salvaged.pointCount > 0) return { module: salvaged.module, execution }
+        if (parsed) return { module: parsed, execution }
         if (value.timedOut) throw new MedicalSummaryCardProgressTimeoutError(MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS)
-        throw new ReportChunkParseError()
+        throw new ReportsParseError()
       }
 
-      const chunkResults: Array<PromiseSettledResult<ReportPick[]>> = new Array(chunks.length)
-      let nextChunk = 0
-      // A stop aborts the requests in flight; this also ends a retry that is
-      // only WAITING, so neither worker starts a request after the stop.
-      const laneAbort = new AbortController()
-      let chunkRetries = 0
-      const worker = async () => {
-        while (nextChunk < chunks.length) {
-          if (laneAbort.signal.aborted || ctx.signal?.aborted) throw abortError()
-          const index = nextChunk
-          nextChunk += 1
-          try {
-            try {
-              chunkResults[index] = { status: 'fulfilled', value: await runChunk(chunks[index], index) }
-            } catch (error) {
-              if (!isRetryableReportChunkError(error)) throw error
-              // One re-send for a failed request. Its reports are otherwise
-              // only the deterministic excerpts, and a rate limit is usually
-              // gone a moment later.
-              chunkRetries += 1
-              if (process.env.NODE_ENV !== 'production') {
-                console.info(
-                  `[medical-summary:reports] chunk ${index + 1}/${chunks.length} request failed; ` +
-                  `retrying once in ${REPORT_CHUNK_RETRY_DELAY_MS / 1_000}s (retry ${chunkRetries} this run)`,
-                )
-              }
-              await waitUnlessAborted(REPORT_CHUNK_RETRY_DELAY_MS, [laneAbort.signal, ctx.signal])
-              chunkResults[index] = { status: 'fulfilled', value: await runChunk(chunks[index], index) }
-              if (process.env.NODE_ENV !== 'production') {
-                console.info(`[medical-summary:reports] chunk ${index + 1}/${chunks.length} succeeded on retry`)
-              }
-            }
-          } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-              laneAbort.abort()
-              throw error
-            }
-            if (process.env.NODE_ENV !== 'production') {
-              console.info(`[medical-summary:reports] chunk ${index + 1}/${chunks.length} failed; its reports fall back`)
-            }
-            chunkResults[index] = { status: 'rejected', reason: error }
+      try {
+        let reply: Awaited<ReturnType<typeof requestOnce>>
+        try {
+          reply = await requestOnce()
+        } catch (error) {
+          if (!isRetryableReportsError(error)) throw error
+          // One re-send for a failed request; a rate limit is usually gone a
+          // moment later.
+          if (process.env.NODE_ENV !== 'production') {
+            console.info(
+              `[medical-summary:reports] request failed; retrying once in ${REPORTS_RETRY_DELAY_MS / 1_000}s`,
+            )
+          }
+          await waitUnlessAborted(REPORTS_RETRY_DELAY_MS, [ctx.signal])
+          reply = await requestOnce()
+          if (process.env.NODE_ENV !== 'production') {
+            console.info('[medical-summary:reports] succeeded on retry')
           }
         }
-      }
-      const workers = await Promise.allSettled(
-        Array.from({ length: Math.min(REPORT_CHUNK_CONCURRENCY, chunks.length) }, worker),
-      )
-      const aborted = workers.find((settlement) => settlement.status === 'rejected')
-      if (aborted?.status === 'rejected') throw aborted.reason
-
-      const succeeded = chunkResults.filter(
-        (result): result is PromiseFulfilledResult<ReportPick[]> => result?.status === 'fulfilled',
-      )
-      if (succeeded.length === 0) {
-        const failures = chunkResults.filter(
-          (result): result is PromiseRejectedResult => result?.status === 'rejected',
-        )
-        if (failures.every((failure) => failure.reason instanceof ReportChunkParseError)) {
+        publishCard(card, reply.module, reply.execution)
+        outcomes.set(card.id, { status: 'fulfilled', value: { cardId: card.id, result: reply.module } })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error
+        if (error instanceof ReportsParseError) {
           markValidationError(card.id)
           outcomes.set(card.id, { status: 'fulfilled', value: { cardId: card.id, error: 'PARSE_FAILED' } })
         } else {
-          const reason = failures.find((failure) => !(failure.reason instanceof ReportChunkParseError))?.reason
-          outcomes.set(card.id, { status: 'rejected', reason })
+          outcomes.set(card.id, { status: 'rejected', reason: error })
         }
-        return outcomes
       }
-      const merged = { reports: succeeded.flatMap((result) => result.value) }
-      // Publish the card under the execution(s) that actually produced it.
-      publishCard(card, merged, mergeModelExecutions(chunkExecutions, initialExecution()))
-      outcomes.set(card.id, { status: 'fulfilled', value: { cardId: card.id, result: merged } })
       return outcomes
     }
 
@@ -1025,6 +993,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // On a compact-harness (on-prem class) model the full-context request is
     // bounded by prefill time, not only by the window.
     contextTokenBudget: medicalSummaryContextTokenBudget,
+    // Owner decisions 2026-10-03, this summary only: medicines are linked to
+    // problems by what they are, never by the visit they were dispensed at;
+    // vitals say which are years-old check-up readings; a passed supply
+    // estimate is worded as one, never as a stop.
+    contextVariant: 'first-visit-summary',
   })
 
   // Deterministic coverage stats for the coverage card — recomputes only when

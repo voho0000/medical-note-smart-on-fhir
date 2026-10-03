@@ -446,14 +446,11 @@ async function main() {
 
   const showOverview = (label: string, text: string) => {
     const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult('overview', text) as
-      { headline?: string; mustKnow?: Array<{ slot?: string; label?: string; text?: string; critical?: boolean; sources?: string[] }> } | null
+      { headline?: string } | null
     if (!parsed) return
     console.log('')
     console.log(`--- overview from ${label} ---`)
     console.log(`headline: ${parsed.headline ?? ''}`)
-    for (const row of parsed.mustKnow ?? []) {
-      console.log(`  [${row.slot ?? '?'}${row.critical ? '!' : ''}] ${row.label ?? ''} — ${row.text ?? ''} (${(row.sources ?? []).join(',')})`)
-    }
   }
   for (const result of results) if (result.overviewParsed) showOverview(result.id, result.text)
 

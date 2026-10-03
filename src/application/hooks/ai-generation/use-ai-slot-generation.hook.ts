@@ -176,6 +176,8 @@ export interface AiSlotGenerationConfig<T> {
    *  keeps the window-only fit. A binding budget is reported as a
    *  `local-latency` adaptation. */
   contextTokenBudget?: (contextLimit: number, model: { selfHosted: boolean }) => number | undefined
+  /** Clinical-context variant (see useClinicalContext). */
+  contextVariant?: 'default' | 'first-visit-summary'
   /** Keep an unavailable selected model visible and block generation instead
    *  of silently substituting the feature default. Opt in only where the UI
    *  provides a clear recovery path. */
@@ -249,6 +251,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     readRunMetrics,
     retainResultOnModelChange = false,
     contextTokenBudget,
+    contextVariant,
   } = config
 
   const ai = useUnifiedAi()
@@ -342,7 +345,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     resolvedContextLimit,
     'insights',
     clinicalContextSafetyFraction,
-    { tokenBudget: resolvedContextTokenBudget },
+    { tokenBudget: resolvedContextTokenBudget, contextVariant },
   )
   // A latency budget narrows only the clinical-context request. Everything
   // else this slot exposes — the source list results are finalised and shown

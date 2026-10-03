@@ -65,8 +65,8 @@ replay('same authorized real responses retain all clinical fields and source lin
         const draft = after.createAiDraftFromResult(newResult)
         const replacement = after.createAiDraftFromResult(newResult)
         const retried = after.mergeModuleResult(draft, id, id === 'overview'
-          ? { headline: replacement.headline, mustKnow: replacement.mustKnow, medicationEducation: replacement.medicationEducation }
-          : id === 'focus' ? { items: replacement.focus }
+          ? { headline: replacement.headline, medicationEducation: replacement.medicationEducation }
+          : id === 'reports' ? replacement.reports ?? { groups: [], unremarkable: [] }
             : { [id]: replacement[id] } as any)
         const retryResult = after.finalizeResult(retried, catalog, options)
         expect(hash(withoutEvidence(retryResult))).toBe(hash(withoutEvidence(newResult)))

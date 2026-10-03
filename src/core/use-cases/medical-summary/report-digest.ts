@@ -3,10 +3,13 @@
 // Clinicians cannot read every report. This module decides, without any
 // model, WHICH reports the section covers (every imaging and pathology report
 // in the AI scope that carries text and resolves to a catalog key), what each
-// one's prompt text is, and how the list is split into requests a slow on-prem
-// MoE model can finish. The model then only picks sentences; the finalizer
-// verifies each one against `narrative` (the full text kept here) and falls
-// back to the deterministic excerpts below for every report it did not cover.
+// one's prompt text is, and how much of it fits ONE request: merging the same
+// finding across reports needs every report in the same prompt, so the digest
+// is fitted to a token budget instead of being split into chunks. The model
+// then groups and states the findings; the finalizer verifies each quote
+// against `narrative` (the full text kept here), and every report the model
+// did not cite — including the ones past the budget — lands in the collapsed
+// footer.
 //
 // Prompt text is a shortened VIEW of the report (conclusion first, admin lines
 // removed, capped); verification always runs against the full narrative, so a
@@ -16,25 +19,25 @@ import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summ
 import type { SummaryCatalogInput } from './generate-medical-summary.use-case'
 import {
   isAiScopeReport,
-  reportIdentity,
+  reportIdentities,
   reportModality,
   reportNarrative,
   type ReportModalityKind,
 } from '@/src/core/utils/report-narrative.utils'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
-/** Reports sent to the model; the rest render with the deterministic fallback. */
+/** Reports considered for the request; the rest go straight to the footer. */
 export const REPORT_DIGEST_MAX_REPORTS = 30
-/** Characters of one report's text in the prompt (conclusion first). */
+/** Characters of one report's text in the prompt (conclusion first) before
+ *  the budget forces it shorter. */
 export const REPORT_DIGEST_PER_REPORT_CHARS = 1_800
-/** Reports per request. With ≤3 quotes × ≤220 chars each, eight reports keep
- *  one reply short enough for an on-prem model to finish well inside the
- *  card watchdog. */
-export const REPORT_DIGEST_CHUNK_REPORTS = 8
-/** Estimated report-text tokens per request. On the hospital GPU ~5K tokens of
- *  prompt is ~10.7 s of prefill; 4K of reports plus the short instructions
- *  stays under that. */
-export const REPORT_DIGEST_CHUNK_TOKENS = 4_000
+/** Estimated report-text tokens of the single request. On the hospital GPU
+ *  ~13K tokens of prompt is ~24 s of prefill; 10K of reports plus the short
+ *  instructions stays inside the first-output watchdog. */
+export const REPORT_DIGEST_TOKEN_BUDGET = 10_000
+/** Per-report lengths tried, in order, before the oldest reports are dropped
+ *  from the request. Every step still leads with the conclusion section. */
+export const REPORT_DIGEST_SHRINK_STEPS = [1_800, 1_200, 800, 500, 300] as const
 
 /** Deterministic fallback lengths (characters). */
 export const REPORT_CONCLUSION_EXCERPT_CHARS = 300
@@ -44,9 +47,10 @@ const OMISSION_MARKER = '[…]'
 
 export interface ReportDigestOptions {
   maxReports?: number
+  /** Starting per-report length (the first shrink step is replaced by it). */
   perReportChars?: number
-  chunkReports?: number
-  chunkTokens?: number
+  /** Estimated-token budget of the request's report text. */
+  tokenBudget?: number
 }
 
 export interface ReportDigestInput {
@@ -76,21 +80,19 @@ export interface ReportDigestItem {
   hasConclusion: boolean
 }
 
-export interface ReportDigestChunk {
-  items: ReportDigestItem[]
-  promptText: string
-  estimatedTokens: number
-}
-
 export interface ReportDigest {
-  /** Reports sent to the model, newest first (≤ maxReports). */
+  /** Reports sent to the model, newest first. */
   items: ReportDigestItem[]
-  /** Reports past the cap, newest first. Rendered with the fallback. */
+  /** Reports left out of the request — past the report cap, or the oldest
+   *  ones dropped to fit the token budget — newest first. They are never
+   *  cited, so they always render in the footer. */
   overflow: ReportDigestItem[]
-  /** `items` split into requests. */
-  chunks: ReportDigestChunk[]
-  /** Every chunk's prompt text, in order. */
+  /** The single request's report text. */
   promptText: string
+  /** Estimated tokens of `promptText`. */
+  estimatedTokens: number
+  /** Per-report length the request was built at (the last shrink step used). */
+  perReportChars: number
 }
 
 /** Every report the section renders, in display order (newest first). */
@@ -331,44 +333,57 @@ function keyNumber(key: string): number {
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER
 }
 
-function chunkItems(
-  items: ReportDigestItem[],
-  chunkReports: number,
-  chunkTokens: number,
-): ReportDigestChunk[] {
-  const chunks: ReportDigestChunk[] = []
-  let current: ReportDigestItem[] = []
-  let tokens = 0
-  const flush = () => {
-    if (current.length === 0) return
-    chunks.push({
-      items: current,
-      promptText: current.map((item) => item.promptText).join('\n\n'),
-      estimatedTokens: tokens,
-    })
-    current = []
-    tokens = 0
-  }
-  for (const item of items) {
-    if (
-      current.length > 0 &&
-      (current.length >= chunkReports || tokens + item.estimatedTokens > chunkTokens)
-    ) flush()
-    current.push(item)
-    tokens += item.estimatedTokens
-  }
-  flush()
-  return chunks
+interface DigestCandidate {
+  key: string
+  resourceType: string
+  resourceId: string
+  kind: ReportModalityKind
+  modalityClass: string
+  rank: number
+  title: string
+  date?: string
+  organization?: string
+  narrative: string
+  header: string
 }
+
+function candidateItem(candidate: DigestCandidate, perReportChars: number): ReportDigestItem {
+  const body = buildReportPromptBody(candidate.narrative, perReportChars)
+  const promptText = `${candidate.header}\n${body.text}`
+  return {
+    key: candidate.key,
+    resourceType: candidate.resourceType,
+    resourceId: candidate.resourceId,
+    kind: candidate.kind,
+    modalityClass: candidate.modalityClass,
+    rank: candidate.rank,
+    title: candidate.title,
+    ...(candidate.date ? { date: candidate.date } : {}),
+    ...(candidate.organization ? { organization: candidate.organization } : {}),
+    narrative: candidate.narrative,
+    promptText,
+    estimatedTokens: estimateTokens(promptText),
+    hasConclusion: body.hasConclusion,
+  }
+}
+
+/** Separator between reports in the prompt, counted in the budget. */
+const REPORT_SEPARATOR = '\n\n'
+const totalTokens = (items: readonly ReportDigestItem[]) =>
+  items.reduce((sum, item) => sum + item.estimatedTokens, 0) +
+  Math.max(0, items.length - 1) * estimateTokens(REPORT_SEPARATOR)
 
 function computeReportDigest(
   input: ReportDigestInput,
   options: ReportDigestOptions,
 ): ReportDigest {
   const maxReports = Math.max(0, options.maxReports ?? REPORT_DIGEST_MAX_REPORTS)
-  const perReportChars = Math.max(200, options.perReportChars ?? REPORT_DIGEST_PER_REPORT_CHARS)
-  const chunkReports = Math.max(1, options.chunkReports ?? REPORT_DIGEST_CHUNK_REPORTS)
-  const chunkTokens = Math.max(1, options.chunkTokens ?? REPORT_DIGEST_CHUNK_TOKENS)
+  const tokenBudget = Math.max(1, options.tokenBudget ?? REPORT_DIGEST_TOKEN_BUDGET)
+  const firstStep = Math.max(200, options.perReportChars ?? REPORT_DIGEST_PER_REPORT_CHARS)
+  const shrinkSteps = [
+    firstStep,
+    ...REPORT_DIGEST_SHRINK_STEPS.filter((chars) => chars < firstStep),
+  ]
 
   const entryByResourceId = new Map(
     input.catalog
@@ -376,7 +391,7 @@ function computeReportDigest(
       .map((entry) => [entry.resourceId, entry]),
   )
   const seen = new Set<string>()
-  const items: ReportDigestItem[] = []
+  const candidates: DigestCandidate[] = []
   for (const report of input.clinicalData?.diagnosticReports ?? []) {
     if (!isAiScopeReport(report)) continue
     const entry = report.id ? entryByResourceId.get(report.id) : undefined
@@ -387,18 +402,10 @@ function computeReportDigest(
     const { cls, rank, kind } = reportModality(report)
     // Same study twice (bilingual bridge rows): keep the first, exactly as the
     // overview snapshot does.
-    const identity = reportIdentity(report, cls, entry.date ?? '')
-    if (seen.has(identity)) continue
-    seen.add(identity)
-    const body = buildReportPromptBody(narrative, perReportChars)
-    const header = [
-      `[${entry.key}] ${PROMPT_KIND_LABEL[kind]}`,
-      entry.date ?? 'date unknown',
-      entry.organization?.trim(),
-      entry.display.replace(/\s+/g, ' ').trim(),
-    ].filter(Boolean).join(' · ')
-    const promptText = `${header}\n${body.text}`
-    items.push({
+    const identities = reportIdentities(report, cls, entry.date ?? '')
+    if (identities.some((identity) => seen.has(identity))) continue
+    identities.forEach((identity) => seen.add(identity))
+    candidates.push({
       key: entry.key,
       resourceType: entry.resourceType,
       resourceId: entry.resourceId,
@@ -409,22 +416,46 @@ function computeReportDigest(
       ...(entry.date ? { date: entry.date } : {}),
       ...(entry.organization ? { organization: entry.organization } : {}),
       narrative,
-      promptText,
-      estimatedTokens: estimateTokens(promptText),
-      hasConclusion: body.hasConclusion,
+      header: [
+        `[${entry.key}] ${PROMPT_KIND_LABEL[kind]}`,
+        entry.date ?? 'date unknown',
+        entry.organization?.trim(),
+        entry.display.replace(/\s+/g, ' ').trim(),
+      ].filter(Boolean).join(' · '),
     })
   }
-  items.sort((a, b) =>
+  candidates.sort((a, b) =>
     (b.date ?? '').localeCompare(a.date ?? '') ||
     b.rank - a.rank ||
     keyNumber(a.key) - keyNumber(b.key))
-  const selected = items.slice(0, maxReports)
-  const chunks = chunkItems(selected, chunkReports, chunkTokens)
+  const considered = candidates.slice(0, maxReports)
+  const pastCap = candidates.slice(maxReports)
+
+  // Shrink every report's view before giving up on any report: a shorter
+  // conclusion-first view of an old study is worth more than no view at all.
+  let perReportChars = shrinkSteps[0]
+  let items = considered.map((candidate) => candidateItem(candidate, perReportChars))
+  for (const chars of shrinkSteps.slice(1)) {
+    if (totalTokens(items) <= tokenBudget) break
+    perReportChars = chars
+    items = considered.map((candidate) => candidateItem(candidate, chars))
+  }
+  // Still over at the shortest view: the oldest reports leave the request
+  // (newest first is the order, so they are at the end) for the footer.
+  const dropped: ReportDigestItem[] = []
+  while (items.length > 1 && totalTokens(items) > tokenBudget) {
+    dropped.unshift(items.pop()!)
+  }
+  const promptText = items.map((item) => item.promptText).join(REPORT_SEPARATOR)
   return {
-    items: selected,
-    overflow: items.slice(maxReports),
-    chunks,
-    promptText: chunks.map((chunk) => chunk.promptText).join('\n\n'),
+    items,
+    overflow: [
+      ...dropped,
+      ...pastCap.map((candidate) => candidateItem(candidate, perReportChars)),
+    ],
+    promptText,
+    estimatedTokens: totalTokens(items),
+    perReportChars,
   }
 }
 
@@ -432,8 +463,8 @@ function computeReportDigest(
 // bundle is built once.
 const defaultDigestCache = new WeakMap<object, WeakMap<object, ReportDigest>>()
 
-/** Imaging & pathology reports to summarise, newest first, with the request
- *  chunks and prompt text. Pure and deterministic. */
+/** Imaging & pathology reports to summarise, newest first, with the single
+ *  request's prompt text fitted to the token budget. Pure and deterministic. */
 export function buildReportDigest(
   input: ReportDigestInput,
   options?: ReportDigestOptions,

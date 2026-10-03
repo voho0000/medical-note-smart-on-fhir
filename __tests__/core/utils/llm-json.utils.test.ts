@@ -55,14 +55,14 @@ describe('medical summary batch blocks', () => {
     `<<<MEDIPRISMA_MODULE:${id}>>>\n${body}\n${closed ? `<<<END_MEDIPRISMA_MODULE:${id}>>>` : ''}`
 
   it('repairs an omitted final } in a block whose end marker arrived', () => {
-    const body = '{"recent": [{"ref": "E1", "label": "住院", "category": "encounter"}]'
-    expect(useCase.parseBatchModuleResult('recent', block('recent', body))?.recent).toHaveLength(1)
+    const body = '{"problems": [{"label": "糖尿病", "sources": ["C1"]}]'
+    expect(useCase.parseBatchModuleResult('problems', block('problems', body))?.problems).toHaveLength(1)
   })
 
   it('rejects a truncated final block instead of keeping only its first items', () => {
-    const truncated = '{"recent": [{"ref": "E1", "label": "住院", "category": "encounter"}, {"ref": "E2", "lab'
-    expect(useCase.parseBatchModuleResult('recent', block('recent', truncated, false))).toBeNull()
-    const atBoundary = '{"recent": [{"ref": "E1", "label": "住院", "category": "encounter"}]'
-    expect(useCase.parseBatchModuleResult('recent', block('recent', atBoundary, false))).toBeNull()
+    const truncated = '{"problems": [{"label": "糖尿病", "sources": ["C1"]}, {"label": "高血'
+    expect(useCase.parseBatchModuleResult('problems', block('problems', truncated, false))).toBeNull()
+    const atBoundary = '{"problems": [{"label": "糖尿病", "sources": ["C1"]}]'
+    expect(useCase.parseBatchModuleResult('problems', block('problems', atBoundary, false))).toBeNull()
   })
 })

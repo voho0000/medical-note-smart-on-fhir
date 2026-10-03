@@ -1,10 +1,13 @@
 // 影像與病理重點 digest — which reports are summarised, in what order, with
-// what prompt text, and how they are split into requests. Synthetic fixtures.
+// what prompt text, and how the single request is fitted to its token budget.
+// Synthetic fixtures.
 import { buildSourceCatalog } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import {
   buildReportDigest,
   buildReportPromptBody,
   cutAtSentenceBoundary,
+  REPORT_DIGEST_SHRINK_STEPS,
+  REPORT_DIGEST_TOKEN_BUDGET,
   deterministicReportExcerpt,
   findConclusionSection,
 } from '@/src/core/use-cases/medical-summary/report-digest'
@@ -74,13 +77,29 @@ describe('report digest — scope and order', () => {
     expect(digest.items.map((item) => item.resourceId).sort()).toEqual(['ct-head', 'ct-zh'])
   })
 
+  it('keeps two different same-day CTs that carry no accession', () => {
+    const { digest } = digestFor([
+      report('ct-head', '2026-04-20', '電腦斷層造影', 'Impression: No ICH.'),
+      report('ct-chest', '2026-04-20', '電腦斷層造影', 'Impression: RUL nodule 8 mm.'),
+    ])
+    expect(digest.items.map((item) => item.resourceId).sort()).toEqual(['ct-chest', 'ct-head'])
+  })
+
+  it('collapses one study emitted twice when only one row carries the accession', () => {
+    const { digest } = digestFor([
+      report('ct-a', '2026-04-20', '電腦斷層造影', 'Impression:  RUL nodule 8 mm.', { identifier: [{ value: 'ACC-9' }] }),
+      report('ct-b', '2026-04-20', '電腦斷層造影 ;(CT)', 'Impression: RUL nodule 8 mm.'),
+    ])
+    expect(digest.items).toHaveLength(1)
+  })
+
   it('caps the request at maxReports and returns the rest as overflow, still newest first', () => {
     const reports = Array.from({ length: 5 }, (_, index) =>
       report(`x-${index}`, `2026-0${index + 1}-01`, 'Chest X-ray', `Impression: Finding number ${index}.`))
     const { digest } = digestFor(reports, { maxReports: 3 })
     expect(digest.items.map((item) => item.resourceId)).toEqual(['x-4', 'x-3', 'x-2'])
     expect(digest.overflow.map((item) => item.resourceId)).toEqual(['x-1', 'x-0'])
-    expect(digest.chunks.flatMap((chunk) => chunk.items)).toHaveLength(3)
+    expect(digest.promptText.match(/^\[L\d+\] /gm)).toHaveLength(3)
   })
 })
 
@@ -157,28 +176,53 @@ describe('report digest — prompt text', () => {
   })
 })
 
-describe('report digest — request chunks', () => {
-  it('splits by report count', () => {
+describe('report digest — one request within a token budget', () => {
+  const long = (index: number) =>
+    `Impression: Case ${index}. ${'Diffuse ground-glass opacities in both lungs. '.repeat(60)}`
+  const longReports = (count: number) => Array.from({ length: count }, (_, index) =>
+    report(`ct-${index}`, `2026-02-${String(index + 1).padStart(2, '0')}`, 'CT chest', long(index)))
+
+  it('sends every report in one prompt when they fit', () => {
     const reports = Array.from({ length: 10 }, (_, index) =>
       report(`x-${index}`, `2026-01-${String(index + 10)}`, 'Chest X-ray', `Impression: Finding ${index}.`))
-    const { digest } = digestFor(reports, { chunkReports: 4 })
-    expect(digest.chunks.map((chunk) => chunk.items.length)).toEqual([4, 4, 2])
-    expect(digest.promptText).toBe(digest.chunks.map((chunk) => chunk.promptText).join('\n\n'))
+    const { digest } = digestFor(reports)
+    expect(digest.items).toHaveLength(10)
+    expect(digest.overflow).toHaveLength(0)
+    expect(digest.promptText).toBe(digest.items.map((item) => item.promptText).join('\n\n'))
+    expect(digest.estimatedTokens).toBeLessThanOrEqual(REPORT_DIGEST_TOKEN_BUDGET)
+    expect(digest.perReportChars).toBe(REPORT_DIGEST_SHRINK_STEPS[0])
   })
 
-  it('splits by estimated tokens', () => {
-    const long = (index: number) => `Impression: ${'Diffuse ground-glass opacities in both lungs. '.repeat(20)}Case ${index}.`
-    const reports = Array.from({ length: 4 }, (_, index) =>
-      report(`ct-${index}`, `2026-02-0${index + 1}`, 'CT chest', long(index)))
-    const { digest } = digestFor(reports)
-    const perItem = digest.items[0].estimatedTokens
-    expect(perItem).toBe(estimateTokens(digest.items[0].promptText))
-    const split = buildReportDigest(
-      { clinicalData: { diagnosticReports: reports } as any, catalog: buildSourceCatalog({ diagnosticReports: reports } as any) },
-      { chunkTokens: perItem * 2 + 1 },
+  it('shrinks every report, conclusion first, before dropping any', () => {
+    const reports = longReports(4)
+    const { digest: full } = digestFor(reports)
+    const budget = Math.floor(full.estimatedTokens * 0.6)
+    const { digest } = digestFor(reports, { tokenBudget: budget })
+    expect(digest.items).toHaveLength(4)
+    expect(digest.overflow).toHaveLength(0)
+    expect(digest.perReportChars).toBeLessThan(REPORT_DIGEST_SHRINK_STEPS[0])
+    expect(digest.estimatedTokens).toBeLessThanOrEqual(budget)
+    // The shorter view still leads with the conclusion text.
+    for (const item of digest.items) expect(item.promptText.split('\n')[1]).toMatch(/^Impression: Case \d+\./)
+    expect(digest.estimatedTokens).toBe(
+      digest.items.reduce((sum, item) => sum + item.estimatedTokens, 0) + (digest.items.length - 1) * estimateTokens('\n\n'),
     )
-    expect(split.chunks.map((chunk) => chunk.items.length)).toEqual([2, 2])
-    for (const chunk of split.chunks) expect(chunk.estimatedTokens).toBeLessThanOrEqual(perItem * 2 + 1)
+  })
+
+  it('drops the oldest reports to the footer only when the shortest view is still over budget', () => {
+    const reports = longReports(6)
+    const shortest = REPORT_DIGEST_SHRINK_STEPS[REPORT_DIGEST_SHRINK_STEPS.length - 1]
+    const { digest: atShortest } = digestFor(reports, { perReportChars: shortest })
+    const perItem = atShortest.items[0].estimatedTokens
+    const { digest } = digestFor(reports, { tokenBudget: perItem * 3 + 5 })
+    expect(digest.perReportChars).toBe(shortest)
+    expect(digest.items.map((item) => item.resourceId)).toEqual(['ct-5', 'ct-4', 'ct-3'])
+    expect(digest.overflow.map((item) => item.resourceId)).toEqual(['ct-2', 'ct-1', 'ct-0'])
+    expect(digest.estimatedTokens).toBeLessThanOrEqual(perItem * 3 + 5)
+  })
+
+  it('the default budget is 10,000 estimated tokens', () => {
+    expect(REPORT_DIGEST_TOKEN_BUDGET).toBe(10_000)
   })
 })
 

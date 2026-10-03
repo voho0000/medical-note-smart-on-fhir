@@ -97,22 +97,11 @@ export const MEDICAL_SUMMARY_CARD_REGISTRY: Readonly<
   safety: SAFETY_CARD_DEFINITION,
 }
 
-const LOCAL_CARD_ORDER: readonly MedicalSummaryCardId[] = [
-  // Overview is always first: it is the smallest block and paints the hero
-  // card while a slow custom model is still writing. Problems (the largest
-  // block) then moves ahead of the rest so tail truncation costs the cheapest
-  // sections rather than the whole-patient list.
-  'overview',
-  'problems',
-  'focus',
-  'recent',
-  'safety',
-  // Its own lane over the report digest; listed last because it never shares
-  // a request with the cards above.
-  'reports',
-]
-
-const FRONTIER_CARD_ORDER: readonly MedicalSummaryCardId[] = [
+// One order for both harness profiles. Overview is always first: it is the
+// smallest block and paints the hero card while a slow model is still
+// writing. 影像與病理重點 runs on its own lane over the report digest and never
+// shares a request with the cards above, so it is listed last.
+const CARD_ORDER: readonly MedicalSummaryCardId[] = [
   ...MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS,
   'safety',
   'reports',
@@ -131,11 +120,8 @@ export function registeredMedicalSummaryCards(
   input: GenerateMedicalSummaryInput,
   enabledCardIds?: readonly MedicalSummaryCardId[],
 ): MedicalSummaryCardDefinition[] {
-  const order = input.harnessProfile === 'local-small'
-    ? LOCAL_CARD_ORDER
-    : FRONTIER_CARD_ORDER
   const enabled = enabledCardIds ? new Set(enabledCardIds) : null
-  return order
+  return CARD_ORDER
     .filter((cardId) => cardServesAudience(cardId, input.audience))
     .filter((cardId) => !enabled || enabled.has(cardId))
     .map((cardId) => MEDICAL_SUMMARY_CARD_REGISTRY[cardId])

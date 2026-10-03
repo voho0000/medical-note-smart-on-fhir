@@ -90,14 +90,23 @@ export function isAiScopeReport(report: DiagnosticReportEntity): boolean {
 
 /** NHI cloud records name every CT the same (33071B 電腦斷層造影) whatever the
  *  body part, so "latest per modality" would let a head CT hide a chest CT.
- *  Collapse only what is demonstrably the same study: same modality, same day,
- *  and the same accession identifier when one is present (bridges emit a
- *  Chinese and an English row). */
-export function reportIdentity(report: DiagnosticReportEntity, cls: string, date: string): string {
+ *  Collapse only what is demonstrably the same study: same modality and day,
+ *  plus the same accession identifier OR the very same report text. Bridges
+ *  emit one study twice (a Chinese and an English row, often only one of them
+ *  carrying the accession) with identical text; two different studies of one
+ *  day without an accession differ in text and are both kept. A report is a
+ *  duplicate when ANY of its identities was already seen. */
+export function reportIdentities(report: DiagnosticReportEntity, cls: string, date: string): string[] {
   const accession = (report.identifier ?? [])
     .map((identifier) => identifier?.value?.trim())
     .find((value): value is string => !!value)
-  return `${cls}|${date}|${accession ?? ''}`
+  const text = reportNarrative(report).replace(/\s+/g, ' ').trim().toLowerCase()
+  return [
+    ...(accession ? [`${cls}|${date}|accession:${accession}`] : []),
+    ...(text ? [`${cls}|${date}|text:${text}`] : []),
+    // Neither: nothing proves a duplicate, so the report stands alone.
+    ...(!accession && !text ? [`${cls}|${date}|resource:${report.id ?? ''}`] : []),
+  ]
 }
 
 /** Pathology (and some bridge imaging) reports carry their text only as a

@@ -37,12 +37,9 @@ const moduleBlock = (id: string, value: unknown) => [
 const SUMMARY_BATCH_MARKDOWN = [
   moduleBlock('overview', {
     headline: '跨院病歷測試摘要',
-    mustKnow: [],
     medicationEducation: [],
   }),
-  moduleBlock('focus', { items: [] }),
   moduleBlock('problems', { problems: [] }),
-  moduleBlock('recent', { recent: [] }),
   moduleBlock('safety', SAFETY_RESULT),
 ].join('\n')
 
@@ -79,8 +76,8 @@ test.describe('safety alerts (mocked)', () => {
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByRole('heading', { name: '初診快覽' })).toBeVisible()
 
-    // High severity is a row of 開藥前必看, not a card of its own.
-    await expect(summaryPanel.getByText('開藥前必看')).toBeVisible()
+    // High severity stays visible in the overview card, not a card of its own.
+    await expect(summaryPanel.getByText('主動安全警示 · 高危')).toBeVisible()
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
 
     // Medium/low fold into the closed disclosure at the very bottom.

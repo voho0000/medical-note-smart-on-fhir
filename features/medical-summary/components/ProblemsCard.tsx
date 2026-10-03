@@ -1,6 +1,6 @@
-// 其餘問題 · 誰在管 — the whole-person list minus whatever 最可能的就診主因
-// already carries. Four columns because the clinician's question is not only
-// "what does this patient have" but "who is watching it and with what".
+// 問題清單與負責院所 — the complete whole-person problem list. Four columns
+// because the clinician's question is not only "what does this patient have"
+// but "who is watching it and with what".
 "use client"
 
 import { useState } from "react"
@@ -15,9 +15,21 @@ interface ProblemsCardProps {
   result: MedicalSummaryResult
   title: string
   subtitle: string
-  /** "{count} 項 · 依臨床重要性 · 主因已移至上方" */
+  /** "{count} 項 · 依臨床重要性" */
   metaLabel: string
   basisLabel: string
+  /** Shown before the date when it is the organization's latest record
+   *  rather than a visit for this problem, e.g. 該院最近紀錄. */
+  organizationLatestLabel: string
+  /** Tag on a metric whose trend the cited records cannot carry. */
+  metricNeedsReviewLabel: string
+  /** Shown after the date when the managing visit was inferred from the
+   *  pharmacy refills the row cites, e.g. 由慢箋推定. */
+  inferredLabel: string
+  /** Tag on a problem that rests on medicines alone, e.g. 用藥推定. */
+  medicationInferredLabel: string
+  /** Tag on a lab problem resting on one unassessed value, e.g. 單次數值. */
+  singleValueLabel: string
   verifyLabel: string
   legendLabel: string
   showAllLabel: string
@@ -29,7 +41,8 @@ interface ProblemsCardProps {
 }
 
 // Eight rows is roughly one screen of the section before the fold; the rest of
-// a 12-problem patient stays one click away rather than pushing 最近 90 天 off.
+// a 12-problem patient stays one click away rather than pushing 影像與病理重點
+// off.
 const INITIAL_VISIBLE = 8
 
 export function ProblemsCard({
@@ -38,6 +51,11 @@ export function ProblemsCard({
   subtitle,
   metaLabel,
   basisLabel,
+  organizationLatestLabel,
+  metricNeedsReviewLabel,
+  inferredLabel,
+  medicationInferredLabel,
+  singleValueLabel,
   verifyLabel,
   legendLabel,
   showAllLabel,
@@ -82,17 +100,39 @@ export function ProblemsCard({
       <div className="@container">
         <ul>
           {visible.map((problem, index) => {
-            const sources = resolveClaimSources(
-              problem.sourceKeys,
-              byKey,
-              problem.documentEvidence,
-            )
             // Finalize-detected evidence-type mismatches (依據:心電圖 citing a
             // chest X-ray) tint that citation amber instead of hiding it.
             const suspectKeys = problem.suspectSourceKeys?.length
               ? new Set(problem.suspectSourceKeys)
               : undefined
-            const managedByLine = [problem.managedBy, problem.managedByDate]
+            const sup = (keys: readonly string[] | undefined) => {
+              if (!keys?.length) return null
+              return (
+                <SourceSup
+                  sources={resolveClaimSources([...keys], byKey, problem.documentEvidence)}
+                  typeLabel={typeLabel}
+                  unverifiedLabel={unverifiedLabel}
+                  suspectKeys={suspectKeys}
+                  suspectLabel={sourceTypeMismatchLabel}
+                  onNavigate={onNavigate}
+                  className="ml-0.5"
+                />
+              )
+            }
+            // Per-column citations: each claim carries the records behind it.
+            // Legacy results (demo snapshots, caches) hold one row-level list.
+            const perColumn = Boolean(
+              problem.basisSourceKeys || problem.metricSourceKeys || problem.medicationSourceKeys,
+            )
+            const managedBySup = sup(problem.managedBySourceKey ? [problem.managedBySourceKey] : undefined)
+            const managedByDate = !problem.managedByDate
+              ? undefined
+              : problem.managedByScope === "organization"
+                ? `${organizationLatestLabel} ${problem.managedByDate}`
+                : problem.managedByScope === "inferred"
+                  ? `${problem.managedByDate}（${inferredLabel}）`
+                  : problem.managedByDate
+            const managedByLine = [problem.managedBy, managedByDate]
               .filter(Boolean)
               .join(" · ")
             return (
@@ -103,17 +143,37 @@ export function ProblemsCard({
                 <div className="min-w-0">
                   <p className="text-[0.8125rem] font-semibold leading-snug text-foreground break-words">
                     {problem.label}
+                    {problem.inferredFromMedication ? (
+                      <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
+                        {medicationInferredLabel}
+                      </span>
+                    ) : null}
+                    {problem.singleUnassessedLab ? (
+                      <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
+                        {singleValueLabel}
+                      </span>
+                    ) : null}
+                    {perColumn && !problem.basis ? sup(problem.basisSourceKeys) : null}
                   </p>
                   {problem.basis ? (
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words">
                       <span className="text-muted-foreground/80">{basisLabel}</span>
                       {problem.basis}
+                      {perColumn ? sup(problem.basisSourceKeys) : null}
                     </p>
                   ) : null}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0" data-problem-column="metric">
                   {problem.metric ? (
-                    <p className="text-xs leading-snug text-foreground break-words">{problem.metric}</p>
+                    <p className="text-xs leading-snug text-foreground break-words">
+                      {problem.metric}
+                      {problem.metricNeedsReview ? (
+                        <span className="ml-1 inline-flex items-center rounded border border-amber-500/40 px-1 align-baseline text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300">
+                          {metricNeedsReviewLabel}
+                        </span>
+                      ) : null}
+                      {perColumn ? sup(problem.metricSourceKeys) : null}
+                    </p>
                   ) : null}
                   {problem.metricMeta ? (
                     <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words">
@@ -121,13 +181,17 @@ export function ProblemsCard({
                     </p>
                   ) : null}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0" data-problem-column="care">
                   {managedByLine ? (
-                    <p className="text-xs leading-snug text-foreground break-words">{managedByLine}</p>
+                    <p className="text-xs leading-snug text-foreground break-words">
+                      {managedByLine}
+                      {managedBySup}
+                    </p>
                   ) : null}
                   {problem.medications ? (
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words">
                       {problem.medications}
+                      {perColumn ? sup(problem.medicationSourceKeys) : null}
                     </p>
                   ) : null}
                 </div>
@@ -138,14 +202,7 @@ export function ProblemsCard({
                       aria-label={verifyLabel}
                     />
                   ) : null}
-                  <SourceSup
-                    sources={sources}
-                    typeLabel={typeLabel}
-                    unverifiedLabel={unverifiedLabel}
-                    suspectKeys={suspectKeys}
-                    suspectLabel={sourceTypeMismatchLabel}
-                    onNavigate={onNavigate}
-                  />
+                  {perColumn ? null : sup(problem.sourceKeys)}
                 </div>
               </li>
             )

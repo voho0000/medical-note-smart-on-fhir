@@ -43,7 +43,7 @@ import {
   listClinicalDocuments,
 } from '@/src/core/utils/clinical-documents.utils'
 import {
-  reportIdentity,
+  reportIdentities,
   reportModality,
   reportNarrative,
 } from '@/src/core/utils/report-narrative.utils'
@@ -220,9 +220,9 @@ function collectProblems(
   const items: SnapshotItem[] = []
   const seen = new Set<string>()
 
-  // Coded conditions first — a Condition is a recorded diagnosis, a claim code
-  // is a billing artefact. The catalog is already newest-first per prefix, so
-  // the first record of a repeated name is the latest one.
+  // Coded conditions first, then the visits' primary diagnoses. The catalog is
+  // already newest-first per prefix, so the first record of a repeated name is
+  // the latest one.
   for (const condition of input.clinicalData.conditions ?? []) {
     const key = condition.id ? keyByResourceId.get(condition.id) : undefined
     const label = diagnosisCodeText(condition.code, locale)
@@ -237,9 +237,9 @@ function collectProblems(
     })
   }
 
-  // Claim diagnoses: an ICD code on an Encounter is frequently entered to
-  // justify a prescription rather than to assert a problem, so it is grouped,
-  // counted and explicitly marked 申報碼 instead of being listed as a diagnosis.
+  // Visit diagnoses: the NHI cloud record carries each visit's primary
+  // diagnosis, which the summary releases as the diagnosis (owner decision
+  // 2026-10-03). Grouped and counted so the line says how often it was coded.
   interface ClaimGroup { label: string; count: number; lastDate?: string; key?: string; fromAdmission: boolean; variants: number; seenLabels?: Set<string> }
   const claims = new Map<string, ClaimGroup>()
   for (const encounter of input.clinicalData.encounters ?? []) {
@@ -284,7 +284,7 @@ function collectProblems(
       (b.lastDate ?? '').localeCompare(a.lastDate ?? '') ||
       b.count - a.count)
     .map((group) => ({
-      line: `- ${group.label} — 申報碼${group.variants > 1 ? ` (+${group.variants - 1} code variant${group.variants === 2 ? '' : 's'})` : ''}, ${group.count} visit${group.count === 1 ? '' : 's'}` +
+      line: `- ${group.label} — primary diagnosis${group.variants > 1 ? ` (+${group.variants - 1} code variant${group.variants === 2 ? '' : 's'})` : ''}, ${group.count} visit${group.count === 1 ? '' : 's'}` +
         `${group.lastDate ? `, last ${group.lastDate}` : ''}${group.key ? ` [${group.key}]` : ''}`,
       keys: group.key ? [group.key] : [],
     }))
@@ -749,17 +749,20 @@ function collectReports(
   input: OverviewSnapshotInput,
   entryByResourceId: Map<string, SummarySourceCatalogEntry>,
 ): SnapshotItem[] {
-  const byClass = new Map<string, { rank: number; reports: Map<string, { report: DiagnosticReportEntity; date: string; group: string }> }>()
+  const byClass = new Map<string, { rank: number; reports: Map<string, { report: DiagnosticReportEntity; date: string; group: string }>; seen: Set<string> }>()
   for (const report of input.clinicalData.diagnosticReports ?? []) {
     const date = isoDay(report.effectiveDateTime ?? report.issued)
     if (!date) continue
     if (!reportNarrative(report).trim()) continue
     const { group, cls, rank } = reportModality(report)
     if (group === 'lab') continue
-    const bucket = byClass.get(cls) ?? { rank, reports: new Map() }
-    const identity = reportIdentity(report, cls, date)
+    const bucket = byClass.get(cls) ?? { rank, reports: new Map(), seen: new Set<string>() }
+    const identities = reportIdentities(report, cls, date)
     // Same study twice (bilingual rows): keep the first, they carry one finding.
-    if (!bucket.reports.has(identity)) bucket.reports.set(identity, { report, date, group })
+    if (!identities.some((identity) => bucket.seen.has(identity))) {
+      identities.forEach((identity) => bucket.seen.add(identity))
+      bucket.reports.set(identities[0], { report, date, group })
+    }
     byClass.set(cls, bucket)
   }
   return [...byClass.values()]
@@ -1039,7 +1042,7 @@ export function buildOverviewSnapshot(
         : null,
       renderItems(
         'problems',
-        '## Problems (deduplicated; 申報碼 = diagnosis code carried on a claim/visit, often entered to justify a prescription)',
+        '## Problems (deduplicated; "primary diagnosis" = the diagnosis code of the counted visits)',
         problems,
         problemCap,
       ),

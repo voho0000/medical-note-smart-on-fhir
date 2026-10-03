@@ -283,6 +283,34 @@ describe('useMedicationsContext full export', () => {
     expect(text).toContain('Terminology note:')
   })
 
+  it('words a passed supply as an estimate, not a stop, for the first-visit summary', () => {
+    const clinicalData = {
+      medications: [{
+        id: 'metformin', status: 'completed', authoredOn: '2026-01-12',
+        medicationCodeableConcept: { text: 'Metformin 500mg Tablets' },
+        dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days' } },
+        requester: { display: '示範診所' },
+      }],
+    }
+    const render = (wording?: 'neutral') => renderHook(
+      () => useMedicationsContext(true, clinicalData as any, {
+        medicationTimeRange: 'all',
+        medicationChronic: 'all',
+        medicationStatus: 'active',
+      } as any, false, new Date('2026-07-10T00:00:00Z').getTime(), wording),
+      { wrapper: Wrapper },
+    ).result.current?.items.join('\n') ?? ''
+
+    const neutral = render('neutral')
+    expect(neutral).not.toContain('NOT currently in use')
+    expect(neutral).toContain('estimated supply already passed')
+    expect(neutral).toContain('current use is not known from these records')
+    expect(neutral).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, estimated to 2026-02-09)')
+    expect(neutral).toContain('a long-acting injection')
+    // Every other consumer keeps the established wording.
+    expect(render()).toContain('NOT currently in use')
+  })
+
   it('never presents a draft, held or cancelled order as recently dispensed', () => {
     const clinicalData = {
       medications: [

@@ -93,6 +93,12 @@ export function useEncountersContext(
     includeProcedures?: boolean
     filters?: Partial<DataFilters>
     nowMs?: number
+    /** 'count' names no medicine under a visit, only how many were
+     *  prescribed there. NHI cloud visits carry one primary diagnosis, and a
+     *  medicine listed under it reads as that diagnosis's treatment (a
+     *  furosemide dispensed at a pneumonia visit became "pneumonia
+     *  medication"); the medicines stay in 'Patient's Medications'. */
+    visitMedications?: 'list' | 'count'
   },
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
@@ -183,8 +189,12 @@ export function useEncountersContext(
         items.push(`    ICD codes on visit record (billing, not confirmed diagnoses): ${entry.diagnoses.join('; ')}`)
       }
       if (entry?.meds.length) {
-        items.push(`    Medications:`)
-        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
+        if (options?.visitMedications === 'count') {
+          items.push(`    Medications prescribed or dispensed at this visit: ${entry.meds.length} (named under 'Patient's Medications'; this visit's diagnosis code does not state any medicine's indication)`)
+        } else {
+          items.push(`    Medications:`)
+          entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
+        }
       }
       if (entry?.procs.length) {
         items.push(`    Procedures:`)

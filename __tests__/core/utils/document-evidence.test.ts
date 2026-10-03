@@ -26,3 +26,12 @@ test('exact excerpt status is not a semantic entailment or negation check', () =
   // never describe this check as validating the clinical assertion.
   expect(verifyDocumentQuote('pneumonia present.', 'No pneumonia present.').verification).toBe('exact')
 })
+
+test('a line break before a full stop is whitespace, not a different sentence', () => {
+  const raw = 'Impression:\nSubchondral sclerosis at right SI joint\n.\nNo fracture.'
+  expect(verifyDocumentQuote('Subchondral sclerosis at right SI joint.', raw)).toEqual({
+    quote: 'Subchondral sclerosis at right SI joint\n.', verification: 'whitespace-restored',
+  })
+  // Words, numbers and negation still have to match exactly.
+  expect(verifyDocumentQuote('Subchondral sclerosis at left SI joint.', raw).verification).toBe('not-found')
+})

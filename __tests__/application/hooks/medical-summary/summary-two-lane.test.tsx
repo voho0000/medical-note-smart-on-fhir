@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
-// The two-lane split: on the compact harness the overview is requested on its
-// own, over a reduced evidence set, concurrently with the rest of the cards —
-// so the first section reaches the screen without waiting for the whole batch.
+// The two-lane split: on the compact harness the overview (the headline) is
+// requested on its own, over a reduced evidence set, concurrently with the
+// full lane (problems + safety) — so the first section reaches the screen
+// without waiting for the whole batch.
 import { act, renderHook } from '@testing-library/react'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
@@ -18,7 +19,6 @@ const CATALOG: SummarySourceCatalogEntry[] = [
 
 const OVERVIEW_BLOCK = '<<<MEDIPRISMA_MODULE:overview>>>' + JSON.stringify({
   headline: '78 歲男性，糖尿病與慢性腎病，跨院照護',
-  mustKnow: [{ slot: 'other', label: 'Metformin', text: '跨院持續調劑中', sources: ['M1'] }],
   medicationEducation: [],
 }) + '<<<END_MEDIPRISMA_MODULE:overview>>>'
 
@@ -39,8 +39,6 @@ const FULL_BLOCKS = [
   '<<<MEDIPRISMA_MODULE:problems>>>' + JSON.stringify({
     problems: [{ label: '第二型糖尿病', basis: '藥局調劑', kind: 'medication', sources: ['M1'] }],
   }) + '<<<END_MEDIPRISMA_MODULE:problems>>>',
-  '<<<MEDIPRISMA_MODULE:focus>>>' + JSON.stringify({ items: [] }) + '<<<END_MEDIPRISMA_MODULE:focus>>>',
-  '<<<MEDIPRISMA_MODULE:recent>>>' + JSON.stringify({ recent: [] }) + '<<<END_MEDIPRISMA_MODULE:recent>>>',
   '<<<MEDIPRISMA_MODULE:safety>>>' + JSON.stringify({ scannedCount: 0, alerts: [] }) + '<<<END_MEDIPRISMA_MODULE:safety>>>',
 ].join('\n')
 
@@ -138,18 +136,26 @@ test('the overview lane publishes its section while the full lane is still strea
   expect(mockResult.headline).toContain('78 歲男性')
   expect(mockResult.problems).toHaveLength(1)
   expect(mockResult.completedCardIds).toEqual(
-    expect.arrayContaining(['overview', 'problems', 'focus', 'recent', 'safety']),
+    expect.arrayContaining(['overview', 'problems', 'safety']),
   )
+  for (const retired of ['focus', 'recent']) expect(mockResult.completedCardIds).not.toContain(retired)
   expect(mockResult.cardErrors).toBeUndefined()
 
-  // Two concurrent requests, both owned by the same generation slot.
+  // Two concurrent requests, both owned by the same generation slot. (No
+  // report lane: this bundle has no imaging or pathology report.)
   expect(mockStream).toHaveBeenCalledTimes(2)
+  const fullLanePrompt = mockStream.mock.calls
+    .map(([messages]: any[]) => messages.map((message: any) => message.content).join('\n'))
+    .find((content: string) => content.includes('<<<MEDIPRISMA_MODULE:problems>>>'))!
+  expect(fullLanePrompt).toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+  expect(fullLanePrompt).not.toContain('<<<MEDIPRISMA_MODULE:overview>>>')
+  for (const retired of ['focus', 'recent']) expect(fullLanePrompt).not.toContain(`<<<MEDIPRISMA_MODULE:${retired}>>>`)
   for (const [, options] of mockStream.mock.calls) {
     expect(options.operationKey).toBe(SLOT)
   }
   // The fast lane carries the deterministic snapshot, not the fitted narrative:
   // a current medicine, an admission and a major procedure, but no routine
-  // outpatient visit — that one cannot back a headline or a 開藥前必看 row.
+  // outpatient visit — that one cannot back the headline.
   expect(fastLanePrompts[0]).toContain('[M1]')
   expect(fastLanePrompts[0]).toContain('[E1]')
   expect(fastLanePrompts[0]).toContain('[P1]')

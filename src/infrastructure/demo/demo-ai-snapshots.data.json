@@ -7,66 +7,16 @@
     "zh-TW": {
       "medical": {
         "headline": "高齡多重慢性病男性：CKD 3b 併輕度貧血，另有第二型糖尿病、甲狀腺功能低下與青光眼；長青、嘉恩兩家醫院加兩家藥局分頭開藥，2025-05 曾因咳血住院。",
-        "mustKnow": [
-          {
-            "slot": "renal",
-            "label": "eGFR 32",
-            "text": "Cr 1.88 → 1.93 mg/dL、eGFR 33 → 32（05-25 → 06-02），屬 CKD 3b；經腎排除藥物的劑量以此為準。",
-            "critical": true,
-            "sources": [
-              "O17",
-              "O18",
-              "O6",
-              "O7"
-            ]
-          },
-          {
-            "slot": "hematology",
-            "label": "Hb 12.1",
-            "text": "Hb 11.2 → 12.1 g/dL、Hct 35.8 → 37.2%（05-25 → 06-02），兩次都低於報告所附參考區間。",
-            "sources": [
-              "O20",
-              "O9",
-              "O19",
-              "O8"
-            ]
-          },
-          {
-            "slot": "high-risk-meds",
-            "label": "抗膽鹼負荷",
-            "text": "Aricept 5 mg 與 Imimine 25 mg 由同一藥局在 08-05、08-27 調劑，兩者都作用於認知與排尿。",
-            "sources": [
-              "M5",
-              "M11",
-              "M12"
-            ]
-          },
-          {
-            "slot": "endocrine-pending",
-            "label": "Eltroxin 100 µg",
-            "text": "08-25 長青醫院續開；本次資料範圍內沒有甲狀腺功能檢驗可以對照。",
-            "sources": [
-              "M9",
-              "E3"
-            ]
-          },
-          {
-            "slot": "other",
-            "label": "五個開藥來源",
-            "text": "近三個月由長青醫院、嘉恩醫院、康健診所與兩家藥局分別開立，慢箋分散在不同院所。",
-            "sources": [
-              "E3",
-              "E11",
-              "E6",
-              "E1"
-            ]
-          }
-        ],
         "medicationEducation": [],
-        "focus": [
+        "problems": [
           {
-            "title": "腎功能持續下降 · CKD 3b",
-            "text": "eGFR 33 → 32、Cr 1.88 → 1.93 mg/dL（2026-05-25 → 06-02），已收案 Pre-ESRD 病人照護與衛教計畫；最近一次腎臟相關門診為 08-25 示範長青醫院。",
+            "label": "慢性腎臟病 3b 期",
+            "basis": "照護計畫及 2 次腎功能檢驗",
+            "kind": "careplan",
+            "metric": "eGFR 33 → 32 ▼；Cr 1.88 → 1.93 mg/dL",
+            "metricMeta": "2026-05-25 → 06-02",
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
             "sources": [
               "O17",
               "O18",
@@ -76,40 +26,6 @@
               "E3"
             ]
           },
-          {
-            "title": "咳血住院後，雲端未見腸胃追蹤紀錄",
-            "text": "2025-05-18 因吐血住院，出院診斷為 A 級逆流性食道炎併紅斑性胃炎；2026-06-25 與 07-20 嘉恩醫院門診再申報胃及十二指腸息肉，但本次資料範圍內沒有對應的檢查報告可以對照。",
-            "flag": true,
-            "sources": [
-              "D1",
-              "E21",
-              "E14"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
-              }
-            ]
-          },
-          {
-            "title": "甲狀腺素長期處方，功能追蹤不在雲端",
-            "text": "出院病摘記載甲狀腺功能低下且使用 Levothyroxine，08-25 長青醫院續開 Eltroxin 100 µg；這份資料沒有任何甲狀腺功能檢驗，是否達標無法由雲端判斷。",
-            "flag": true,
-            "sources": [
-              "D1",
-              "M9",
-              "E3"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Hypothyrodism, under Levothyroxine"
-              }
-            ]
-          }
-        ],
-        "problems": [
           {
             "label": "貧血",
             "basis": "2 次檢驗低於參考區間",
@@ -253,59 +169,32 @@
               "E7",
               "E12"
             ]
-          }
-        ],
-        "recent": [
-          {
-            "ref": "E1",
-            "label": "向陽藥局調劑青光眼藥水與 Aricept",
-            "category": "medication"
           },
           {
-            "ref": "E3",
-            "label": "長青醫院慢性腎臟病門診，續開 Forxiga、Eltroxin、Feuri、葉酸與軟便劑",
-            "category": "encounter"
-          },
-          {
-            "ref": "E6",
-            "label": "康健診所處理口腔撕裂傷",
-            "category": "encounter"
-          },
-          {
-            "ref": "E11",
-            "label": "嘉恩醫院青光眼門診",
-            "category": "encounter"
-          },
-          {
-            "ref": "E14",
-            "label": "嘉恩醫院腸胃門診，申報胃及十二指腸息肉",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "E26",
-            "label": "長青醫院慢性咳嗽門診，同日抽血並照胸部 X 光",
-            "category": "encounter"
-          },
-          {
-            "ref": "L15",
-            "label": "胸部 X 光：雙側下肺斑塊影、肋膜變化併積液、邊緣性心臟擴大",
-            "category": "lab"
-          },
-          {
-            "ref": "P1",
-            "label": "左眼玻璃體部分切除術",
-            "category": "procedure"
-          },
-          {
-            "ref": "P2",
-            "label": "眼內治療物質注射",
-            "category": "procedure"
+            "label": "甲狀腺功能低下",
+            "basis": "出院病摘記載並持續處方甲狀腺素",
+            "kind": "discharge",
+            "metric": "甲狀腺功能檢驗不在雲端資料範圍",
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medications": "Eltroxin Tablets 100mcg",
+            "flag": true,
+            "sources": [
+              "D1",
+              "M9",
+              "E3"
+            ],
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Hypothyrodism, under Levothyroxine"
+              }
+            ]
           }
         ]
       },
       "patient": {
         "headline": "您的健康存摺顯示：腎功能屬慢性腎臟病第 3b 期並有輕度貧血，同時在追蹤血糖、甲狀腺與青光眼；藥物分別由長青醫院、嘉恩醫院和兩家藥局開立。",
-        "mustKnow": [],
         "medicationEducation": [
           {
             "name": "Aricept",
@@ -343,10 +232,15 @@
             ]
           }
         ],
-        "focus": [
+        "problems": [
           {
-            "title": "腎功能數值持續偏低",
-            "text": "最近兩次抽血的腎絲球過濾率從 33 降到 32、肌酸酐由 1.88 升到 1.93（5/25、6/2）。您已被收進慢性腎臟病照護與衛教計畫，醫院會持續追蹤。",
+            "label": "慢性腎臟病",
+            "basis": "腎臟照護計畫與抽血紀錄",
+            "kind": "careplan",
+            "metric": "腎絲球過濾率 33 → 32",
+            "metricMeta": "5/25 → 6/2",
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
             "sources": [
               "O17",
               "O18",
@@ -355,40 +249,6 @@
               "K1"
             ]
           },
-          {
-            "title": "去年住院之後，腸胃問題還沒看到後續紀錄",
-            "text": "2025 年 5 月因為吐血住院，出院診斷是逆流性食道炎與胃部發炎；今年 6 月和 7 月門診也登錄過胃與十二指腸息肉，但這份資料裡沒有後續的檢查紀錄可以對照。",
-            "flag": true,
-            "sources": [
-              "D1",
-              "E21",
-              "E14"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
-              }
-            ]
-          },
-          {
-            "title": "甲狀腺藥一直在拿，但看不到追蹤抽血",
-            "text": "出院紀錄寫著甲狀腺功能低下並在補充甲狀腺素，8/25 長青醫院也再次開了 Eltroxin 100 微克；這份資料沒有甲狀腺功能的抽血結果，下次回診可以問醫師是否要複驗。",
-            "flag": true,
-            "sources": [
-              "D1",
-              "M9",
-              "E3"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Hypothyrodism, under Levothyroxine"
-              }
-            ]
-          }
-        ],
-        "problems": [
           {
             "label": "貧血",
             "basis": "2 次抽血低於參考值",
@@ -496,148 +356,15 @@
               "M5",
               "M11"
             ]
-          }
-        ],
-        "recent": [
-          {
-            "ref": "E1",
-            "label": "向陽藥局調劑青光眼藥水與 Aricept",
-            "category": "medication"
           },
           {
-            "ref": "E3",
-            "label": "長青醫院慢性腎臟病門診，續開 Forxiga、Eltroxin、Feuri、葉酸與軟便劑",
-            "category": "encounter"
-          },
-          {
-            "ref": "E6",
-            "label": "康健診所處理口腔撕裂傷",
-            "category": "encounter"
-          },
-          {
-            "ref": "E11",
-            "label": "嘉恩醫院青光眼門診",
-            "category": "encounter"
-          },
-          {
-            "ref": "E14",
-            "label": "嘉恩醫院腸胃門診，申報胃及十二指腸息肉",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "E26",
-            "label": "長青醫院慢性咳嗽門診，同日抽血並照胸部 X 光",
-            "category": "encounter"
-          },
-          {
-            "ref": "L15",
-            "label": "胸部 X 光：雙側下肺斑塊影、肋膜變化併積液、邊緣性心臟擴大",
-            "category": "lab"
-          },
-          {
-            "ref": "P1",
-            "label": "左眼玻璃體部分切除術",
-            "category": "procedure"
-          },
-          {
-            "ref": "P2",
-            "label": "眼內治療物質注射",
-            "category": "procedure"
-          }
-        ]
-      }
-    },
-    "en": {
-      "medical": {
-        "headline": "Elderly multimorbid male: stage 3b CKD with mild anaemia, plus type 2 diabetes, hypothyroidism and glaucoma; prescribing is split across two hospitals and two pharmacies, with a May 2025 admission for haemoptysis.",
-        "mustKnow": [
-          {
-            "slot": "renal",
-            "label": "eGFR 32",
-            "text": "Creatinine 1.88 → 1.93 mg/dL and eGFR 33 → 32 (25 May → 2 Jun) — stage 3b CKD; dose renally cleared drugs against this.",
-            "critical": true,
-            "sources": [
-              "O17",
-              "O18",
-              "O6",
-              "O7"
-            ]
-          },
-          {
-            "slot": "hematology",
-            "label": "Hb 12.1",
-            "text": "Hb 11.2 → 12.1 g/dL and Hct 35.8 → 37.2% (25 May → 2 Jun); both readings sit below the reference range the report supplies.",
-            "sources": [
-              "O20",
-              "O9",
-              "O19",
-              "O8"
-            ]
-          },
-          {
-            "slot": "high-risk-meds",
-            "label": "Anticholinergic load",
-            "text": "Aricept 5 mg and Imimine 25 mg were dispensed by the same pharmacy on 5 and 27 Aug; both act on cognition and on voiding.",
-            "sources": [
-              "M5",
-              "M11",
-              "M12"
-            ]
-          },
-          {
-            "slot": "endocrine-pending",
-            "label": "Eltroxin 100 µg",
-            "text": "Continued on 25 Aug; this data scope contains no thyroid function test to read it against.",
-            "sources": [
-              "M9",
-              "E3"
-            ]
-          },
-          {
-            "slot": "other",
-            "label": "Five prescribing sources",
-            "text": "Over the past three months prescriptions came from two hospitals, one clinic and two pharmacies, so the chronic list is spread across facilities.",
-            "sources": [
-              "E3",
-              "E11",
-              "E6",
-              "E1"
-            ]
-          }
-        ],
-        "medicationEducation": [],
-        "focus": [
-          {
-            "title": "Falling renal function · stage 3b CKD",
-            "text": "eGFR 33 → 32 and creatinine 1.88 → 1.93 mg/dL (25 May → 2 Jun 2026), with an active pre-ESRD care and education plan; the most recent renal clinic visit was 25 Aug.",
-            "sources": [
-              "O17",
-              "O18",
-              "O6",
-              "O7",
-              "K1",
-              "E3"
-            ]
-          },
-          {
-            "title": "No upper-GI follow-up in the cloud after the haemoptysis admission",
-            "text": "Admitted 18 May 2025 for bloody vomiting; the discharge summary records L.A. grade A reflux oesophagitis with erythematous gastritis. Gastric and duodenal polyp was claimed again on 25 Jun and 20 Jul 2026, yet this data scope holds no matching report to read against it.",
-            "flag": true,
-            "sources": [
-              "D1",
-              "E21",
-              "E14"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
-              }
-            ]
-          },
-          {
-            "title": "Long-running thyroid replacement with no functional follow-up on record",
-            "text": "The discharge summary documents hypothyroidism on levothyroxine and Eltroxin 100 µg was continued on 25 Aug 2026; with no thyroid function test in this data, whether the dose is at target cannot be judged from the cloud record.",
+            "label": "甲狀腺功能低下",
+            "basis": "出院紀錄與持續領取的甲狀腺藥",
+            "kind": "discharge",
+            "metric": "這份資料沒有甲狀腺功能的抽血結果",
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medications": "Eltroxin Tablets 100mcg",
             "flag": true,
             "sources": [
               "D1",
@@ -651,8 +378,31 @@
               }
             ]
           }
-        ],
+        ]
+      }
+    },
+    "en": {
+      "medical": {
+        "headline": "Elderly multimorbid male: stage 3b CKD with mild anaemia, plus type 2 diabetes, hypothyroidism and glaucoma; prescribing is split across two hospitals and two pharmacies, with a May 2025 admission for haemoptysis.",
+        "medicationEducation": [],
         "problems": [
+          {
+            "label": "Chronic kidney disease, stage 3b",
+            "basis": "care plan and 2 renal function results",
+            "kind": "careplan",
+            "metric": "eGFR 33 → 32 ▼; creatinine 1.88 → 1.93 mg/dL",
+            "metricMeta": "25 May → 2 Jun 2026",
+            "managedBy": "Demo Evergreen Hospital",
+            "managedByRef": "E3",
+            "sources": [
+              "O17",
+              "O18",
+              "O6",
+              "O7",
+              "K1",
+              "E3"
+            ]
+          },
           {
             "label": "Anaemia",
             "basis": "2 results below the reference range",
@@ -796,59 +546,32 @@
               "E7",
               "E12"
             ]
-          }
-        ],
-        "recent": [
-          {
-            "ref": "E1",
-            "label": "Pharmacy dispensed the glaucoma drops and Aricept",
-            "category": "medication"
           },
           {
-            "ref": "E3",
-            "label": "Chronic kidney disease clinic; Forxiga, Eltroxin, Feuri, folic acid and a laxative continued",
-            "category": "encounter"
-          },
-          {
-            "ref": "E6",
-            "label": "Clinic care for an oral laceration",
-            "category": "encounter"
-          },
-          {
-            "ref": "E11",
-            "label": "Glaucoma clinic visit",
-            "category": "encounter"
-          },
-          {
-            "ref": "E14",
-            "label": "Gastroenterology visit; gastric and duodenal polyp claimed",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "E26",
-            "label": "Chronic cough clinic; same-day blood work and chest X-ray",
-            "category": "encounter"
-          },
-          {
-            "ref": "L15",
-            "label": "Chest X-ray: bilateral lower-lobe patchy lesions, pleural change with effusion, borderline cardiomegaly",
-            "category": "lab"
-          },
-          {
-            "ref": "P1",
-            "label": "Partial vitrectomy of the left eye",
-            "category": "procedure"
-          },
-          {
-            "ref": "P2",
-            "label": "Intraocular injection of a therapeutic substance",
-            "category": "procedure"
+            "label": "Hypothyroidism",
+            "basis": "discharge summary plus continued levothyroxine",
+            "kind": "discharge",
+            "metric": "No thyroid function test in this data scope",
+            "managedBy": "Demo Evergreen Hospital",
+            "managedByRef": "E3",
+            "medications": "Eltroxin Tablets 100mcg",
+            "flag": true,
+            "sources": [
+              "D1",
+              "M9",
+              "E3"
+            ],
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Hypothyrodism, under Levothyroxine"
+              }
+            ]
           }
         ]
       },
       "patient": {
         "headline": "Your NHI records show stage 3b chronic kidney disease with mild anaemia, alongside diabetes, thyroid and glaucoma care; your medicines come from two hospitals and two pharmacies.",
-        "mustKnow": [],
         "medicationEducation": [
           {
             "name": "Forxiga (dapagliflozin)",
@@ -884,10 +607,15 @@
             ]
           }
         ],
-        "focus": [
+        "problems": [
           {
-            "title": "Your kidney numbers have stayed low",
-            "text": "The last two blood tests show kidney filtration falling from 33 to 32 and creatinine rising from 1.88 to 1.93 (25 May and 2 June). You are already enrolled in a kidney care and education programme, so the team keeps following it.",
+            "label": "Chronic kidney disease",
+            "basis": "kidney care programme and blood tests",
+            "kind": "careplan",
+            "metric": "Kidney filtration 33 → 32",
+            "metricMeta": "25 May → 2 Jun",
+            "managedBy": "Demo Evergreen Hospital",
+            "managedByRef": "E3",
             "sources": [
               "O17",
               "O18",
@@ -896,40 +624,6 @@
               "K1"
             ]
           },
-          {
-            "title": "Nothing follows up the stomach problem from last year's stay",
-            "text": "You were admitted in May 2025 after vomiting blood, and the discharge record lists reflux oesophagitis and stomach inflammation. Visits in June and July this year record a stomach and duodenal polyp, but these records hold no later test to compare against.",
-            "flag": true,
-            "sources": [
-              "D1",
-              "E21",
-              "E14"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
-              }
-            ]
-          },
-          {
-            "title": "Thyroid medicine keeps being collected, with no follow-up blood test on record",
-            "text": "The discharge record notes an underactive thyroid treated with thyroid hormone, and Eltroxin 100 micrograms was prescribed again on 25 August. There is no thyroid blood result here, so it is worth asking your doctor whether a repeat test is due.",
-            "flag": true,
-            "sources": [
-              "D1",
-              "M9",
-              "E3"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Hypothyrodism, under Levothyroxine"
-              }
-            ]
-          }
-        ],
-        "problems": [
           {
             "label": "Anaemia",
             "basis": "2 blood tests below the reference range",
@@ -1037,53 +731,27 @@
               "M5",
               "M11"
             ]
-          }
-        ],
-        "recent": [
-          {
-            "ref": "E1",
-            "label": "Pharmacy dispensed the glaucoma drops and Aricept",
-            "category": "medication"
           },
           {
-            "ref": "E3",
-            "label": "Chronic kidney disease clinic; Forxiga, Eltroxin, Feuri, folic acid and a laxative continued",
-            "category": "encounter"
-          },
-          {
-            "ref": "E6",
-            "label": "Clinic care for an oral laceration",
-            "category": "encounter"
-          },
-          {
-            "ref": "E11",
-            "label": "Glaucoma clinic visit",
-            "category": "encounter"
-          },
-          {
-            "ref": "E14",
-            "label": "Gastroenterology visit; gastric and duodenal polyp claimed",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "E26",
-            "label": "Chronic cough clinic; same-day blood work and chest X-ray",
-            "category": "encounter"
-          },
-          {
-            "ref": "L15",
-            "label": "Chest X-ray: bilateral lower-lobe patchy lesions, pleural change with effusion, borderline cardiomegaly",
-            "category": "lab"
-          },
-          {
-            "ref": "P1",
-            "label": "Partial vitrectomy of the left eye",
-            "category": "procedure"
-          },
-          {
-            "ref": "P2",
-            "label": "Intraocular injection of a therapeutic substance",
-            "category": "procedure"
+            "label": "Underactive thyroid",
+            "basis": "discharge record and thyroid medicine collected regularly",
+            "kind": "discharge",
+            "metric": "No thyroid blood test appears in these records",
+            "managedBy": "Demo Evergreen Hospital",
+            "managedByRef": "E3",
+            "medications": "Eltroxin Tablets 100mcg",
+            "flag": true,
+            "sources": [
+              "D1",
+              "M9",
+              "E3"
+            ],
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Hypothyrodism, under Levothyroxine"
+              }
+            ]
           }
         ]
       }

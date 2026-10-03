@@ -138,6 +138,8 @@ export function useClinicalAiInput(
      *  it becomes the fitting target, and the adaptation reports
      *  `local-latency`. Undefined keeps the window-only behaviour. */
     tokenBudget?: number
+    /** Forwarded to the clinical context (see useClinicalContext). */
+    contextVariant?: 'default' | 'first-visit-summary'
   } = {},
 ) {
   // Scope controls need the same fitting policy, not a generation-ready source
@@ -332,6 +334,7 @@ export function useClinicalAiInput(
       ?? (consumer === 'nhiLipid' ? activeClinicalData : undefined)) as ClinicalData | undefined,
     documentTokenBudget:
       prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
+    contextVariant: options.contextVariant,
   })
   const { getFormattedClinicalContext, getFullClinicalContext, includedDocumentIds } = contextView
 

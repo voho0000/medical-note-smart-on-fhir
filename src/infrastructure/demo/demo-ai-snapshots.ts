@@ -15,6 +15,11 @@
 // for citation relevance, evidence existence, trend faithfulness and medication
 // pharmacology before being frozen here. Editorial corrections preserve the
 // verified record direction and distinguish claims from confirmed diagnoses.
+// 2026-10-02: 開藥前必看, 最可能的就診主因 and 最近 90 天 were retired from
+// 初診快覽. The two problems only the retired focus card carried (CKD 3b and
+// hypothyroidism) moved into the problem list with that card's own sources
+// and document quote; nothing else was re-authored. The snapshots carry no
+// `reports` module, so 影像與病理重點 renders its digest fallback here.
 // Live patients still use the model-generated path.
 // Only the safety results are post-processed by the same
 // filterDuplicateFalsePositives guard the live path applies.

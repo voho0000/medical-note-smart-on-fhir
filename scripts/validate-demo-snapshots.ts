@@ -4,11 +4,11 @@
 //
 //   npx tsx scripts/validate-demo-snapshots.ts
 //
-// Fails if any citation doesn't resolve verified, any recent-event pick is
-// dropped (unresolvable ref, or outside the 90-day window without being an
-// admission/procedure), a problem duplicates a focus item, OR a grounding-audit
-// issue is found (a fabricated test, a positional cross-ref, or a topically-
-// irrelevant citation — the "second pass" that mere citation resolution misses).
+// Fails if any citation doesn't resolve verified, the problem list is empty,
+// 影像與病理重點 does not list every digest report in its fallback, OR a
+// grounding-audit issue is found (a fabricated test, a positional cross-ref,
+// or a topically-irrelevant citation — the "second pass" that mere citation
+// resolution misses).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -77,20 +77,21 @@ async function main() {
       })
       const unverified = finalized.sourceIndex.filter((s: any) => !s.verified)
       if (unverified.length) fail(`summary[${tag}]: unverified keys ${unverified.map((s: any) => s.key).join(',')}`)
-      if (finalized.droppedRecentCount > 0) fail(`summary[${tag}]: ${finalized.droppedRecentCount} recent picks dropped`)
-      if (finalized.droppedProblemCount > 0) fail(`summary[${tag}]: ${finalized.droppedProblemCount} problems duplicate a focus item`)
-      if (finalized.focus.length === 0) fail(`summary[${tag}]: no focus items survived`)
-      if (aud === 'medical' && finalized.mustKnow.length === 0) fail(`summary[${tag}]: no 開藥前必看 rows survived`)
+      if (finalized.problems.length === 0) fail(`summary[${tag}]: no problems survived`)
       for (const issue of auditSummaryGrounding(snapshot, grounding)) fail(`summary[${tag}] grounding: ${issue}`)
-      // 影像與病理重點: the demo snapshots carry no reports module, so every row
-      // must render from the digest's deterministic fallback.
+      // 影像與病理重點: the demo snapshots carry no reports module, so the
+      // section must be the unavailable-summary fallback listing EVERY digest
+      // report with its deterministic excerpt.
       const highlights = finalized.reportHighlights
       if (aud === 'medical') {
         if (!highlights) fail(`summary[${tag}]: no 影像與病理重點 rendered`)
         else {
-          const empty = highlights.items.filter((item: any) => item.excerpts.length === 0)
-          if (empty.length) fail(`summary[${tag}]: 影像與病理重點 rows without an excerpt: ${empty.map((item: any) => item.key).join(',')}`)
-          console.log(`✓ reports[${tag}]: ${highlights.items.length} imaging/pathology rows (${highlights.aiSummarized} AI-picked, ${highlights.items.length - highlights.aiSummarized} fallback)`)
+          if (highlights.summarized) fail(`summary[${tag}]: 影像與病理重點 claims a summary the snapshot does not carry`)
+          if (highlights.groups.length > 0) fail(`summary[${tag}]: 影像與病理重點 has groups without a reports module`)
+          if (highlights.others.length !== highlights.totalReports) fail(`summary[${tag}]: 影像與病理重點 lists ${highlights.others.length} of ${highlights.totalReports} reports`)
+          const empty = highlights.others.filter((row: any) => !row.excerpt)
+          if (empty.length) fail(`summary[${tag}]: 影像與病理重點 rows without an excerpt: ${empty.map((row: any) => row.key).join(',')}`)
+          console.log(`✓ reports[${tag}]: ${highlights.others.length} imaging/pathology reports listed with their own excerpt (summary unavailable)`)
         }
       } else if (highlights) fail(`summary[${tag}]: 影像與病理重點 rendered for the patient audience`)
       if (aud === 'patient') {
@@ -107,7 +108,7 @@ async function main() {
           }
         }
       }
-      console.log(`✓ summary[${tag}]: ${finalized.mustKnow.length} 開藥前必看 rows, ${finalized.focus.length} focus items, ${finalized.problems.length} problems, ${finalized.recent.length} recent events, ${finalized.medicationEducation.length} education items, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
+      console.log(`✓ summary[${tag}]: ${finalized.problems.length} problems, ${finalized.medicationEducation.length} education items, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
 
       // --- safety: same path as a live reply ---
       const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(
