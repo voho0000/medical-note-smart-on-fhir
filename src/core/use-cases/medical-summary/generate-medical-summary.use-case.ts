@@ -1751,9 +1751,11 @@ function metricRecordText(
 
 /**
  * A model-written metric may draw an arrow only where its cited records carry
- * one: each part of the line is tied to one record's date — the date the part
- * writes, or else the one cited record of this kind whose text states the
- * part's numbers — and those dates run strictly forward. Two sides of one
+ * one: each part of the line is tied to the date of a cited record whose text
+ * states the part's numbers — the date the part writes when that record is
+ * of that date, else the one such record — and those dates run strictly
+ * forward. A written date no cited record bears with those numbers ties the
+ * part to nothing. Two sides of one
  * study (baPWV right 1544 / left 1547), two values of one day, a CT size
  * beside an ultrasound size, or undated parts no record ties to a date are not
  * a trend; written as one ("Size 2 → 5 cm" over a 5 cm and a later 2 cm CT)
@@ -1779,13 +1781,15 @@ function reviewModelMetric(
   }
   const recordNumbers = entries.map((entry) => ({ date: entry.date, numbers: new Set(statedNumbers(metricRecordText(entry, clinicalData))) }))
   const partDates = parts.map((part) => {
-    const written = writtenDate(part)
-    if (written) return written
     const numbers = statedNumbers(part)
     if (numbers.length === 0) return undefined
     const dates = new Set(recordNumbers
       .filter((record) => record.date && numbers.every((number) => record.numbers.has(number)))
       .map((record) => record.date!))
+    // A date the model wrote is evidence only when a cited record of that
+    // date states these numbers; otherwise the one record date that does.
+    const written = writtenDate(part)
+    if (written) return dates.has(written) ? written : undefined
     return dates.size === 1 ? [...dates][0] : undefined
   })
   const trend = modalities.size === 1 &&
@@ -2693,34 +2697,51 @@ const SEVERITY_FILLER = new Set(['to', 'degree', 'degrees', 'of', 'the', 'a', 'a
 type SeverityBinding = { severity: string; words: Set<string> }
 
 /**
- * Each severity word in a sentence with the finding words it qualifies: the
- * words after it up to the next break ("severe tricuspid regurgitation"), or,
- * when nothing follows ("tricuspid regurgitation (moderate)", "TR is
- * moderate"), the words before it back to the previous break. A severity whose
- * finding cannot be found carries an empty set.
+ * Each severity in a sentence with the finding words it qualifies: the words
+ * after it up to the next break ("severe tricuspid regurgitation"), plus the
+ * structure a "with" hangs it on ("mitral valve with severe regurgitation"
+ * qualifies the mitral regurgitation, not any regurgitation); or, when nothing
+ * follows ("tricuspid regurgitation (moderate)", "TR is moderate"), the words
+ * before it back to the previous break. A range ("moderate to severe",
+ * "mild-to-moderate") is one severity. A severity whose finding cannot be
+ * found carries an empty set.
  */
 function severityBindings(text: string): SeverityBinding[] {
-  const tokens = text.toLowerCase().match(/[a-z][a-z'-]*|[.;,:()\n/]/g) ?? []
+  const tokens = text.toLowerCase().replace(/([a-z])-(?=[a-z])/g, '$1 ').match(/[a-z][a-z']*|[.;,:()\n/]/g) ?? []
   const isBreak = (token: string) => !/^[a-z]/.test(token) || SEVERITY_PHRASE_BREAK.has(token)
   const isFinding = (token: string) => token.length >= 3 && !SEVERITY_FILLER.has(token) && !SEVERITY_TERMS.has(token) && !isBreak(token)
-  const bindings: SeverityBinding[] = []
-  tokens.forEach((token, index) => {
-    if (!SEVERITY_TERMS.has(token)) return
-    const words = new Set<string>()
-    for (let i = index + 1; i < tokens.length && !isBreak(tokens[i]); i++) {
+  const collectBack = (from: number, words: Set<string>) => {
+    for (let i = from; i >= 0 && !isBreak(tokens[i]); i--) {
       if (isFinding(tokens[i])) words.add(tokens[i])
     }
-    if (words.size === 0) {
-      let i = index - 1
-      // Step over what sits between the finding and a trailing severity:
-      // "(", ":", ",", "is", or another severity ("mild to moderate").
-      while (i >= 0 && (tokens[i] === '(' || tokens[i] === ':' || tokens[i] === ',' || SEVERITY_TERMS.has(tokens[i]) || SEVERITY_FILLER.has(tokens[i]))) i--
-      for (; i >= 0 && !isBreak(tokens[i]); i--) {
-        if (isFinding(tokens[i])) words.add(tokens[i])
-      }
+  }
+  const bindings: SeverityBinding[] = []
+  for (let index = 0; index < tokens.length; index++) {
+    if (!SEVERITY_TERMS.has(tokens[index])) continue
+    const severities = [tokens[index]]
+    let last = index
+    while (tokens[last + 1] === 'to' && SEVERITY_TERMS.has(tokens[last + 2] ?? '')) {
+      severities.push(tokens[last + 2])
+      last += 2
     }
-    bindings.push({ severity: token, words })
-  })
+    const words = new Set<string>()
+    for (let i = last + 1; i < tokens.length && !isBreak(tokens[i]); i++) {
+      if (isFinding(tokens[i])) words.add(tokens[i])
+    }
+    let before = index - 1
+    while (before >= 0 && SEVERITY_FILLER.has(tokens[before])) before--
+    if (words.size > 0 && tokens[before] === 'with') {
+      collectBack(before - 1, words)
+    } else if (words.size === 0) {
+      // Step over what sits between the finding and a trailing severity:
+      // "(", ":", ",", "is".
+      let i = index - 1
+      while (i >= 0 && (tokens[i] === '(' || tokens[i] === ':' || tokens[i] === ',' || SEVERITY_FILLER.has(tokens[i]))) i--
+      collectBack(i, words)
+    }
+    bindings.push({ severity: severities.join(' to '), words })
+    index = last
+  }
   return bindings
 }
 
@@ -2730,14 +2751,15 @@ const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((word) => b.ha
  * Whether the line attaches a severity to a different finding than the report
  * does. "Severe tricuspid regurgitation and moderate pulmonary hypertension"
  * summarised as "Moderate tricuspid regurgitation and pulmonary hypertension"
- * moves "moderate" onto the regurgitation; so does "Tricuspid regurgitation
- * (moderate)". Each severity in the line is paired with the finding it
- * qualifies, and a verified quote must pair the same severity with that
- * finding, with no other severity in the quotes pairing with it more closely
- * ("mitral valve with moderate regurgitation" carries "moderate mitral
- * regurgitation"). A severity whose finding cannot be paired falls back to
- * the quote. A quote in another language (a Chinese pathology report) cannot
- * be checked word by word and is left to its own quote.
+ * moves "moderate" onto the regurgitation; so do "Tricuspid regurgitation
+ * (moderate)" and, over "Mitral valve with severe regurgitation. Tricuspid
+ * valve with moderate regurgitation.", "Moderate mitral regurgitation". Each
+ * severity in the line is paired with the finding it qualifies, and a
+ * verified quote must pair the same severity (or range) with that finding
+ * more closely than any other severity does; a tie, or a severity whose
+ * finding cannot be paired, falls back to the quote. A quote in another
+ * language (a Chinese pathology report) cannot be checked word by word and is
+ * left to its own quote.
  */
 export function reportTextMovesSeverity(text: string, quotes: readonly string[]): boolean {
   const quoteBindings = quotes
@@ -2750,7 +2772,7 @@ export function reportTextMovesSeverity(text: string, quotes: readonly string[])
       .filter((quote) => (quote.severity === line.severity) === same)
       .map((quote) => overlap(line.words, quote.words)))
     const matched = best(true)
-    if (matched === 0 || best(false) > matched) return true
+    if (matched === 0 || best(false) >= matched) return true
   }
   return false
 }

@@ -32,6 +32,10 @@ describe('severity stays on its finding', () => {
     ['Severe tricuspid regurgitation. Moderate pulmonary hypertension.', 'Tricuspid regurgitation (moderate); pulmonary hypertension (moderate)'],
     // Shared words: the regurgitation the report calls moderate is tricuspid.
     ['Severe mitral regurgitation, moderate tricuspid regurgitation.', 'Moderate mitral regurgitation'],
+    // "with" hangs each severity on its valve (f209 review).
+    ['Mitral valve with severe regurgitation. Tricuspid valve with moderate regurgitation.', 'Moderate mitral regurgitation'],
+    // A range is not narrowed to one end.
+    ['Mild-to-moderate mitral regurgitation.', 'Moderate mitral regurgitation'],
   ])('falls back to the quote: %s', (quote, text) => {
     expect(reportPoint(quote, text).displayAs).toBe('quote')
   })
@@ -41,6 +45,8 @@ describe('severity stays on its finding', () => {
     ['Severe tricuspid regurgitation.', 'Tricuspid regurgitation (severe)'],
     ['Mitral valve with moderate regurgitation.', 'Moderate mitral regurgitation'],
     ['Moderate to severe tricuspid regurgitation.', 'Moderate to severe tricuspid regurgitation'],
+    ['Mitral valve with severe regurgitation. Tricuspid valve with moderate regurgitation.', 'Severe mitral regurgitation; moderate tricuspid regurgitation'],
+    ['Mild-to-moderate mitral regurgitation.', 'Mild to moderate mitral regurgitation'],
   ])('keeps a faithful line: %s', (quote, text) => {
     expect(reportPoint(quote, text).displayAs).toBe('text')
   })
@@ -61,6 +67,21 @@ describe('a metric trend', () => {
     const forward = finalizeMetric(ct, 'Size 5 → 2 cm')
     expect(forward.metric).toBe('Size 5 → 2 cm')
     expect(forward.metricNeedsReview).toBeUndefined()
+  })
+
+  it.each([
+    // Values and dates paired the wrong way round (f209 review).
+    'Size 2 cm (2026-01-01) → 5 cm (2026-02-01)',
+    // Dates no cited record bears.
+    'Size 5 cm (2024-01-01) → 2 cm (2024-02-01)',
+  ])('with written dates is checked against the records too: %s', (metric) => {
+    expect(finalizeMetric(ct, metric).metricNeedsReview).toBe(true)
+  })
+
+  it('with written dates that the records bear keeps its arrow', () => {
+    const line = finalizeMetric(ct, 'Size 5 cm (2026-01-01) → 2 cm (2026-02-01)')
+    expect(line.metric).toBe('Size 5 cm (2026-01-01) → 2 cm (2026-02-01)')
+    expect(line.metricNeedsReview).toBeUndefined()
   })
 
   it('is not drawn between different, unconverted units', () => {
