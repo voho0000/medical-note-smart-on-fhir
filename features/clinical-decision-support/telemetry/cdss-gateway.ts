@@ -61,6 +61,16 @@ export function cdssGatewayStatus() {
     saving: active.size > 0 }
 }
 
+function cancellable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(new Error('cdss_site_changed'))
+    signal.addEventListener('abort', cancel, { once: true })
+    if (signal.aborted) cancel()
+    work.then(value => { signal.removeEventListener('abort', cancel); resolve(value) },
+      error => { signal.removeEventListener('abort', cancel); reject(error) })
+  })
+}
+
 export async function saveCdssSnapshot(input: {
   patient: PatientEntity
   packId: string
@@ -74,45 +84,44 @@ export async function saveCdssSnapshot(input: {
   if (!patientId || !isCollectorSite()) throw new Error('cdss_site_unavailable')
   const url = cdssEndpoint()
   if (!url) throw new Error('cdss_endpoint_unavailable')
-  const identity = await cdssPatientIdentity(input.patient)
-  const events = [...(pending.get(patientId) ?? [])]
-  const piiLiterals = buildPatientTextLiterals(input.patient)
-  const { id: _patientId, ...profileWithoutPatientId } = input.profile
-  // JSON snapshot drops undefined fields and rejects cyclic/non-JSON data before transport.
-  const content = JSON.parse(JSON.stringify({
-    site: 'vghtpe', patient_session_id: sessionFor(patientId), pack_id: input.packId,
-    app_version: process.env.NEXT_PUBLIC_COLLECTOR_APP_VERSION || '0.0.0',
-    build_revision: process.env.NEXT_PUBLIC_COLLECTOR_BUILD_REVISION || 'unknown',
-    profile: profileWithoutPatientId, result: input.result,
-    physician_inputs: input.physicianInputs,
-    physician_decisions: input.physicianDecisions,
-    source_records: input.sourceRecords, events,
-  }, (_key, value: unknown) => {
-    if (typeof value !== 'string') return value
-    if (value === patientId) return '[redacted]'
-    if (value === `Patient/${patientId}`) return 'Patient/[redacted]'
-    return scrubFreeText(value, piiLiterals)
-  }))
-  const signature = JSON.stringify({ ...identity, ...content })
-  const previous = retryable.get(patientId)
-  const receipt = previous?.content === signature
-    ? previous
-    : { content: signature, saveId: crypto.randomUUID(), savedAt: new Date().toISOString() }
-  const payload = {
-    schema_version: 2, save_id: receipt.saveId, saved_at: receipt.savedAt, ...identity, ...content,
-  }
-  const parsed = cdssGatewaySaveSchema.parse(payload)
-  const body = JSON.stringify(parsed)
-  if (new TextEncoder().encode(body).length > MAX_BYTES) throw new Error('cdss_payload_too_large')
-  retryable.set(patientId, receipt)
-
   const controller = new AbortController()
   active.add(controller)
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
+    // Freeze the click-time snapshot BEFORE asynchronous identity preparation.
+    const events = [...(pending.get(patientId) ?? [])]
+    const piiLiterals = buildPatientTextLiterals(input.patient)
+    const { id: _patientId, ...profileWithoutPatientId } = input.profile
+    const content = JSON.parse(JSON.stringify({
+      site: 'vghtpe', patient_session_id: sessionFor(patientId), pack_id: input.packId,
+      app_version: process.env.NEXT_PUBLIC_COLLECTOR_APP_VERSION || '0.0.0',
+      build_revision: process.env.NEXT_PUBLIC_COLLECTOR_BUILD_REVISION || 'unknown',
+      profile: profileWithoutPatientId, result: input.result,
+      physician_inputs: input.physicianInputs, physician_decisions: input.physicianDecisions,
+      source_records: input.sourceRecords, events,
+    }, function (this: unknown, key, value: unknown) {
+      if (typeof value !== 'string') return value
+      const holder = this as { resourceType?: string; resource_type?: string }
+      if (value === patientId && (key === 'patientId' || key === 'patient_id' ||
+        (holder.resourceType === 'Patient' && (key === 'resourceId' || key === 'id')) ||
+        (holder.resource_type === 'Patient' && key === 'resource_id'))) return '[redacted]'
+      if (value === `Patient/${patientId}`) return 'Patient/[redacted]'
+      return scrubFreeText(value, piiLiterals)
+    }))
+    const identity = await cancellable(cdssPatientIdentity(input.patient), controller.signal)
+    if (!isCollectorSite() || controller.signal.aborted) throw new Error('cdss_site_changed')
+    const signature = JSON.stringify({ ...identity, ...content })
+    const previous = retryable.get(patientId)
+    const receipt = previous?.content === signature
+      ? previous : { content: signature, saveId: crypto.randomUUID(), savedAt: new Date().toISOString() }
+    const parsed = cdssGatewaySaveSchema.parse({ schema_version: 2, save_id: receipt.saveId,
+      saved_at: receipt.savedAt, ...identity, ...content })
+    const body = JSON.stringify(parsed)
+    if (new TextEncoder().encode(body).length > MAX_BYTES) throw new Error('cdss_payload_too_large')
+    retryable.set(patientId, receipt)
     const pilot = process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot'
-    const auth = pilot ? null : await captureCollectorAuth()
-    const token = pilot ? null : await auth?.getToken()
+    const auth = pilot ? null : await cancellable(captureCollectorAuth(), controller.signal)
+    const token = pilot || !auth ? null : await cancellable(auth.getToken(), controller.signal)
     if (!pilot && !token) throw new Error('cdss_auth_unavailable')
     if (!isCollectorSite() || controller.signal.aborted) throw new Error('cdss_site_changed')
     const response = await fetch(url, {
@@ -123,6 +132,7 @@ export async function saveCdssSnapshot(input: {
     })
     if (response.status !== 201) throw new Error('cdss_gateway_rejected')
     const ack = await response.json() as { status?: string; save_id?: string }
+    if (!isCollectorSite() || controller.signal.aborted) throw new Error('cdss_site_changed')
     if (ack.status !== 'stored' || ack.save_id !== parsed.save_id) throw new Error('cdss_gateway_unconfirmed')
     const current = pending.get(patientId) ?? []
     const saved = new Set(events)

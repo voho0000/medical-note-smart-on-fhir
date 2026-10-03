@@ -95,6 +95,36 @@ test('failed or unconfirmed save keeps pending actions for retry', async () => {
   expect(cdssGatewayStatus().pending_events).toBe(0)
 })
 
+test('patient change cancels a save during identity preparation before any transport begins', async () => {
+  Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: {
+    digest: () => new Promise<ArrayBuffer>(() => {}),
+  } })
+  const request = saveCdssSnapshot(input)
+  expect(cdssGatewayStatus().saving).toBe(true)
+  cancelCdssGatewayRequests()
+  await expect(request).rejects.toThrow('cdss_site_changed')
+  expect(fetch).not.toHaveBeenCalled()
+  expect(cdssGatewayStatus().saving).toBe(false)
+})
+
+test('events added during identity preparation remain pending after the click-time snapshot succeeds', async () => {
+  const tuple = JSON.stringify([1, 'vghtpe', '陳小華', '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
+  const digest = await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(tuple))
+  let resolveDigest: (value: ArrayBuffer) => void = () => {}
+  Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: {
+    digest: () => new Promise<ArrayBuffer>(resolve => { resolveDigest = resolve }),
+  } })
+  recordCdssEvent(input.patient.id, input.packId, { kind: 'interaction', action: 'page_reset' })
+  const request = saveCdssSnapshot(input)
+  recordCdssEvent(input.patient.id, input.packId, { kind: 'interaction', action: 'layout_selected' })
+  resolveDigest(digest)
+  await request
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(body.events).toHaveLength(1)
+  expect(body.events[0].action).toBe('page_reset')
+  expect(cdssGatewayStatus().pending_events).toBe(1)
+})
+
 test.each(['/', '/app/?site=hmc', '/app/?site=VGHTPE', '/app/?site=vghtpe&site=vghtpe'])('refuses save on %s', async (url) => {
   window.history.replaceState({}, '', url)
   await expect(saveCdssSnapshot(input)).rejects.toThrow('cdss_site_unavailable')
@@ -123,6 +153,17 @@ test('patient key stays stable when the imported FHIR Patient.id changes', async
   const bodies = jest.mocked(fetch).mock.calls.map((call) => JSON.parse(call[1]?.body as string))
   expect(bodies[0].patient_key_sha256).toBe(bodies[1].patient_key_sha256)
   expect(bodies[0].patient_session_id).not.toBe(bodies[1].patient_session_id)
+})
+
+test('opaque numeric Patient IDs do not erase equal clinical values or other resource IDs', async () => {
+  await saveCdssSnapshot({ ...input, patient: { ...input.patient, id: '92' },
+    profile: { id: '92', facts: { ldl: { zh: '92', en: '92', numericValue: 92,
+      sources: [{ resourceType: 'Observation', resourceId: '92' }] },
+      age: { sources: [{ resourceType: 'Patient', resourceId: '92' }] } } } as CdssPatientProfile })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(body.profile.facts.ldl.zh).toBe('92')
+  expect(body.profile.facts.ldl.sources[0].resourceId).toBe('92')
+  expect(body.profile.facts.age.sources[0].resourceId).toBe('[redacted]')
 })
 
 test('does not transmit when complete identity inputs are missing', async () => {
