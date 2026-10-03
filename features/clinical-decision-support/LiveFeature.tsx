@@ -84,6 +84,10 @@ import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
 import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
+import { CdssStorageActions } from './renderers/CdssStorageActions'
+import { cdssSourceRecords } from './telemetry/source-records'
+import { useCdssGateway } from './telemetry/use-cdss-gateway'
+import { recordCdssEvent } from './telemetry/cdss-gateway'
 
 const AF_PACK_ID = 'atrial-fibrillation-cdss'
 const LIPID_PACK_ID = 'hyperlipidemia-cdss'
@@ -532,6 +536,8 @@ export default function LiveClinicalDecisionSupportFeature({
     ?? applicablePacks[0]
     ?? getDefaultClinicalGuidelinePack()
 
+  useCdssGateway({ patientId, packId: selectedPack?.id ?? 'unknown', ready: answersHydrated })
+
   const result = useMemo(() => {
     if (!profile) return null
     return selectedPack.applies(profile)
@@ -723,6 +729,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
+    if (patientId) recordCdssEvent(patientId, result.packId, { kind: 'interaction', action: 'page_reset' })
     if (!patientId) return
     if (isNhiTable) {
       useNhiLipidReviewStore.getState().clear(patientId)
@@ -767,7 +774,7 @@ export default function LiveClinicalDecisionSupportFeature({
             packs={guidelinePacks}
             applicablePackIds={applicablePackIds}
             selectedPackId={selectedPack.id}
-            onSelect={setRequestedPackId}
+            onSelect={id => { if (patientId) recordCdssEvent(patientId, id, { kind: 'interaction', action: 'disease_selected' }); setRequestedPackId(id) }}
           />
           {showLayoutSwitcher ? (
             <LayoutSwitcher
@@ -775,7 +782,7 @@ export default function LiveClinicalDecisionSupportFeature({
               layout={switcherLayout}
               packId={result.packId}
               mapAvailable={mapOffered}
-              onSelect={setLayout}
+              onSelect={next => { if (patientId) recordCdssEvent(patientId, result.packId, { kind: 'interaction', action: 'layout_selected', target: next }); setLayout(next) }}
             />
           ) : null}
           {(isVisitFlow || isNhiTable) && patientId ? (
@@ -807,6 +814,12 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
+      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} input={{ patient,
+        packId: result.packId, profile, result,
+        physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
+          nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
+        physicianDecisions: { ...physicianDecisions },
+      }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
       <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
 
       {/*
