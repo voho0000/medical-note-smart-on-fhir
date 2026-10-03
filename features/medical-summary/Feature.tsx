@@ -55,6 +55,13 @@ import { OverviewHeroCard } from "./components/OverviewHeroCard"
 import { ProblemsCard } from "./components/ProblemsCard"
 import { ReportHighlightsCard } from "./components/ReportHighlightsCard"
 import { MedicationSafetySection } from "./components/MedicationSafetySection"
+import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
+import { staleEvidenceDate } from "@/src/core/utils/stale-evidence.utils"
+import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
+import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
+import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
+import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { MedicationEducationCard } from "./components/MedicationEducationCard"
 import { CoverageCard } from "./components/CoverageCard"
 import { SummaryStatusStrip } from "./components/SummaryStatusStrip"
@@ -411,6 +418,29 @@ export default function MedicalSummaryFeature() {
       )
     },
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],
+  )
+
+  // A 雲端病歷 chart holds about a year; when its whole year is in scope and
+  // holds no imaging or pathology report, the section says so instead of
+  // vanishing (owner, 2026-10-03).
+  const sourceClinicalData = useClinicalData()
+  const { filters: scopeFilters } = useDataSelection()
+  const reportsNoneLabel = useMemo(
+    () => detectClinicalDataSource(sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0]) === 'nhi-medcloud' &&
+      ['1y', '3y', '5y', 'all'].includes(scopeFilters.imagingReportTimeRange)
+      ? ms.reportsNoneMedcloudYear
+      : undefined,
+    [sourceClinicalData, scopeFilters.imagingReportTimeRange, ms.reportsNoneMedcloudYear],
+  )
+
+  // 「依據資料已逾 1 年」: judged at render against the clinical reference date
+  // (the demo's own as-of date for demo data), so cached results carry it too.
+  const alertStaleEvidenceDate = useCallback(
+    (alert: SafetyAlert) => staleEvidenceDate(
+      (alert.sources ?? []).map((key) => resolveSafetySource(key)?.date),
+      clinicalNowMs(isDemoDataActive()),
+    ),
+    [resolveSafetySource],
   )
 
   const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
@@ -923,8 +953,10 @@ export default function MedicalSummaryFeature() {
                   othersAll: ms.reportsAll,
                   unavailable: ms.reportsUnavailable,
                   hiddenPoints: ms.reportsHiddenPoints,
+                  hiddenPointsNote: ms.reportsHiddenPointsNote,
                   conclusionTag: ms.reportsConclusionTag,
                   openingTag: ms.reportsOpeningTag,
+                  noReports: reportsNoneLabel,
                 }}
                 onNavigate={navigateToResource}
               />
@@ -942,6 +974,8 @@ export default function MedicalSummaryFeature() {
               lessLabel={ms.showLessItems}
               disclaimer={safetyText.disclaimer}
               renderSources={renderSafetySources}
+              staleEvidenceDate={alertStaleEvidenceDate}
+              staleEvidenceLabel={ms.safetyStaleEvidence}
             />
           )}
 

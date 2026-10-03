@@ -56,8 +56,14 @@ export interface ReportHighlightsCardLabels {
   unavailable: string
   /** "{count}" — points not shown because no quote matched. */
   hiddenPoints: string
+  /** Note above those points once opened: AI wording, not verified. */
+  hiddenPointsNote: string
   conclusionTag: string
   openingTag: string
+  /** Said when the scope holds no imaging or pathology report at all, e.g.
+   *  「過去一年無檢查報告」 for a 雲端病歷 year; without it the section is
+   *  not drawn. */
+  noReports?: string
 }
 
 interface ReportHighlightsCardProps {
@@ -84,7 +90,18 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   // Nothing to list at all: the section has no content of its own.
   const [othersOpen, setOthersOpen] = useState(groups.length === 0)
   const [openPoints, setOpenPoints] = useState<ReadonlySet<string>>(new Set())
-  if (groups.length === 0 && others.length === 0) return null
+  const [hiddenOpen, setHiddenOpen] = useState(false)
+  if (groups.length === 0 && others.length === 0) {
+    if (!labels.noReports || highlights.totalReports > 0) return null
+    return (
+      <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="medical-summary-reports-title">
+        <h3 id="medical-summary-reports-title" className="mb-1 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
+          {labels.title}
+        </h3>
+        <p className="text-xs leading-snug text-muted-foreground" data-no-reports>{labels.noReports}</p>
+      </section>
+    )
+  }
 
   const newestYear = [
     ...groups.flatMap((group) => group.points.flatMap((point) => point.sources.map((source) => source.date))),
@@ -102,9 +119,9 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     return next
   })
 
-  const chip = (source: ReportFindingSource, point: ReportFindingPoint) => {
+  const chip = (source: ReportFindingSource, quotes: ReportFindingPoint["quotes"] = []) => {
     const label = `${labels.kindLabels[source.kind]} ${reportChipDate(source.date, newestYear)}`
-    const evidenceQuote = point.quotes.find((quote) => quote.key === source.key)?.quote
+    const evidenceQuote = quotes.find((quote) => quote.key === source.key)?.quote
     const className =
       "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[0.6875rem] leading-[1.125rem] tabular-nums text-muted-foreground"
     if (!onNavigate) {
@@ -253,7 +270,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                                 {point.text}
                               </span>
                             )}
-                            {point.sources.map((source) => chip(source, point))}
+                            {point.sources.map((source) => chip(source, point.quotes))}
                           </p>
                           {open && !showAsQuote ? (
                             <ul className="mt-0.5 space-y-0.5 border-l border-border pl-2">
@@ -307,9 +324,39 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
       ) : null}
 
       {highlights.hiddenPointCount > 0 ? (
-        <p className="mt-0.5 text-xs text-muted-foreground/80">
-          {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount))}
-        </p>
+        highlights.hiddenPoints?.length ? (
+          // Points no verified quote supported stay folded: a clinician may
+          // open them for reference, labelled as unverified AI wording, with
+          // the cited reports one click away.
+          <div className="mt-0.5" data-hidden-points>
+            <button
+              type="button"
+              onClick={() => setHiddenOpen((value) => !value)}
+              aria-expanded={hiddenOpen}
+              className="flex min-h-[44px] w-full items-center gap-1.5 text-left text-xs text-muted-foreground/80 transition-colors hover:text-foreground lg:min-h-8"
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 -rotate-90 transition-transform", hiddenOpen && "rotate-0")} aria-hidden="true" />
+              {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount))}
+            </button>
+            {hiddenOpen ? (
+              <div className="border-l border-dashed border-border pb-0.5 pl-2">
+                <p className="text-[0.6875rem] leading-snug text-muted-foreground">{labels.hiddenPointsNote}</p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {highlights.hiddenPoints.map((point, index) => (
+                    <li key={`${point.organ}-${index}`} className="break-words text-xs leading-snug text-muted-foreground" data-unverified-point>
+                      {point.text}
+                      {point.sources.map((source) => chip(source))}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-0.5 text-xs text-muted-foreground/80">
+            {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount))}
+          </p>
+        )
       ) : null}
     </section>
   )

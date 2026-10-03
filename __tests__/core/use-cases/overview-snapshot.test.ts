@@ -52,6 +52,20 @@ describe('buildOverviewSnapshot', () => {
     expect(snapshot.clinicalContext).toContain('- 第二型糖尿病 — primary diagnosis, 2 visits, last 2026-04-20 [E1]')
   })
 
+  it('groups and ranks a zh-TW visit diagnosis by its ICD coding, not its Chinese name', () => {
+    const icd = (code: string, display: string) => [{ coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code, display }] }]
+    const input: SummaryCatalogInput = {
+      encounters: [
+        { id: 'eye', class: { code: 'AMB' }, period: { start: '2026-04-20' }, reasonCode: icd('H10.43', '雙側眼慢性結膜炎') },
+        { id: 'ca-1', class: { code: 'AMB' }, period: { start: '2026-02-12' }, reasonCode: icd('C61', '攝護腺惡性腫瘤') },
+        { id: 'ca-2', class: { code: 'AMB' }, period: { start: '2025-11-12' }, reasonCode: icd('C61', '攝護腺惡性腫瘤') },
+      ] as never,
+    }
+    const lines = build(input).clinicalContext.split('\n').filter((line) => line.startsWith('- ') && line.includes('primary diagnosis'))
+    expect(lines[0]).toContain('攝護腺惡性腫瘤 — primary diagnosis, 2 visits')
+    expect(lines[1]).toContain('雙側眼慢性結膜炎')
+  })
+
   it('lists a claims-feed medicine whose only evidence is a live supply window', () => {
     // The NHI bridge leaves status at `unknown`; the days-supply is the evidence.
     const input: SummaryCatalogInput = {

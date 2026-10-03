@@ -14,6 +14,8 @@
 // Guardrails so this never fights the user:
 //  • only when the 初診 template is active AND filters are still pristine
 //    factory defaults (the moment the user tweaks anything, we stop);
+//  • a 雲端病歷 record that is not small takes its whole year instead of the
+//    6-month window (owner decision 2026-10-03), silently;
 //  • once per bundle (keyed by a cheap signature), so re-renders don't re-apply;
 //  • reversible — 還原範本預設 restores the 6-month factory filters;
 //  • a one-time toast tells the user why the whole record was pulled in.
@@ -22,7 +24,8 @@ import { toast } from "sonner"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useOpenAiCompatibleProfiles } from "@/src/application/stores/ai-config.store"
-import { DEFAULT_DATA_FILTERS } from "@/src/shared/constants/data-selection.constants"
+import { DEFAULT_DATA_FILTERS, MEDCLOUD_YEAR_DATA_FILTERS } from "@/src/shared/constants/data-selection.constants"
+import { detectClinicalDataSource, type ClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
 import { estimateTokens } from "@/src/shared/utils/token-estimator"
 import { listClinicalDocuments } from "@/src/core/utils/clinical-documents.utils"
 import { clinicalContextTokenTarget } from "@/src/core/utils/adaptive-clinical-context.utils"
@@ -93,14 +96,40 @@ export function estimateFullRecordTokens(data: ClinicalDataCollection): number {
   return structuredTokens + docTokens
 }
 
-/** Are the filters still exactly the factory 初診 defaults (user hasn't tweaked)? */
-function isPristineDefaultFilters(filters: DataFilters): boolean {
-  const keys = Object.keys(DEFAULT_DATA_FILTERS) as (keyof DataFilters)[]
-  return keys.every((k) => filters[k] === DEFAULT_DATA_FILTERS[k])
+const sameFilters = (a: DataFilters, b: DataFilters): boolean =>
+  (Object.keys(b) as (keyof DataFilters)[]).every((k) => a[k] === b[k])
+
+export type AdaptiveFiltersAction =
+  | { kind: 'select-all' }
+  | { kind: 'set-filters'; filters: DataFilters }
+  | { kind: 'none' }
+
+/**
+ * What the 初診 defaults become for this record, while the user has not
+ * touched them (the factory filters, or the cloud-record year this rule set
+ * itself). A small record takes everything; a 雲端病歷 record takes its whole
+ * year; any other record keeps — or gets back — the factory window. Exported
+ * for testing.
+ */
+export function adaptiveFiltersAction(args: {
+  filters: DataFilters
+  activePreset: string
+  dataSource: ClinicalDataSource
+  smallRecord: boolean
+}): AdaptiveFiltersAction {
+  if (args.activePreset !== 'newPatient') return { kind: 'none' }
+  const factory = sameFilters(args.filters, DEFAULT_DATA_FILTERS)
+  const medcloudYear = sameFilters(args.filters, MEDCLOUD_YEAR_DATA_FILTERS)
+  if (!factory && !medcloudYear) return { kind: 'none' }
+  if (args.smallRecord) return { kind: 'select-all' }
+  if (args.dataSource === 'nhi-medcloud') {
+    return medcloudYear ? { kind: 'none' } : { kind: 'set-filters', filters: { ...MEDCLOUD_YEAR_DATA_FILTERS } }
+  }
+  return medcloudYear ? { kind: 'set-filters', filters: { ...DEFAULT_DATA_FILTERS } } : { kind: 'none' }
 }
 
 export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | null): void {
-  const { filters, activePreset, selectAllData } = useDataSelection()
+  const { filters, activePreset, selectAllData, setFilters } = useDataSelection()
   const { t } = useLanguage()
   const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
   const appliedSigRef = useRef<string | null>(null)
@@ -123,18 +152,22 @@ export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | n
     const sig = `${structured}`
     if (appliedSigRef.current === sig) return
 
-    // Only act on the pristine 初診 default — never override a user's own or a
-    // 追蹤 / 自訂 selection.
-    if (activePreset !== 'newPatient' || !isPristineDefaultFilters(filters)) {
-      appliedSigRef.current = sig
-      return
-    }
-
-    if (structured > 0 && estimateFullRecordTokens(clinicalData) <= autoSelectThreshold) {
+    const action = adaptiveFiltersAction({
+      filters,
+      activePreset,
+      // Entities do not type `meta`; the bridge's provenance is still on them.
+      dataSource: detectClinicalDataSource(clinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0]),
+      smallRecord: structured > 0 && estimateFullRecordTokens(clinicalData) <= autoSelectThreshold,
+    })
+    if (action.kind === 'select-all') {
       selectAllData()
       const ds = t.dataSelection as unknown as Record<string, string>
       toast.info(ds.autoSelectAllToast ?? '因資料量少,已自動帶入全部資料(可在「資料範圍」調整)。')
+    } else if (action.kind === 'set-filters') {
+      // Silent: 資料範圍 shows the window, and the hospital's Medcloud launch
+      // must not raise any prompt.
+      setFilters(action.filters)
     }
     appliedSigRef.current = sig
-  }, [clinicalData, filters, activePreset, selectAllData, t, autoSelectThreshold])
+  }, [clinicalData, filters, activePreset, selectAllData, setFilters, t, autoSelectThreshold])
 }

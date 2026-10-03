@@ -64,6 +64,7 @@ import {
   type SummaryCoverageStats,
   type SummaryProblem,
   type SummarySourceCatalogEntry,
+  type UnverifiedReportPoint,
   metricReviewCarryKey,
 } from '@/src/core/entities/medical-summary.entity'
 import { referenceId } from '@/src/core/utils/observation-selectors'
@@ -2333,6 +2334,7 @@ export class GenerateMedicalSummaryUseCase {
             reportsCarriedCounts: {
               droppedQuoteCount: highlights.droppedQuoteCount,
               hiddenPointCount: highlights.hiddenPointCount,
+              ...(highlights.hiddenPoints?.length ? { hiddenPoints: highlights.hiddenPoints } : {}),
             },
           }
         : {}),
@@ -2818,7 +2820,7 @@ export interface FinalizeReportHighlightsOptions {
   locale?: SummaryLocale
   /** Counts the finalizer already took on a retained module (see
    *  MedicalSummaryAiResult.reportsCarriedCounts). */
-  carried?: { droppedQuoteCount: number; hiddenPointCount: number }
+  carried?: { droppedQuoteCount: number; hiddenPointCount: number; hiddenPoints?: UnverifiedReportPoint[] }
 }
 
 /**
@@ -2845,6 +2847,7 @@ export function finalizeReportHighlights(
   const itemByKey = new Map(digestItems.map((item) => [item.key, item]))
   let droppedQuoteCount = options.carried?.droppedQuoteCount ?? 0
   let hiddenPointCount = options.carried?.hiddenPointCount ?? 0
+  const hiddenPoints: UnverifiedReportPoint[] = [...(options.carried?.hiddenPoints ?? [])]
   let uncertaintyRewriteCount = 0
   const citedKeys = new Set<string>()
   const pointsByOrgan = new Map<ReportOrgan, ReportFindingPoint[]>()
@@ -2856,6 +2859,17 @@ export function finalizeReportHighlights(
       droppedQuoteCount += finalized.droppedQuotes
       if (!finalized.point) {
         hiddenPointCount += 1
+        if (point.text?.trim()) {
+          hiddenPoints.push({
+            organ,
+            text: point.text.trim(),
+            sources: [...new Set([...point.sources, ...point.quotes.map((quote) => quote.source)].map(normaliseSummarySourceKey))]
+              .map((key) => itemByKey.get(key))
+              .filter((item): item is ReportDigestItem => Boolean(item))
+              .sort(newestFirst)
+              .map(reportFindingSource),
+          })
+        }
         continue
       }
       if (finalized.point.displayAs === 'quote') uncertaintyRewriteCount += 1
@@ -2897,6 +2911,7 @@ export function finalizeReportHighlights(
     totalReports: digestItems.length,
     droppedQuoteCount,
     hiddenPointCount,
+    ...(hiddenPoints.length > 0 ? { hiddenPoints } : {}),
     uncertaintyRewriteCount,
   }
 }

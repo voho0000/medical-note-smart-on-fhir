@@ -241,7 +241,7 @@ function collectProblems(
   // Visit diagnoses: the NHI cloud record carries each visit's primary
   // diagnosis, which the summary releases as the diagnosis (owner decision
   // 2026-10-03). Grouped and counted so the line says how often it was coded.
-  interface ClaimGroup { label: string; count: number; lastDate?: string; key?: string; fromAdmission: boolean; variants: number; seenLabels?: Set<string> }
+  interface ClaimGroup { label: string; code?: string; count: number; lastDate?: string; key?: string; fromAdmission: boolean; variants: number; seenLabels?: Set<string> }
   const claims = new Map<string, ClaimGroup>()
   for (const encounter of input.clinicalData.encounters ?? []) {
     const encounterKey = encounter.id ? keyByResourceId.get(encounter.id) : undefined
@@ -257,12 +257,16 @@ function collectProblems(
       // three-character category so one row carries the whole disease and the
       // variants do not crowd out an unrelated problem; codes without an ICD
       // prefix fall back to the normalised label.
-      const category = label.match(/^([A-Z]\d{2})/)?.[1]
+      // The ICD code is read from the coding itself: a zh-TW label is the
+      // Chinese name alone (攝護腺惡性腫瘤), which would lose both the grouping
+      // and the chapter weight below.
+      const code = reason.coding?.map((coding) => coding.code?.trim().toUpperCase()).find((value) => value && /^[A-Z]\d{2}/.test(value))
+      const category = code?.slice(0, 3) ?? label.match(/^([A-Z]\d{2})/)?.[1]
       const identity = category ?? normalizeName(label)
       if (!identity || seen.has(identity)) continue
       const group = claims.get(identity)
       if (!group) {
-        claims.set(identity, { label: compact(label), count: 1, lastDate: date, key: encounterKey, fromAdmission, variants: 1, seenLabels: new Set([label]) })
+        claims.set(identity, { label: compact(label), code, count: 1, lastDate: date, key: encounterKey, fromAdmission, variants: 1, seenLabels: new Set([label]) })
         continue
       }
       group.count += 1
@@ -281,7 +285,7 @@ function collectProblems(
   // ties inside a band.
   const claimItems = [...claims.values()]
     .sort((a, b) =>
-      claimWeight(b.label, b.fromAdmission) - claimWeight(a.label, a.fromAdmission) ||
+      claimWeight(b.code ?? b.label, b.fromAdmission) - claimWeight(a.code ?? a.label, a.fromAdmission) ||
       (b.lastDate ?? '').localeCompare(a.lastDate ?? '') ||
       b.count - a.count)
     .map((group) => ({

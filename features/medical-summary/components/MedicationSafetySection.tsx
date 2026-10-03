@@ -22,6 +22,11 @@ interface MedicationSafetySectionProps {
   lessLabel: string
   disclaimer: string
   renderSources?: (keys: string[], unsupportedKeys?: string[]) => ReactNode
+  /** The newest cited date when every cited record is over a year old
+   *  (「依據資料已逾 1 年」); labels the alert, never hides it. */
+  staleEvidenceDate?: (alert: SafetyAlert) => string | undefined
+  /** "依據資料已逾 1 年（{date}）" */
+  staleEvidenceLabel?: string
 }
 
 export function MedicationSafetySection({
@@ -31,6 +36,8 @@ export function MedicationSafetySection({
   lessLabel,
   disclaimer,
   renderSources,
+  staleEvidenceDate,
+  staleEvidenceLabel,
 }: MedicationSafetySectionProps) {
   const [showAll, setShowAll] = useState(false)
   if (alerts.length === 0) return null
@@ -49,18 +56,28 @@ export function MedicationSafetySection({
         {title}
       </h3>
       <ol className="space-y-1.5" data-safety-alerts>
-        {visible.map((alert) => (
-          <li key={alert.id} className="border-b border-border pb-1.5 last:border-b-0 last:pb-0">
-            <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">{alert.title}</p>
-            <p className="mt-0.5 text-xs leading-snug text-foreground/85">
-              {alert.detail}
-              {renderSources ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys) : null}
-            </p>
-            {alert.recommendation ? (
-              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{alert.recommendation}</p>
-            ) : null}
-          </li>
-        ))}
+        {visible.map((alert) => {
+          const staleDate = staleEvidenceLabel ? staleEvidenceDate?.(alert) : undefined
+          return (
+            <li key={alert.id} className="border-b border-border pb-1.5 last:border-b-0 last:pb-0">
+              <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
+                {alert.title}
+                {staleDate ? (
+                  <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
+                    {staleEvidenceLabel!.replace("{date}", staleDate)}
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-0.5 text-xs leading-snug text-foreground/85">
+                {alert.detail}
+                {renderSources ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys) : null}
+              </p>
+              {alert.recommendation ? (
+                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{alert.recommendation}</p>
+              ) : null}
+            </li>
+          )
+        })}
       </ol>
       {hiddenCount > 0 ? (
         <button

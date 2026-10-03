@@ -45,4 +45,19 @@ describe('MedicationSafetySection', () => {
     renderSection([alert('m1', 'medium', 'Synthetic B')])
     expect(screen.queryByRole('button')).toBeNull()
   })
+  it('labels an alert resting only on year-old records, and hides nothing', () => {
+    render(
+      <MedicationSafetySection
+        alerts={[alert('old', 'high', 'Synthetic old BP'), alert('new', 'medium', 'Synthetic recent lab')]}
+        title="開藥注意"
+        moreLabel="顯示其餘 {count} 項"
+        lessLabel="收合"
+        disclaimer="AI 掃描，僅供參考"
+        staleEvidenceDate={(item) => (item.id === 'old' ? '2022-11-07' : undefined)}
+        staleEvidenceLabel="依據資料已逾 1 年（{date}）"
+      />,
+    )
+    expect(screen.getByText('Synthetic old BP')).toHaveTextContent('依據資料已逾 1 年（2022-11-07）')
+    expect(screen.getByText('Synthetic recent lab')).not.toHaveTextContent('逾 1 年')
+  })
 })

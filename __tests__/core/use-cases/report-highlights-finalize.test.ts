@@ -137,6 +137,9 @@ describe('quote verification', () => {
     expect(highlights.groups[0].points.map((shown) => shown.text)).toEqual(['疑似肺癌'])
     expect(highlights.hiddenPointCount).toBe(2)
     expect(highlights.droppedQuoteCount).toBe(1)
+    // Kept for a clinician who opens them: the line and the reports it cited.
+    expect(highlights.hiddenPoints?.map((hidden) => [hidden.text, hidden.sources.map((source) => source.key)]))
+      .toEqual([['縱膈腔淋巴腫大', [CT]], ['沒有引句的重點', [CT]]])
   })
 
   it('drops a translated or altered quote and keeps the point on its other verified quote', () => {
@@ -483,6 +486,7 @@ describe('影像與病理重點 across card retries', () => {
   it('keeps groups, display decisions and every counter when another card is retried', () => {
     const highlights = first.reportHighlights!
     expect(highlights).toMatchObject({ droppedQuoteCount: 2, hiddenPointCount: 1, uncertaintyRewriteCount: 1 })
+    expect(highlights.hiddenPoints?.map((hidden) => hidden.text)).toEqual(['不存在'])
     const draft = useCase.createAiDraftFromResult(first)
     const retried = useCase.mergeModuleResult(draft, 'problems', { problems: [] })
     const again = useCase.finalizeResult(retried, catalog, { clinicalData, audience: 'medical', locale: 'zh-TW' })

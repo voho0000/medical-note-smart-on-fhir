@@ -27,6 +27,7 @@ const LABELS = {
   othersAll: ms.reportsAll,
   unavailable: ms.reportsUnavailable,
   hiddenPoints: ms.reportsHiddenPoints,
+  hiddenPointsNote: ms.reportsHiddenPointsNote,
   conclusionTag: ms.reportsConclusionTag,
   openingTag: ms.reportsOpeningTag,
 }
@@ -178,6 +179,33 @@ describe('ReportHighlightsCard', () => {
     expect(screen.getByText('2 項因與原文不符未顯示')).toBeInTheDocument()
     rerender(<ReportHighlightsCard highlights={{ ...HIGHLIGHTS, hiddenPointCount: 0 }} labels={LABELS} />)
     expect(screen.queryByText(/因與原文不符未顯示/)).toBeNull()
+  })
+
+  it('folds hidden points away, and opens them as unverified AI wording with their reports', () => {
+    const onNavigate = jest.fn()
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{ ...HIGHLIGHTS, hiddenPoints: [{ organ: 'heart', text: 'Synthetic unmatched finding', sources: [XR1] }] }}
+        labels={LABELS}
+        onNavigate={onNavigate}
+      />,
+    )
+    expect(screen.queryByText('Synthetic unmatched finding')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /2 項因與原文不符未顯示/ }))
+    expect(screen.getByText(/未通過原文比對，僅供參考/)).toBeInTheDocument()
+    const item = container.querySelector('[data-unverified-point]')!
+    expect(item).toHaveTextContent('Synthetic unmatched finding')
+    fireEvent.click(item.querySelector('[data-report-chip="L1"]')!)
+    expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ resourceId: 'dr-L1' }))
+  })
+
+  it('says when the scope holds no report at all, and only when given the words', () => {
+    const empty: ReportHighlights = { summarized: false, groups: [], others: [], totalReports: 0, droppedQuoteCount: 0, hiddenPointCount: 0, uncertaintyRewriteCount: 0 }
+    const { container, rerender } = render(<ReportHighlightsCard highlights={empty} labels={LABELS} />)
+    expect(container).toBeEmptyDOMElement()
+    rerender(<ReportHighlightsCard highlights={empty} labels={{ ...LABELS, noReports: ms.reportsNoneMedcloudYear }} />)
+    expect(screen.getByText('過去一年無檢查報告')).toBeInTheDocument()
+    expect(screen.queryByText(ms.reportsUnavailable)).toBeNull()
   })
 
   it('without a summary, lists every report open with its own excerpt and says so', () => {

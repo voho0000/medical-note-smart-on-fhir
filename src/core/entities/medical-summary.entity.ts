@@ -256,6 +256,7 @@ export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema
   reportsCarriedCounts?: {
     droppedQuoteCount: number
     hiddenPointCount: number
+    hiddenPoints?: UnverifiedReportPoint[]
   }
   /** App-only carry-over for retained problem rows whose metric the finalizer
    *  marked 需核對: the draft holds the cleaned line (arrows removed), which
@@ -501,6 +502,14 @@ export interface ReportFindingPoint {
   sources: ReportFindingSource[]
 }
 
+/** A point no verified quote supported (see ReportHighlights.hiddenPoints). */
+export interface UnverifiedReportPoint {
+  organ: ReportOrgan
+  text: string
+  /** The listed reports the point cited, newest first. */
+  sources: ReportFindingSource[]
+}
+
 export interface ReportFindingGroup {
   organ: ReportOrgan
   /** App-written organ label in the output locale. */
@@ -522,6 +531,10 @@ export interface ReportHighlights {
   droppedQuoteCount: number
   /** Points not shown because no quote of theirs survived. */
   hiddenPointCount: number
+  /** Those points, kept for a clinician who opens them on purpose: the
+   *  model's line and the listed reports it cited. Never verified; the UI
+   *  folds them away and says so. */
+  hiddenPoints?: UnverifiedReportPoint[]
   /** Points shown as their quote because the text dropped an uncertainty
    *  marker the quote carries. The counter the uncertainty guard is judged on. */
   uncertaintyRewriteCount: number

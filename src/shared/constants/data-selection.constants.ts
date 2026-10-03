@@ -95,6 +95,19 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
 // 無檢驗時自動放寬為每項目最近 1 筆、不限時間 — 見 ips-curation.ts），此回溯/放寬
 // 與 depth 值解耦、是 IPS 層獨立機制。
 // 只影響 'ips' consumer profile 的種子值；chat/insights 的 DEFAULT_DATA_FILTERS 不變。
+// 雲端病歷 (NHI MediCloud) holds about one year of visits. The 6-month 初診
+// window dropped a cancer diagnosis whose follow-up runs every six months
+// (owner decision 2026-10-03: use the cloud record's whole year). Applied by
+// the adaptive defaults only while the 初診 filters are untouched, and shown
+// as such in 資料範圍.
+export const MEDCLOUD_YEAR_DATA_FILTERS: DataFilters = {
+  ...DEFAULT_DATA_FILTERS,
+  encounterTimeRange: '1y',
+  medicationTimeRange: '1y',
+  labReportTimeRange: '1y',
+  imagingReportTimeRange: '1y',
+}
+
 export const IPS_DEFAULT_DATA_FILTERS: DataFilters = {
   ...DEFAULT_DATA_FILTERS,
   labDepth: '3',
