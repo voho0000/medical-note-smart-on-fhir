@@ -16,6 +16,21 @@ describe('detectClinicalDataSource', () => {
     expect(detectClinicalDataSource({ observations: [vendored, medcloud] })).toBe('nhi-medcloud')
   })
 
+  it('matches the provenance host exactly, not anywhere in the string', () => {
+    const sdk = { meta: { source: 'https://nhi-fhir-bridge.github.io/source/health-bank-sdk-json' } }
+    expect(detectClinicalDataSource({ observations: [sdk] })).toBe('nhi-health-bank')
+    expect(detectClinicalDataSource({ observations: [{ meta: { source: 'medcloud2.nhi.gov.tw/viewer' } }] })).toBe('nhi-medcloud')
+    for (const source of [
+      'https://medcloud2.nhi.gov.tw.example.com/',
+      'https://example.com/?from=medcloud2.nhi.gov.tw',
+      'https://example.com/nhi-fhir-bridge/scraper',
+      'https://nhi-fhir-bridge.github.io.example.com/source',
+    ]) {
+      expect(detectClinicalDataSource({ observations: [{ meta: { source } }] })).toBe('other')
+    }
+    expect(detectClinicalDataSource({ observations: [{ meta: { tag: [{ system: 'https://example.com/cloud-wildcatch.invalid/fhir' }] } }] })).toBe('other')
+  })
+
   it('treats a mixed or unmarked chart as other', () => {
     expect(detectClinicalDataSource({ observations: [medcloud], encounters: [healthBank] })).toBe('other')
     expect(detectClinicalDataSource({ observations: [{}] })).toBe('other')

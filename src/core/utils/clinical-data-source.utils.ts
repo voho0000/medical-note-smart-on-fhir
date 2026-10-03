@@ -5,6 +5,8 @@
 // secondary codes. Read from each resource's own provenance, never guessed
 // from content.
 
+import { MEDCLOUD_FHIR_BASE } from '@/src/shared/constants/medcloud.constants'
+
 export type ClinicalDataSource = 'nhi-medcloud' | 'nhi-health-bank' | 'other'
 
 type ProvenancedResource = {
@@ -18,12 +20,29 @@ interface ClinicalDataSourceInput {
   encounters?: ProvenancedResource[]
 }
 
-const isMedcloud = (resource: ProvenancedResource): boolean =>
-  /medcloud2\.nhi\.gov\.tw/.test(resource.meta?.source ?? '') ||
-  (resource.meta?.tag ?? []).some((tag) => /cloud-wildcatch\.invalid/.test(tag.system ?? ''))
+const MEDCLOUD_HOST = 'medcloud2.nhi.gov.tw'
 
-const isHealthBank = (resource: ProvenancedResource): boolean =>
-  /nhi-fhir-bridge/.test(resource.meta?.source ?? '') && !isMedcloud(resource)
+/** The host a provenance string names, with or without a scheme. */
+function sourceHost(source: string): string {
+  try {
+    return new URL(source).hostname.toLowerCase()
+  } catch {
+    return source.split('/')[0].toLowerCase()
+  }
+}
+
+const isMedcloud = (resource: ProvenancedResource): boolean =>
+  sourceHost(resource.meta?.source ?? '') === MEDCLOUD_HOST ||
+  (resource.meta?.tag ?? []).some((tag) => (tag.system ?? '').startsWith(`${MEDCLOUD_FHIR_BASE}/`))
+
+const HEALTH_BANK_HOST = 'nhi-fhir-bridge.github.io'
+
+/** The 健康存摺 scraper ("nhi-fhir-bridge/scraper") or its SDK-JSON importer
+ *  ("https://nhi-fhir-bridge.github.io/source/…"). */
+const isHealthBank = (resource: ProvenancedResource): boolean => {
+  const source = resource.meta?.source ?? ''
+  return (/^nhi-fhir-bridge(?:\/|$)/.test(source) || sourceHost(source) === HEALTH_BANK_HOST) && !isMedcloud(resource)
+}
 
 /** The bridge behind the data; a chart mixing both NHI bridges, or neither,
  *  is 'other' and gets the neutral description. */
