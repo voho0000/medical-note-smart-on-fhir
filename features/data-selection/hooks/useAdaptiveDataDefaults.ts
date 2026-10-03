@@ -16,7 +16,11 @@
 //    factory defaults (the moment the user tweaks anything, we stop);
 //  • a 雲端病歷 record that is not small takes its whole year instead of the
 //    6-month window (owner decision 2026-10-03), silently;
-//  • once per bundle (keyed by a cheap signature), so re-renders don't re-apply;
+//  • once per chart (source + per-list count and first/last ids, reset when
+//    the data clears), so re-renders don't re-apply and a same-size new chart
+//    is still evaluated;
+//  • the cloud-record year is reverted only when this rule set it (a marker in
+//    localStorage) and the user has not changed it; a year chosen by hand stays;
 //  • reversible — 還原範本預設 restores the 6-month factory filters;
 //  • a one-time toast tells the user why the whole record was pulled in.
 import { useEffect, useMemo, useRef } from "react"
@@ -106,26 +110,55 @@ export type AdaptiveFiltersAction =
 
 /**
  * What the 初診 defaults become for this record, while the user has not
- * touched them (the factory filters, or the cloud-record year this rule set
- * itself). A small record takes everything; a 雲端病歷 record takes its whole
- * year; any other record keeps — or gets back — the factory window. Exported
- * for testing.
+ * touched them: the factory filters, or the cloud-record year this rule set
+ * itself (`autoApplied` — the same values chosen by hand are the user's and
+ * are never reset). A small record takes everything; a 雲端病歷 record takes
+ * its whole year; any other record keeps — or gets back — the factory window.
+ * Exported for testing.
  */
 export function adaptiveFiltersAction(args: {
   filters: DataFilters
   activePreset: string
   dataSource: ClinicalDataSource
   smallRecord: boolean
+  /** The current filters are the cloud-record year this rule applied and the
+   *  user has not changed since. */
+  autoApplied: boolean
 }): AdaptiveFiltersAction {
   if (args.activePreset !== 'newPatient') return { kind: 'none' }
   const factory = sameFilters(args.filters, DEFAULT_DATA_FILTERS)
-  const medcloudYear = sameFilters(args.filters, MEDCLOUD_YEAR_DATA_FILTERS)
-  if (!factory && !medcloudYear) return { kind: 'none' }
+  const ruleYear = args.autoApplied && sameFilters(args.filters, MEDCLOUD_YEAR_DATA_FILTERS)
+  if (!factory && !ruleYear) return { kind: 'none' }
   if (args.smallRecord) return { kind: 'select-all' }
   if (args.dataSource === 'nhi-medcloud') {
-    return medcloudYear ? { kind: 'none' } : { kind: 'set-filters', filters: { ...MEDCLOUD_YEAR_DATA_FILTERS } }
+    return ruleYear ? { kind: 'none' } : { kind: 'set-filters', filters: { ...MEDCLOUD_YEAR_DATA_FILTERS } }
   }
-  return medcloudYear ? { kind: 'set-filters', filters: { ...DEFAULT_DATA_FILTERS } } : { kind: 'none' }
+  return ruleYear ? { kind: 'set-filters', filters: { ...DEFAULT_DATA_FILTERS } } : { kind: 'none' }
+}
+
+// Remembers, across reloads, that the current window is the cloud-record year
+// this rule applied — not one the user picked. Cleared the moment the filters
+// leave that year (a user edit, a reset, another template).
+const AUTO_WINDOW_KEY = 'clinicalDataAutoWindow'
+const readAutoWindow = (): boolean => {
+  try { return globalThis.localStorage?.getItem(AUTO_WINDOW_KEY) === 'medcloud-year' } catch { return false }
+}
+const writeAutoWindow = (on: boolean): void => {
+  try {
+    if (on) globalThis.localStorage?.setItem(AUTO_WINDOW_KEY, 'medcloud-year')
+    else globalThis.localStorage?.removeItem(AUTO_WINDOW_KEY)
+  } catch { /* private mode: the rule just never reverts */ }
+}
+
+/** Which chart this is: its source and, per resource list, the count and the
+ *  first and last ids. Two charts with the same number of records — a new
+ *  patient, another import — still read as different. Exported for testing. */
+export function chartSignature(data: ClinicalDataCollection, source: ClinicalDataSource): string {
+  const d = data as unknown as Record<string, Array<{ id?: string }> | undefined>
+  return [source, ...STRUCTURED_KEYS.map((k) => {
+    const list = Array.isArray(d[k]) ? d[k]! : []
+    return `${list.length}:${list[0]?.id ?? ''}:${list.at(-1)?.id ?? ''}`
+  })].join('|')
 }
 
 export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | null): void {
@@ -145,27 +178,40 @@ export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | n
     [openAiCompatibleProfiles],
   )
 
+  // The rule's year stops being the rule's once the filters leave it.
+  // Declared first so a mount evaluates against an up-to-date marker.
   useEffect(() => {
-    if (!clinicalData) return
-    const structured = countStructured(clinicalData)
-    // Cheap per-bundle signature so we evaluate once per loaded patient.
-    const sig = `${structured}`
+    if (!sameFilters(filters, MEDCLOUD_YEAR_DATA_FILTERS)) writeAutoWindow(false)
+  }, [filters])
+
+  useEffect(() => {
+    if (!clinicalData) {
+      // Cleared between charts: the next one is always evaluated.
+      appliedSigRef.current = null
+      return
+    }
+    // Entities do not type `meta`; the bridge's provenance is still on them.
+    const dataSource = detectClinicalDataSource(clinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0])
+    const sig = chartSignature(clinicalData, dataSource)
     if (appliedSigRef.current === sig) return
 
+    const structured = countStructured(clinicalData)
     const action = adaptiveFiltersAction({
       filters,
       activePreset,
-      // Entities do not type `meta`; the bridge's provenance is still on them.
-      dataSource: detectClinicalDataSource(clinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0]),
+      dataSource,
       smallRecord: structured > 0 && estimateFullRecordTokens(clinicalData) <= autoSelectThreshold,
+      autoApplied: readAutoWindow(),
     })
     if (action.kind === 'select-all') {
+      writeAutoWindow(false)
       selectAllData()
       const ds = t.dataSelection as unknown as Record<string, string>
       toast.info(ds.autoSelectAllToast ?? '因資料量少,已自動帶入全部資料(可在「資料範圍」調整)。')
     } else if (action.kind === 'set-filters') {
       // Silent: 資料範圍 shows the window, and the hospital's Medcloud launch
       // must not raise any prompt.
+      writeAutoWindow(sameFilters(action.filters, MEDCLOUD_YEAR_DATA_FILTERS))
       setFilters(action.filters)
     }
     appliedSigRef.current = sig

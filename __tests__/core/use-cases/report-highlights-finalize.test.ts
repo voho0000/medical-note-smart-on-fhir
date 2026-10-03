@@ -600,3 +600,36 @@ describe('reports prompt', () => {
     expect(user).not.toContain('Patient clinical data')
   })
 })
+
+describe('a reply whose every point failed verification', () => {
+  // PR #237 review (d834b140): nothing summarized, yet the rejected point and
+  // its counts must stay openable when another card is retried.
+  const clinicalData: any = {
+    diagnosticReports: [{
+      id: 'synthetic-report', status: 'final', category: [{ coding: [{ code: 'RAD', system: 'http://terminology.hl7.org/CodeSystem/v2-0074' }] }],
+      code: { text: 'Chest X-ray' }, effectiveDateTime: '2026-10-02', conclusion: 'Heart size is normal.',
+    }],
+  }
+  const catalog = buildSourceCatalog(clinicalData)
+  const key = catalog[0].key
+  const first = useCase.finalizeResult({
+    ...useCase.createEmptyAiResult(),
+    reports: { groups: [{ organ: 'heart', points: [{ text: 'Cardiomegaly', sources: [key], quotes: [{ source: key, quote: 'Cardiomegaly.' }] }] }], unremarkable: [] },
+  }, catalog, { clinicalData, audience: 'medical' })
+
+  it('keeps its unverified points and counts across another card\'s retry', () => {
+    expect(first.reportHighlights).toMatchObject({ summarized: false, hiddenPointCount: 1, droppedQuoteCount: 1 })
+    expect(first.reportHighlights!.hiddenPoints).toHaveLength(1)
+    const draft = useCase.mergeModuleResult(useCase.createAiDraftFromResult(first), 'overview', { headline: 'Synthetic follow-up overview', medicationEducation: [] })
+    const after = useCase.finalizeResult(draft, catalog, { clinicalData, audience: 'medical' }).reportHighlights!
+    expect(after.hiddenPoints).toEqual(first.reportHighlights!.hiddenPoints)
+    expect(after).toMatchObject({ summarized: false, hiddenPointCount: 1, droppedQuoteCount: 1 })
+  })
+
+  it('lets the reports card\'s own retry replace them', () => {
+    const draft = useCase.mergeModuleResult(useCase.createAiDraftFromResult(first), 'reports', { groups: [], unremarkable: [key] })
+    const after = useCase.finalizeResult(draft, catalog, { clinicalData, audience: 'medical' }).reportHighlights!
+    expect(after.hiddenPoints).toBeUndefined()
+    expect(after).toMatchObject({ summarized: true, hiddenPointCount: 0, droppedQuoteCount: 0 })
+  })
+})

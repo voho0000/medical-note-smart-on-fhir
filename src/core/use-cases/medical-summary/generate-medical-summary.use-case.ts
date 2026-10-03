@@ -2331,6 +2331,15 @@ export class GenerateMedicalSummaryUseCase {
               // survive another card's retry.
               unremarkable: highlights.groups.length === 0 ? highlights.others.map((row) => row.key) : [],
             },
+          }
+        : {}),
+      // What the finalizer rejected rides along whether or not any point
+      // survived: a reply whose every point failed verification is not
+      // summarized, yet its unverified points and counts must stay openable
+      // across another card's retry. Only the reports card's own retry
+      // replaces them (mergeModuleResult).
+      ...(highlights && (highlights.summarized || highlights.hiddenPointCount > 0 || highlights.droppedQuoteCount > 0)
+        ? {
             reportsCarriedCounts: {
               droppedQuoteCount: highlights.droppedQuoteCount,
               hiddenPointCount: highlights.hiddenPointCount,

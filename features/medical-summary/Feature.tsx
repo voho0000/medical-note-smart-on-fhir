@@ -61,7 +61,8 @@ import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-
 import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
 import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
-import { useDataSelection } from "@/src/application/providers/data-selection.provider"
+import { isAiScopeReport } from "@/src/core/utils/report-narrative.utils"
+import type { DiagnosticReportEntity } from "@/src/core/entities/clinical-data.entity"
 import { MedicationEducationCard } from "./components/MedicationEducationCard"
 import { CoverageCard } from "./components/CoverageCard"
 import { SummaryStatusStrip } from "./components/SummaryStatusStrip"
@@ -420,18 +421,16 @@ export default function MedicalSummaryFeature() {
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],
   )
 
-  // A 雲端病歷 chart holds about a year; when its whole year is in scope and
-  // holds no imaging or pathology report, the section says so instead of
-  // vanishing (owner, 2026-10-03).
+  // A 雲端病歷 chart holds about a year. When the chart ITSELF holds no
+  // imaging or pathology report, the section says so instead of vanishing
+  // (owner, 2026-10-03). Judged on the loaded chart, never on the summary's
+  // scope: reports the user left out of the summary are not "none".
   const sourceClinicalData = useClinicalData()
-  const { filters: scopeFilters } = useDataSelection()
-  const reportsNoneLabel = useMemo(
-    () => detectClinicalDataSource(sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0]) === 'nhi-medcloud' &&
-      ['1y', '3y', '5y', 'all'].includes(scopeFilters.imagingReportTimeRange)
-      ? ms.reportsNoneMedcloudYear
-      : undefined,
-    [sourceClinicalData, scopeFilters.imagingReportTimeRange, ms.reportsNoneMedcloudYear],
-  )
+  const reportsNoneLabel = useMemo(() => {
+    const chart = sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0] & { diagnosticReports?: DiagnosticReportEntity[] }
+    if (detectClinicalDataSource(chart) !== 'nhi-medcloud') return undefined
+    return (chart.diagnosticReports ?? []).some(isAiScopeReport) ? undefined : ms.reportsNoneMedcloudYear
+  }, [sourceClinicalData, ms.reportsNoneMedcloudYear])
 
   // 「依據資料已逾 1 年」: judged at render against the clinical reference date
   // (the demo's own as-of date for demo data), so cached results carry it too.
