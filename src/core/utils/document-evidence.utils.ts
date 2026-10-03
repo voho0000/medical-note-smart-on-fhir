@@ -18,12 +18,16 @@ export function verifyDocumentQuote(quote: string, sourceText?: string): {
   if (sourceText.includes(quote)) return { quote, verification: 'exact' }
   // Only whitespace may differ. Do not fuzzy-match, translate, case-fold
   // units, remove negation, change numbers, or join non-contiguous passages.
-  const target = quote.replace(/\s+/g, ' ').trim()
+  // Whitespace before closing punctuation counts as absent on both sides:
+  // reports break a line before a sentence's full stop ("SI joint\n."),
+  // which a quote of that sentence writes as "SI joint.".
+  const target = quote.replace(/\s+/g, ' ').replace(/ (?=[.,;:)\]])/g, '').trim()
   const chars: string[] = [], starts: number[] = [], ends: number[] = []
   for (let i = 0; i < sourceText.length;) {
     const start = i
     if (/\s/.test(sourceText[i])) {
       while (i < sourceText.length && /\s/.test(sourceText[i])) i++
+      if (i < sourceText.length && /[.,;:)\]]/.test(sourceText[i])) continue
       chars.push(' ')
     } else chars.push(sourceText[i++])
     starts.push(start); ends.push(i)
