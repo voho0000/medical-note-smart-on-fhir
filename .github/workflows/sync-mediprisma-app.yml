@@ -52,6 +52,9 @@ jobs:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
+          # Leave unset until the VM lab-report receiver is deployed and verified.
+          # Public endpoint only; no fallback to the usage-event Collector.
+          NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL: ${{ vars.NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL }}
           NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
           NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
