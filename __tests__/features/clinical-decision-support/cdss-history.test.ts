@@ -3,6 +3,10 @@ import { listCdssHistory, readCdssHistory } from '@/features/clinical-decision-s
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
 import { captureCollectorAuth } from '@/src/application/telemetry/cdss-auth'
 jest.mock('@/src/application/telemetry/cdss-auth', () => ({ captureCollectorAuth: jest.fn() }))
+const mockGetFhirToken = jest.fn()
+jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', () => ({
+  captureFhirFirebaseAuth: jest.fn(async () => ({ getToken: mockGetFhirToken })),
+}))
 
 const patient = { id: 'synthetic-patient', resourceType: 'Patient' as const, name: [{ text: '測試病人' }],
   birthDate: '1970-01-01', identifier: [{ system: 'https://synthetic.invalid/national-id', value: 'A123XXXXXX' }] }
@@ -21,6 +25,7 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/?site=vghtpe')
   jest.mocked(fetch).mockReset().mockResolvedValue(response({ records: [index], hasMore: false }))
   jest.mocked(captureCollectorAuth).mockClear()
+  mockGetFhirToken.mockReset().mockResolvedValue('synthetic-firebase-id-token')
 })
 afterEach(() => { delete process.env.NEXT_PUBLIC_CDSS_ADMISSION })
 
@@ -32,6 +37,17 @@ test('intranet history uses a body lookup with no Firebase prerequisite and no p
   expect(request).toMatchObject({ method: 'POST', credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer' })
   expect(request?.headers).toEqual({ 'Content-Type': 'application/json' })
   expect(request?.body).not.toContain('測試病人')
+})
+
+test('Firebase history uses the existing account and refuses to send a request after sign-out', async () => {
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'firebase'
+  await listCdssHistory(patient, new AbortController().signal)
+  expect(jest.mocked(fetch).mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer synthetic-firebase-id-token' })
+  expect(captureCollectorAuth).not.toHaveBeenCalled()
+  jest.mocked(fetch).mockClear()
+  mockGetFhirToken.mockResolvedValue(null)
+  await expect(listCdssHistory(patient, new AbortController().signal)).rejects.toThrow('cdss_auth_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 test('unknown receipt shapes, mismatched patients and wrong save IDs are unavailable', async () => {

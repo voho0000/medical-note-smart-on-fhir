@@ -1,6 +1,7 @@
 'use client'
 
 import type * as OAuth from 'oauth4webapi'
+import { captureFhirFirebaseAuth } from './fhir-firebase-auth'
 
 const scopes = ['mediprisma.fhir.read', 'mediprisma.fhir.write']
 const listeners = new Set<() => void>()
@@ -19,6 +20,12 @@ export function disconnectFhir(): void {
 }
 
 export async function fhirAccessToken(): Promise<string | null> {
+  if (process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'firebase') {
+    const session = await captureFhirFirebaseAuth()
+    const token = await session?.getToken()
+    if (!token) throw new Error('cdss_auth_unavailable')
+    return token
+  }
   if (process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot') return null
   if (!fhirOAuthEnabled() || !fhirAuthStatus()) throw new Error('cdss_auth_unavailable')
   return access!.token

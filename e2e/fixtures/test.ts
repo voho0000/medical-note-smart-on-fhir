@@ -15,7 +15,9 @@ export const test = base.extend({
   // conventionally named `use`, but positional — and that name trips
   // react-hooks/rules-of-hooks, which reads it as React's `use`.
   context: async ({ context }, runTest) => {
-    await stubFirebaseAnonymousAuth(context)
+    // The explicit FHIR Firebase profile signs in a synthetic real account.
+    // Its chat repositories require an initialized db; all Firestore network calls stay blocked by the fixture.
+    await stubFirebaseAnonymousAuth(context, { initializeFirestore: process.env.FHIR_E2E_AUTH_MODE === 'firebase' })
     await runTest(context)
   },
 })

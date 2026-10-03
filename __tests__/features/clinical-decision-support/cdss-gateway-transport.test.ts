@@ -7,6 +7,9 @@ const mockGetToken = jest.fn()
 jest.mock('@/src/application/telemetry/cdss-auth', () => ({
   captureCollectorAuth: jest.fn(async () => ({ getToken: mockGetToken })),
 }))
+jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', () => ({
+  captureFhirFirebaseAuth: jest.fn(async () => ({ getToken: mockGetToken })),
+}))
 
 const input = {
   patient: {
@@ -50,6 +53,20 @@ test('explicit intranet pilot saves without a Firebase identity or an invented c
     expect(request.headers).toEqual({ 'Content-Type': 'application/json' })
     expect(JSON.parse(request.body as string).actor_uid).toBeUndefined()
   } finally { delete process.env.NEXT_PUBLIC_CDSS_ADMISSION }
+})
+
+test('Firebase collaborator mode sends the existing account token only to the independent FHIR endpoint', async () => {
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'firebase'
+  await saveCdssSnapshot(input)
+  expect(fetch).toHaveBeenCalledTimes(1)
+  const [url, request] = jest.mocked(fetch).mock.calls[0]
+  expect(url).toBe('http://127.0.0.1:8098/cdss/v1/saves')
+  expect(request?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer synthetic-firebase-token' })
+  expect(JSON.parse(request!.body as string).actor_uid).toBeUndefined()
+  jest.mocked(fetch).mockClear()
+  mockGetToken.mockResolvedValue(null)
+  await expect(saveCdssSnapshot(input)).rejects.toThrow('cdss_auth_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 test('records clicks locally and sends all used data only on explicit save', async () => {

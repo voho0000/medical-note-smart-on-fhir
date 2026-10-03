@@ -150,7 +150,7 @@ AF is listed alongside HF and lipid in the HMC host, including production builds
 
 ## Optional private integrations (all routes)
 
-2026-10-04，使用者授權新增獨立FHIR/OAuth。site=vghtpe 的有效CDSS結果保留人工儲存／歷史控制；oauth2設定額外提供「登入 FHIR 授權／斷開 FHIR 授權」。其餘臨床surface與既有Beta／院別規則保留，FHIR不經Gateway；詳見CDSS-FHIR-PILOT.md。
+2026-10-04，使用者指定 FHIR 讀寫暫只開放已登入 Firebase 的 CDSS 協作者。site=vghtpe 的有效CDSS結果保留人工儲存／歷史控制，firebase 模式沿用既有登入、由API查UID名單；不顯示額外FHIR登入鈕。只有明確 oauth2 設定提供「登入 FHIR 授權／斷開 FHIR 授權」。其餘臨床surface與既有Beta／院別規則保留，FHIR不經Gateway；詳見CDSS-FHIR-PILOT.md。
 
 | Surface | Behaviour | Owner decision |
 |---|---|---|

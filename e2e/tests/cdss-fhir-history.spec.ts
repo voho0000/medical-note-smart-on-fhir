@@ -4,7 +4,7 @@ import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
 
 // Run only with playwright.fhir.config.ts against the real local FHIR stack.
-test('App saves and retrieves a synthetic snapshot through the independent FHIR API without a Gateway', async ({ page }, info) => {
+test('App saves and retrieves a synthetic snapshot through the independent FHIR API without a Gateway', async ({ page, context }, info) => {
   test.skip(info.project.name !== 'fhir-local', 'Requires the explicit local FHIR integration profile')
   test.setTimeout(180_000)
   const fixture = JSON.parse(readFileSync(SYNTHETIC_BUNDLE, 'utf8'))
@@ -16,7 +16,33 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
   await page.setViewportSize({ width: 1440, height: 900 })
   const writes: object[] = []
   page.on('request', request => { if (request.url().endsWith('/cdss/v1/saves')) writes.push(request.postDataJSON()) })
+  if (process.env.FHIR_E2E_AUTH_MODE === 'firebase') {
+    if (!process.env.FHIR_E2E_FIREBASE_STATE) throw new Error('Private synthetic Firebase test state required')
+    const credential = JSON.parse(readFileSync(process.env.FHIR_E2E_FIREBASE_STATE, 'utf8'))
+    await context.route('**/identitytoolkit.googleapis.com/**', async route => {
+      const url = route.request().url()
+      if (url.includes('accounts:signInWithPassword')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        localId: credential.uid, email: 'collaborator@synthetic.invalid', displayName: 'Synthetic CDSS',
+        idToken: credential.token, refreshToken: 'synthetic-refresh-token', expiresIn: '3600', registered: true,
+      }) })
+      if (url.includes('accounts:lookup') && route.request().postDataJSON()?.idToken === credential.token)
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ users: [{ localId: credential.uid,
+          email: 'collaborator@synthetic.invalid', emailVerified: true, displayName: 'Synthetic CDSS',
+          providerUserInfo: [{ providerId: 'password', email: 'collaborator@synthetic.invalid' }], validSince: '0' }] }) })
+      await route.fallback() // Existing anonymous/offline fixtures block all production calls.
+    })
+  }
   await importBundle(page, { bundlePath: path })
+  if (process.env.FHIR_E2E_AUTH_MODE === 'firebase') {
+    await page.getByRole('button', { name: '訪客', exact: true }).click()
+    await page.getByRole('menuitem', { name: '登入解鎖更多免費額度' }).click()
+    const login = page.getByRole('dialog', { name: '登入', exact: true })
+    await expect(login).toBeVisible()
+    await login.locator('#email').fill('collaborator@synthetic.invalid')
+    await login.locator('#password').fill('synthetic-test-password')
+    await login.getByRole('button', { name: '登入', exact: true }).click()
+    await expect(login).not.toBeVisible()
+  }
   await page.evaluate(() => window.history.replaceState({}, '', '/?site=vghtpe'))
   await openFeaturePanel(page)
   await page.getByRole('tab', { name: '設定', exact: true }).click()
@@ -26,6 +52,7 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
   await page.getByRole('tab', { name: /個人化照護指引/ }).click()
   const save = page.getByTestId('cdss-save-record')
   await expect(save).toBeVisible()
+  if (process.env.FHIR_E2E_AUTH_MODE === 'firebase') await expect(page.getByTestId('cdss-fhir-authorize')).toHaveCount(0)
   expect(writes).toHaveLength(0)
   if (process.env.FHIR_E2E_AUTH_MODE === 'oauth2') {
     const secretsPath = process.env.FHIR_E2E_SECRETS_FILE
@@ -52,7 +79,7 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
   await save.click()
   const saveResponse = await stored
   expect(saveResponse.status()).toBe(201)
-  expect(new URL(saveResponse.url()).port).toBe(process.env.FHIR_E2E_AUTH_MODE === 'oauth2' ? '8098' : '28098')
+  expect(new URL(saveResponse.url()).port).toBe(process.env.FHIR_E2E_AUTH_MODE === 'firebase' ? '28096' : process.env.FHIR_E2E_AUTH_MODE === 'oauth2' ? '8098' : '28098')
   await expect(page.getByText('CDSS 紀錄已儲存。')).toBeVisible()
   expect(writes).toHaveLength(1)
   expect(JSON.stringify(writes[0])).not.toContain(patient.name[0].text)
