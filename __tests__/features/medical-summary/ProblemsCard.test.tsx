@@ -20,6 +20,7 @@ function renderCard(problem: SummaryProblem) {
       columnLabels={{ problem: "問題與依據", metric: "關鍵指標", care: "負責院所與用藥" }}
       metricLabel="指標"
       medicationsMoreLabel="+{count} 項"
+      abnormalLabels={{ high: "偏高", low: "偏低", abnormal: "異常" }}
       basisLabel="依據:"
       organizationLatestLabel="該院最近紀錄"
       metricNeedsReviewLabel="需核對"
@@ -134,5 +135,16 @@ describe('ProblemsCard', () => {
     expect(tokens()).toHaveLength(5)
     fireEvent.click(screen.getByRole('button', { name: '收合' }))
     expect(tokens()).toHaveLength(3)
+  })
+  it('colours a flagged metric value and says so beyond colour', () => {
+    const { container } = renderCard({
+      label: 'Hypertriglyceridemia', kind: 'lab', sourceKeys: ['L1'], metricSourceKeys: ['L1'],
+      metric: 'TG 467 → 103 mg/dL',
+      metricSegments: [{ text: 'TG ' }, { text: '467', abnormal: 'high' }, { text: ' → 103 mg/dL' }],
+    })
+    const flagged = container.querySelector('[data-metric-abnormal="high"]')!
+    expect(flagged).toHaveClass('text-clinical-abnormal')
+    expect(flagged).toHaveTextContent('467↑（偏高）')
+    expect(container.querySelectorAll('[data-metric-abnormal]')).toHaveLength(1)
   })
 })

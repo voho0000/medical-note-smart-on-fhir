@@ -420,6 +420,7 @@ export const en = {
     problemColumns: {"problem":"Problem and basis","metric":"Key values","care":"Care facility and medicines"},
     problemMetricLabel: 'Key value',
     problemMedicationsMore: '+{count} more',
+    problemAbnormalLabels: { high: 'High', low: 'Low', abnormal: 'Abnormal' },
     problemBasisLabel: 'basis: ',
     problemManagedByOrganizationLatest: 'latest record at this facility',
     problemMetricNeedsReview: 'check source',

@@ -1486,6 +1486,38 @@ describe('finalizeResult', () => {
     expect(result.problems[1].metricNeedsReview).toBe(true)
   })
 
+  it('flags each app-written metric value by its own record: source flag first, then the reference range', () => {
+    const tg = (id: string, date: string, value: number, extra: object = {}) => ({
+      id, status: 'final', effectiveDateTime: date, valueQuantity: { value, unit: 'mg/dL' },
+      code: { text: 'Triglyceride', coding: [{ system: 'http://loinc.org', code: '2571-8' }] }, ...extra,
+    })
+    const labData = {
+      observations: [
+        tg('t1', '2026-01-01', 467, { interpretation: [{ coding: [{ code: 'H' }] }] }),
+        tg('t2', '2026-03-01', 256, { referenceRange: [{ low: { value: 0, unit: 'mg/dL' }, high: { value: 150, unit: 'mg/dL' } }] }),
+        tg('t3', '2026-06-01', 103, { interpretation: [{ coding: [{ code: 'N' }] }] }),
+      ],
+    } as any
+    const labCatalog = buildSourceCatalog(labData)
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [{ label: 'Hypertriglyceridemia', kind: 'lab', metricSources: labCatalog.map((entry) => entry.key) }],
+    }, labCatalog, { clinicalData: labData })
+    const problem = result.problems[0]
+    expect(problem.metricSegments?.map((segment) => segment.text).join('')).toBe(problem.metric)
+    expect(problem.metricSegments?.filter((segment) => segment.abnormal)).toEqual([
+      { text: '467', abnormal: 'high' },
+      { text: '256', abnormal: 'high' },
+    ])
+  })
+
+  it('writes no segments when no value is flagged', () => {
+    const labData = { observations: [{ id: 'n', status: 'final', effectiveDateTime: '2026-01-01', valueQuantity: { value: 5.4, unit: '%' }, code: { text: 'HbA1c' }, interpretation: [{ coding: [{ code: 'N' }] }] }] } as any
+    const labCatalog = buildSourceCatalog(labData)
+    const result = useCase.finalizeResult({ ...empty, problems: [{ label: 'x', kind: 'lab', metricSources: [labCatalog[0].key] }] }, labCatalog, { clinicalData: labData })
+    expect(result.problems[0].metricSegments).toBeUndefined()
+  })
+
   it('writes each cited medicine as an item: the drug master short name, the record name kept', () => {
     const medData = {
       medications: [

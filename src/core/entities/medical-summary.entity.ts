@@ -398,6 +398,11 @@ export interface SummaryProblem {
    *  record resolves to it, else the record's own name; `fullName` is always
    *  the record's name. `medications` keeps the joined record names. */
   medicationItems?: Array<{ key: string; name: string; fullName: string }>
+  /** An app-written lab metric in pieces, present only when one of its values
+   *  is abnormal: each value carries its own record's flag (source
+   *  interpretation, else an audited reference range). Joined, the pieces are
+   *  exactly `metric`. Model-written metrics never carry them. */
+  metricSegments?: MetricSegment[]
   /** The record behind "managedBy · date". */
   managedBySourceKey?: string
   /** 'organization': no visit for this problem or the named specialty was
@@ -505,6 +510,12 @@ export interface ReportFindingPoint {
   quotes: Array<{ key: string; quote: string }>
   /** The cited reports, newest first. */
   sources: ReportFindingSource[]
+}
+
+/** A piece of an app-written metric; `abnormal` only on a flagged value. */
+export interface MetricSegment {
+  text: string
+  abnormal?: 'high' | 'low' | 'abnormal'
 }
 
 /** A point no verified quote supported (see ReportHighlights.hiddenPoints). */

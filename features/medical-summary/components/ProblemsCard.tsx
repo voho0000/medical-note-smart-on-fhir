@@ -27,6 +27,8 @@ interface ProblemsCardProps {
   metricLabel: string
   /** "+{count} 項" — the medicines folded behind the first few. */
   medicationsMoreLabel: string
+  /** Words for a flagged value (title and screen readers), e.g. 偏高. */
+  abnormalLabels: { high: string; low: string; abnormal: string }
   basisLabel: string
   /** Shown before the date when it is the organization's latest record
    *  rather than a visit for this problem, e.g. 該院最近紀錄. */
@@ -67,6 +69,7 @@ export function ProblemsCard({
   columnLabels,
   metricLabel,
   medicationsMoreLabel,
+  abnormalLabels,
   basisLabel,
   organizationLatestLabel,
   metricNeedsReviewLabel,
@@ -233,7 +236,24 @@ export function ProblemsCard({
                         title={problem.metric}
                       >
                         <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
-                        {problem.metric}
+                        {problem.metricSegments?.length
+                          ? problem.metricSegments.map((segment, segmentIndex) => segment.abnormal ? (
+                            // Same rule and colour as the lab tables; the
+                            // arrow and the label carry it beyond colour.
+                            <span
+                              key={segmentIndex}
+                              className="font-semibold text-clinical-abnormal"
+                              title={abnormalLabels[segment.abnormal]}
+                              data-metric-abnormal={segment.abnormal}
+                            >
+                              {segment.text}
+                              {segment.abnormal === "high" ? "↑" : segment.abnormal === "low" ? "↓" : null}
+                              <span className="sr-only">（{abnormalLabels[segment.abnormal]}）</span>
+                            </span>
+                          ) : (
+                            <span key={segmentIndex}>{segment.text}</span>
+                          ))
+                          : problem.metric}
                         {problem.metricMeta ? (
                           <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
                         ) : null}

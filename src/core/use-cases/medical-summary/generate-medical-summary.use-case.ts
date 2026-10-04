@@ -14,6 +14,7 @@ import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type {
   EncounterEntity,
   MedicationEntity,
@@ -64,6 +65,7 @@ import {
   type SummaryCoverageStats,
   type SummaryProblem,
   type SummarySourceCatalogEntry,
+  type MetricSegment,
   type UnverifiedReportPoint,
   metricReviewCarryKey,
 } from '@/src/core/entities/medical-summary.entity'
@@ -1470,13 +1472,13 @@ function composeLabMetric(
   clinicalData: SummaryCatalogInput | undefined,
   audience: 'medical' | 'patient',
   locale: SummaryLocale,
-): string | undefined {
+): { text: string; segments: MetricSegment[] } | undefined {
   if (keys.length === 0 || !clinicalData) return undefined
   const observationById = reportObservationMap(clinicalData.observations)
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
     .filter((report) => report.id)
     .map((report) => [report.id, report]))
-  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string }> = []
+  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal'] }> = []
   for (const key of keys) {
     const entry = byKey.get(key)
     if (!entry) return undefined
@@ -1501,6 +1503,7 @@ function composeLabMetric(
         value,
         unit: observation.valueQuantity?.unit?.trim() || undefined,
         id: observation.id ?? `${key}:${label}:${value}`,
+        abnormal: observationAbnormality(observation),
       }]
     })
     // A cited record with no lab value: the metric is not a lab read-out.
@@ -1513,14 +1516,30 @@ function composeLabMetric(
     if (!series.some((existing) => existing.id === value.id)) series.push(value)
     byGroup.set(value.group, series)
   }
-  return [...byGroup.values()].map((series) => {
+  // Segments carry each value with its own record's flag, so the row can
+  // colour an abnormal value; joined, they are exactly `text`.
+  const segments: MetricSegment[] = []
+  const push = (text: string, abnormal?: MetricSegment['abnormal']) => {
+    if (!text) return
+    const last = segments.at(-1)
+    if (!abnormal && last && !last.abnormal) last.text += text
+    else segments.push(abnormal ? { text, abnormal } : { text })
+  }
+  ;[...byGroup.values()].forEach((series, seriesIndex) => {
+    if (seriesIndex > 0) push('; ')
     const label = series[0].label
     const ordered = [...series].sort((a, b) => a.date.localeCompare(b.date))
     const units = new Set(ordered.map((value) => value.unit ?? ''))
+    push(`${label} `)
     // Values in different units (90 mg/dL, then 5 mmol/L) are not converted
     // here, so they are not a trend: each stands with its own unit and date.
     if (new Set(ordered.map((value) => (value.unit ?? '').toLowerCase())).size > 1) {
-      return `${label} ${ordered.map((value) => value.date ? `${value.value} (${value.date})` : value.value).join('；')}`
+      ordered.forEach((value, index) => {
+        if (index > 0) push('；')
+        push(value.value, value.abnormal)
+        if (value.date) push(` (${value.date})`)
+      })
+      return
     }
     // One shared unit is written once, after the last value.
     const sharedUnit = units.size === 1 && ordered.length > 1 ? ordered[0].unit : undefined
@@ -1529,14 +1548,24 @@ function composeLabMetric(
       : value.value
     // An arrow means "later": values of the same day (two orders, two sides)
     // stand side by side instead of reading as a change.
-    const days: string[][] = []
     ordered.forEach((value, index) => {
-      if (index > 0 && value.date && value.date === ordered[index - 1].date) days[days.length - 1].push(text(value))
-      else days.push([text(value)])
+      if (index > 0) push(value.date && value.date === ordered[index - 1].date ? ' / ' : ' → ')
+      push(text(value), value.abnormal)
     })
-    const series_ = days.map((day) => day.join(' / ')).join(' → ')
-    return `${label} ${series_}${sharedUnit ? (sharedUnit === '%' ? '%' : ` ${sharedUnit}`) : ''}`
-  }).join('; ')
+    if (sharedUnit) push(sharedUnit === '%' ? '%' : ` ${sharedUnit}`)
+  })
+  return { text: segments.map((segment) => segment.text).join(''), segments }
+}
+
+/** Whether a value is abnormal, by the same rule as every lab table: the
+ *  source's interpretation decides, an audited reference range only when it
+ *  gives none; the direction when the record states one. */
+function observationAbnormality(observation: ObservationEntity): MetricSegment['abnormal'] {
+  if (!isObservationAbnormal(observation)) return undefined
+  const tag = getInterpretationTag(observation.interpretation as never)
+  if (tag) return /high/i.test(tag.label) ? 'high' : /low/i.test(tag.label) ? 'low' : 'abnormal'
+  const comparison = getReferenceRangeComparison(observation)
+  return comparison === 'high' ? 'high' : comparison === 'low' ? 'low' : 'abnormal'
 }
 
 /** A pharmacy dispenses; it never follows a problem. */
@@ -2594,8 +2623,11 @@ export class GenerateMedicalSummaryUseCase {
         options.audience === 'patient' ? 'patient' : 'medical',
         locale,
       )
-      const metricView: { metric?: string; metricNeedsReview?: true } = labMetric
-        ? { metric: labMetric }
+      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = labMetric
+        ? {
+            metric: labMetric.text,
+            ...(labMetric.segments.some((segment) => segment.abnormal) ? { metricSegments: labMetric.segments } : {}),
+          }
         : reviewModelMetric(
             isPlaceholderText(p.metric) || namesMedication(p.metric, medicationDisplays) || isCodeOrVisitMetric(p.metric)
               ? undefined

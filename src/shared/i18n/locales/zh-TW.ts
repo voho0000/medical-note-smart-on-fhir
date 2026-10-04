@@ -420,6 +420,7 @@ export const zhTW = {
     problemColumns: {"problem":"問題與依據","metric":"關鍵指標","care":"負責院所與用藥"},
     problemMetricLabel: '指標',
     problemMedicationsMore: '+{count} 項',
+    problemAbnormalLabels: { high: '偏高', low: '偏低', abnormal: '異常' },
     problemBasisLabel: '依據:',
     problemManagedByOrganizationLatest: '該院最近紀錄',
     problemMetricNeedsReview: '需核對',
