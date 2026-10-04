@@ -1462,7 +1462,7 @@ function metricLabel(
  * The problem row's key indicator written from the lab records it cites —
  * 模型選、app 寫: a value, unit or trend the model typed never reaches the
  * screen when every cited record is a lab value. Serial values of one test
- * run oldest → newest under one name ("eGFR 35 → 33 → 32 mL/min/1.73m²").
+ * run oldest → newest under one name ("eGFR 35 → 33 → 32"; eGFR goes unitless).
  * Returns undefined when any cited record is not a lab value (an imaging
  * statement such as "OP scar at right 12/0"); that text stays the model's.
  */
@@ -1493,7 +1493,14 @@ function composeLabMetric(
     // line stays for those.
     if (observations.length > 1) return undefined
     const labValues = observations.flatMap((observation) => {
-      const value = labValueText(observation)
+      // eGFR is always mL/min/1.73m²; in a dense row the unit only takes room,
+      // and sources spell it differently ("ml/min/1.7"), which would split
+      // one series into "different units" (owner, 2026-10-04).
+      const unitless = Boolean(getAnalyteCanonicalKey(observation)?.startsWith('EGFR'))
+      const quantity = observation.valueQuantity as (ObservationEntity['valueQuantity'] & { comparator?: string }) | undefined
+      const value = unitless && typeof quantity?.value === 'number'
+        ? `${quantity.comparator ?? ''}${quantity.value}`
+        : labValueText(observation)
       if (!value || (typeof observation.valueQuantity?.value !== 'number' && value.length > LAB_TEXT_VALUE_MAX_CHARS)) return []
       const { label, group } = metricLabel(observation, audience, locale)
       return [{
@@ -1501,7 +1508,7 @@ function composeLabMetric(
         group,
         date: obsDate(observation) ?? entry.date ?? '',
         value,
-        unit: observation.valueQuantity?.unit?.trim() || undefined,
+        unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
         id: observation.id ?? `${key}:${label}:${value}`,
         abnormal: observationAbnormality(observation),
       }]

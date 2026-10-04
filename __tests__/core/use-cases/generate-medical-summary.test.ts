@@ -1200,7 +1200,7 @@ describe('finalizeResult', () => {
       metric: 'HbA1c 6.6 → 7.1%',
       metricMeta: '2026-01-10 → 2026-04-18',
     }))
-    expect(result.problems[1].metric).toBe('eGFR 32 mL/min/1.73m2')
+    expect(result.problems[1].metric).toBe('eGFR 32')
     expect(result.problems[2].metric).toBe('Fatty liver on US')
   })
 
@@ -1397,14 +1397,14 @@ describe('finalizeResult', () => {
       ],
     }, egfrCatalog, { clinicalData: egfrData, audience: 'medical', locale: 'zh-TW' })
 
-    expect(result.problems[0].metric).toBe('eGFR (CKD-EPI) 32.7 → 31.68 mL/min/1.73m2; eGFR 32 mL/min/1.73m2')
+    expect(result.problems[0].metric).toBe('eGFR (CKD-EPI) 32.7 → 31.68; eGFR 32')
 
     const sameDay = useCase.finalizeResult({
       ...empty,
       problems: [{ label: 'CKD', kind: 'lab', basisSources: [key('epi-1')], metric: 'x', metricSources: [key('epi-2'), key('epi-1'), key('epi-3')] }],
     }, egfrCatalog, { clinicalData: egfrData, audience: 'medical', locale: 'zh-TW' })
     // Two orders of one day stand side by side; only a later day earns an arrow.
-    expect(sameDay.problems[0].metric).toBe('eGFR (CKD-EPI) 32.7 → 31.68 / 30.1 mL/min/1.73m2')
+    expect(sameDay.problems[0].metric).toBe('eGFR (CKD-EPI) 32.7 → 31.68 / 30.1')
     expect(result.problems[1].metric).toBe('Zeta assay 3 U')
   })
 
@@ -1509,6 +1509,17 @@ describe('finalizeResult', () => {
       { text: '467', abnormal: 'high' },
       { text: '256', abnormal: 'high' },
     ])
+  })
+
+  it('writes eGFR without a unit, so differently spelled units stay one series', () => {
+    const egfr = (id: string, date: string, value: number, unit: string) => ({
+      id, status: 'final', effectiveDateTime: date, valueQuantity: { value, unit },
+      code: { text: 'eGFR', coding: [{ system: 'http://loinc.org', code: '33914-3' }] },
+    })
+    const labData = { observations: [egfr('e1', '2026-08-03', 37.5, 'ml/min/1.7'), egfr('e2', '2026-08-20', 52.5, 'mL/min/1.73m²')] } as any
+    const labCatalog = buildSourceCatalog(labData)
+    const result = useCase.finalizeResult({ ...empty, problems: [{ label: 'CKD', kind: 'lab', metricSources: labCatalog.map((entry) => entry.key) }] }, labCatalog, { clinicalData: labData })
+    expect(result.problems[0].metric).toMatch(/^eGFR.* 37\.5 → 52\.5$/)
   })
 
   it('writes no segments when no value is flagged', () => {
