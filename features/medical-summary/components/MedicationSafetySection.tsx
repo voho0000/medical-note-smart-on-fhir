@@ -9,6 +9,7 @@ import { useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
+import { keyMentionsText, type KeyMentionSegment } from "@/src/core/utils/key-mentions.utils"
 
 const INITIAL_VISIBLE = 3
 
@@ -23,6 +24,11 @@ interface MedicationSafetySectionProps {
   disclaimer: string
   /** Wraps the alert's title so the title itself opens the cited records. */
   renderSources?: (keys: string[], unsupportedKeys: string[] | undefined, children: ReactNode) => ReactNode
+  /** Splits a sentence at the source keys the model wrote into it ("(M8,
+   *  M11)"), each mention named as its record. In the detail and the
+   *  recommendation a mention opens its record; the title, a link already,
+   *  reads plain. */
+  resolveMentions?: (text: string, citedKeys: string[]) => KeyMentionSegment[]
   /** The newest cited date when every cited record is over a year old
    *  (「依據資料已逾 1 年」); labels the alert, never hides it. */
   staleEvidenceDate?: (alert: SafetyAlert) => string | undefined
@@ -37,11 +43,31 @@ export function MedicationSafetySection({
   lessLabel,
   disclaimer,
   renderSources,
+  resolveMentions,
   staleEvidenceDate,
   staleEvidenceLabel,
 }: MedicationSafetySectionProps) {
   const [showAll, setShowAll] = useState(false)
   if (alerts.length === 0) return null
+  const prose = (alert: SafetyAlert, text: string): ReactNode => {
+    const keys = alert.sources ?? []
+    if (!resolveMentions || keys.length === 0) return text
+    return resolveMentions(text, keys).map((segment, i) =>
+      segment.keys && renderSources ? (
+        <span key={i}>
+          {renderSources(
+            segment.keys,
+            alert.unsupportedSourceKeys?.filter((key) => segment.keys!.includes(key)),
+            segment.text,
+          )}
+        </span>
+      ) : (
+        segment.text
+      ),
+    )
+  }
+  const plain = (alert: SafetyAlert, text: string) =>
+    resolveMentions && alert.sources?.length ? keyMentionsText(resolveMentions(text, alert.sources)) : text
   const hiddenCount = Math.max(0, alerts.length - INITIAL_VISIBLE)
   const visible = showAll ? alerts : alerts.slice(0, INITIAL_VISIBLE)
 
@@ -63,8 +89,8 @@ export function MedicationSafetySection({
             <li key={alert.id} className="border-b border-border pb-1.5 last:border-b-0 last:pb-0">
               <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
                 {renderSources
-                  ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys, alert.title)
-                  : alert.title}
+                  ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys, plain(alert, alert.title))
+                  : plain(alert, alert.title)}
                 {staleDate ? (
                   <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
                     {staleEvidenceLabel!.replace("{date}", staleDate)}
@@ -72,10 +98,12 @@ export function MedicationSafetySection({
                 ) : null}
               </p>
               <p className="mt-0.5 text-xs leading-snug text-foreground/85">
-                {alert.detail}
+                {prose(alert, alert.detail)}
               </p>
               {alert.recommendation ? (
-                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{alert.recommendation}</p>
+                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                  {prose(alert, alert.recommendation)}
+                </p>
               ) : null}
             </li>
           )

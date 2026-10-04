@@ -57,6 +57,7 @@ import { ReportHighlightsCard } from "./components/ReportHighlightsCard"
 import { MedicationSafetySection } from "./components/MedicationSafetySection"
 import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
 import { staleEvidenceDate } from "@/src/core/utils/stale-evidence.utils"
+import { keyMentionLanguage, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
 import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
 import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
 import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
@@ -421,6 +422,13 @@ export default function MedicalSummaryFeature() {
       )
     },
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],
+  )
+  // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
+  // as the records they name, in the sentence's own language.
+  const resolveSafetyMentions = useCallback(
+    (text: string, citedKeys: string[]) =>
+      resolveKeyMentions(text, citedKeys, resolveSafetySource, keyMentionLanguage(text)),
+    [resolveSafetySource],
   )
 
   // A 雲端病歷 chart holds about a year. When the chart ITSELF holds no
@@ -988,6 +996,7 @@ export default function MedicalSummaryFeature() {
               lessLabel={ms.showLessItems}
               disclaimer={safetyText.disclaimer}
               renderSources={renderSafetySources}
+              resolveMentions={resolveSafetyMentions}
               staleEvidenceDate={alertStaleEvidenceDate}
               staleEvidenceLabel={ms.safetyStaleEvidence}
             />

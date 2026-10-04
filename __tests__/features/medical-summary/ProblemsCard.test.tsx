@@ -81,6 +81,19 @@ describe('ProblemsCard', () => {
     expect(screen.queryByRole('button', { name: /^Type 2 diabetes mellitus/ })).not.toBeInTheDocument()
   })
 
+  it('writes keys in the basis as the records they name', () => {
+    renderCard({
+      label: 'Type 2 diabetes mellitus',
+      basis: '1 claim record (C1) and HbA1c L1',
+      kind: 'careplan',
+      sourceKeys: ['C1', 'L1'],
+      basisSourceKeys: ['C1', 'L1'],
+    })
+    expect(screen.getByRole('button', {
+      name: /^1 claim record \(Type 2 diabetes\) and HbA1c 2026-04-18\s*（2 筆來源）/,
+    })).toBeInTheDocument()
+  })
+
   it('says when the date is the facility\'s latest record rather than this problem\'s visit', () => {
     renderCard({
       label: 'Heart failure',

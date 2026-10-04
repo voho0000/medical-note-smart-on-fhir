@@ -4,6 +4,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MedicationSafetySection } from '@/features/medical-summary/components/MedicationSafetySection'
 import type { SafetyAlert } from '@/src/core/entities/safety-alert.entity'
+import { resolveKeyMentions, type KeyMentionSource } from '@/src/core/utils/key-mentions.utils'
 
 const alert = (id: string, severity: 'high' | 'medium' | 'low', title: string): SafetyAlert => ({
   id, severity, category: 'interaction', title, detail: `${title} detail`, sources: [],
@@ -59,5 +60,44 @@ describe('MedicationSafetySection', () => {
     )
     expect(screen.getByText('Synthetic old BP')).toHaveTextContent('依據資料已逾 1 年（2022-11-07）')
     expect(screen.getByText('Synthetic recent lab')).not.toHaveTextContent('逾 1 年')
+  })
+
+  it('writes keys in the prose as the records they name, and lets those open them', () => {
+    const sources: Record<string, KeyMentionSource> = {
+      M8: { key: 'M8', resourceType: 'MedicationRequest', display: 'SYN-NAPRO 250MG', medicationClass: 'naproxen · M01A ANTIINFLAMMATORY' },
+      M11: { key: 'M11', resourceType: 'MedicationRequest', display: 'SYN-IBU 400MG', medicationClass: 'ibuprofen · M01A ANTIINFLAMMATORY' },
+      E10: { key: 'E10', resourceType: 'Encounter', date: '2025-09-14' },
+    }
+    const opened: string[][] = []
+    const { container } = render(
+      <MedicationSafetySection
+        alerts={[{
+          id: 'gi', severity: 'high', category: 'interaction',
+          title: 'NSAIDs (M8, M11) with ulcer history',
+          detail: 'Recent NSAID use (M8, M11) with ulcer history (E10).',
+          recommendation: 'Review NSAID need; see visit E10.',
+          sources: ['M8', 'M11', 'E10'],
+        } as unknown as SafetyAlert]}
+        title="開藥注意"
+        moreLabel="顯示其餘 {count} 項"
+        lessLabel="收合"
+        disclaimer="AI 掃描，僅供參考"
+        renderSources={(keys, _unsupported, children) => (
+          <button type="button" data-keys={keys.join(',')} onClick={() => opened.push(keys)}>{children}</button>
+        )}
+        resolveMentions={(text, cited) => resolveKeyMentions(text, cited, (key) => sources[key], 'en')}
+      />,
+    )
+    const item = container.querySelector('[data-safety-alerts] li')!
+    expect(item.textContent).not.toMatch(/\b(M8|M11|E10)\b/)
+    // The title is one link already: its mentions read plain.
+    expect(screen.getByRole('button', { name: 'NSAIDs (Naproxen, Ibuprofen) with ulcer history' }))
+      .toHaveAttribute('data-keys', 'M8,M11,E10')
+    expect(screen.getByText(/^Recent NSAID use/)).toHaveTextContent(
+      'Recent NSAID use (Naproxen, Ibuprofen) with ulcer history (visit 2025-09-14).',
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: 'visit 2025-09-14' })[0])
+    expect(opened).toEqual([['E10']])
+    expect(screen.getAllByRole('button', { name: 'Naproxen, Ibuprofen' })[0]).toHaveAttribute('data-keys', 'M8,M11')
   })
 })

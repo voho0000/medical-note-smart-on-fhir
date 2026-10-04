@@ -15,6 +15,7 @@ import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.e
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceLink } from "./SourceLink"
 import { resolveClaimSources } from "../utils/resolve-claim-sources"
+import { keyMentionLanguage, keyMentionsText, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
 
 interface ProblemsCardProps {
   result: MedicalSummaryResult
@@ -170,6 +171,17 @@ export function ProblemsCard({
             const perColumn = Boolean(
               problem.basisSourceKeys || problem.metricSourceKeys || problem.medicationSourceKeys,
             )
+            // "2 care plans (K1, K2)": keys the model wrote into the basis read
+            // as the records they name; the line itself opens them.
+            const basisKeys = (perColumn ? problem.basisSourceKeys : problem.sourceKeys) ?? []
+            const basisText = problem.basis
+              ? keyMentionsText(resolveKeyMentions(
+                  problem.basis,
+                  basisKeys,
+                  (key) => byKey.get(key),
+                  keyMentionLanguage(problem.basis),
+                ))
+              : undefined
             const managedByDate = !problem.managedByDate
               ? undefined
               : problem.managedByScope === "organization"
@@ -236,7 +248,7 @@ export function ProblemsCard({
                   {problem.basis ? (
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:basis]">
                       <span className="text-muted-foreground/80">{basisLabel}</span>
-                      {perColumn ? cited(problem.basisSourceKeys, problem.basis) : problem.basis}
+                      {perColumn ? cited(problem.basisSourceKeys, basisText) : basisText}
                     </p>
                   ) : null}
                 </div>
