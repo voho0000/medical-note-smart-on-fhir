@@ -69,6 +69,7 @@
     "js-sha1": "^0.7.0",
     "lucide-react": "^1.48.0",
     "next": "^16.3.6",
+    "oauth4webapi": "3.8.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
