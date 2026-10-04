@@ -150,7 +150,9 @@ export function ProblemsCard({
                   suspectLabel={sourceTypeMismatchLabel}
                   onNavigate={onNavigate}
                   tone="quiet"
-                  className="ml-0.5"
+                  // Centred in its line, not raised: a raised pill that
+                  // wraps to a new line sits over the line above.
+                  className="ml-0.5 align-middle [line-height:0.8rem]"
                 />
               )
             }

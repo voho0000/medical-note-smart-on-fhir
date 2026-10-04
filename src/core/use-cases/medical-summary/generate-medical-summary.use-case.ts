@@ -1478,7 +1478,8 @@ function composeLabMetric(
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
     .filter((report) => report.id)
     .map((report) => [report.id, report]))
-  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal'] }> = []
+  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
+  const observationOrder = new Map((clinicalData.observations ?? []).map((observation, index) => [observation.id, index]))
   for (const key of keys) {
     const entry = byKey.get(key)
     if (!entry) return undefined
@@ -1511,6 +1512,8 @@ function composeLabMetric(
         unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
         id: observation.id ?? `${key}:${label}:${value}`,
         abnormal: observationAbnormality(observation),
+        oneADay: unitless,
+        order: observationOrder.get(observation.id) ?? Number.MAX_SAFE_INTEGER,
       }]
     })
     // A cited record with no lab value: the metric is not a lab read-out.
@@ -1535,7 +1538,12 @@ function composeLabMetric(
   ;[...byGroup.values()].forEach((series, seriesIndex) => {
     if (seriesIndex > 0) push('; ')
     const label = series[0].label
-    const ordered = [...series].sort((a, b) => a.date.localeCompare(b.date))
+    // eGFR comes twice a day in the cloud record — the lab's value and the
+    // NHI's own calculation. One is enough: the first record of the day, the
+    // same one the lab tables show (owner, 2026-10-04).
+    const ordered = [...series]
+      .sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order)
+      .filter((value, index, all) => !value.oneADay || !value.date || index === 0 || all[index - 1].date !== value.date)
     const units = new Set(ordered.map((value) => value.unit ?? ''))
     push(`${label} `)
     // Values in different units (90 mg/dL, then 5 mmol/L) are not converted

@@ -1404,7 +1404,7 @@ describe('finalizeResult', () => {
       problems: [{ label: 'CKD', kind: 'lab', basisSources: [key('epi-1')], metric: 'x', metricSources: [key('epi-2'), key('epi-1'), key('epi-3')] }],
     }, egfrCatalog, { clinicalData: egfrData, audience: 'medical', locale: 'zh-TW' })
     // Two orders of one day stand side by side; only a later day earns an arrow.
-    expect(sameDay.problems[0].metric).toBe('eGFR (CKD-EPI) 32.7 → 31.68 / 30.1')
+    expect(sameDay.problems[0].metric).toBe('eGFR (CKD-EPI) 32.7 → 31.68')
     expect(result.problems[1].metric).toBe('Zeta assay 3 U')
   })
 
@@ -1520,6 +1520,25 @@ describe('finalizeResult', () => {
     const labCatalog = buildSourceCatalog(labData)
     const result = useCase.finalizeResult({ ...empty, problems: [{ label: 'CKD', kind: 'lab', metricSources: labCatalog.map((entry) => entry.key) }] }, labCatalog, { clinicalData: labData })
     expect(result.problems[0].metric).toMatch(/^eGFR.* 37\.5 → 52\.5$/)
+  })
+
+  it('keeps one eGFR a day, the first record, and every same-day value of other tests', () => {
+    const obs = (id: string, text: string, code: string, date: string, value: number, unit: string) => ({
+      id, status: 'final', effectiveDateTime: date, valueQuantity: { value, unit }, code: { text, coding: [{ system: 'http://loinc.org', code }] },
+    })
+    const labData = {
+      observations: [
+        obs('e-lab', 'eGFR', '33914-3', '2026-08-03', 37.6, 'mL/min/1.73m2'),
+        obs('e-nhi', 'eGFR', '33914-3', '2026-08-03', 37.9, 'mL/min/1.73m2'),
+        obs('k-am', 'Potassium', '2823-3', '2026-08-03', 3.2, 'mmol/L'),
+        obs('k-pm', 'Potassium', '2823-3', '2026-08-03', 2.8, 'mmol/L'),
+      ],
+    } as any
+    const labCatalog = buildSourceCatalog(labData)
+    const key = (id: string) => labCatalog.find((entry) => entry.resourceId === id)!.key
+    const metric = (ids: string[]) => useCase.finalizeResult({ ...empty, problems: [{ label: 'x', kind: 'lab', metricSources: ids.map(key) }] }, labCatalog, { clinicalData: labData }).problems[0].metric
+    expect(metric(['e-nhi', 'e-lab'])).toMatch(/^eGFR.* 37\.6$/)
+    expect(metric(['k-am', 'k-pm'])).toMatch(/3\.2 \/ 2\.8 mmol\/L$/)
   })
 
   it('writes no segments when no value is flagged', () => {
