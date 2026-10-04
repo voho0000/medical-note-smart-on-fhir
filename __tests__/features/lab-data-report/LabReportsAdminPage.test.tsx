@@ -115,27 +115,35 @@ describe('LabReportsAdminPage', () => {
         fields: { order_code: '12034B', assay_item_name: 'Anti-ENA', hosp: '合成醫院' },
         results: { assay_value: 'Negative' }, withheld: { memo_data: 60 },
       },
+      {
+        // The 健保月檔 copy of row 1: same test, report instance (the minute)
+        // and value — merged.
+        ref: 3, source: 's02', ordinal: 9, dates: { case_time: { day: 3, time: '09:30:00' } },
+        fields: { order_code: '12999C', assay_item_name: 'C3', unit_data: 'mg/dL', hosp: '合成醫院', data_mark: '健保月檔;' },
+        results: { assay_value: '98' }, withheld: {},
+      },
     ]
     ;(service.listLabDataReports as jest.Mock).mockResolvedValue([{
       ...report,
-      rawRowCount: 2,
+      rawRowCount: 3,
       rawSource: {
-        producer: 'medcloud2', producerVersion: '0.12.19', s02Rows: 2, s03Rows: 0, endpointStatus: { s02: 200 },
+        producer: 'medcloud2', producerVersion: '0.12.19', s02Rows: 3, s03Rows: 0, endpointStatus: { s02: 200 },
         truncatedRows: 0, droppedStrings: 1, unparsedDates: 0, unknownFields: ['new_col'],
       },
     }])
     ;(service.getLabDataReportRows as jest.Mock).mockResolvedValue({ rows, rawRows })
     render(<LabReportsAdminPage />)
     fireEvent.click(await screen.findByRole('button', { name: /LDR-20260927-AAAAAAAA/ }))
-    expect(await screen.findByText('2 列（明細 2、歷史 0）· 擴充套件 0.12.19')).toBeInTheDocument()
+    expect(await screen.findByText('3 列（明細 3、歷史 0）· 擴充套件 0.12.19')).toBeInTheDocument()
     const section = await screen.findByRole('region', { name: '原始列表格' })
-    expect(screen.getByText('原始列 2 列，配對 1 列（其中數值不同 0 列）；未配對原始列 1 列，找不到原始列的轉換後列 1 列。')).toBeInTheDocument()
+    expect(screen.getByText('原始列 3 列，配對 1 列（其中數值不同 0 列、只靠醫令碼 0 列），併入同一轉換列的副本（日／月檔、歷史列）1 列；未配對原始列 1 列，找不到原始列的轉換後列 1 列。')).toBeInTheDocument()
+    expect(within(section).getByText('併入轉換後 #1')).toBeInTheDocument()
     expect(screen.getByText('來源多出的欄位（只有名稱）：new_col')).toBeInTheDocument()
     expect(within(section).getByText('轉換後 #1')).toBeInTheDocument()
     expect(within(section).getByText('未配對')).toBeInTheDocument()
     expect(within(section).getByText('memo_data (60)')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: '只看未配對或數值不同' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '只看未配對、數值不同或只靠醫令碼' }))
     expect(within(section).queryByText('轉換後 #1')).not.toBeInTheDocument()
     expect(within(section).getByText('Anti-ENA')).toBeInTheDocument()
   })
