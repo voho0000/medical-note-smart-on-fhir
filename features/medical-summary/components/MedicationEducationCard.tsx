@@ -11,7 +11,7 @@ import type {
   MedicalSummaryResult,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
-import { SourceSup } from "./SourceSup"
+import { SourceLink } from "./SourceLink"
 import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 interface MedicationEducationCardProps {
@@ -71,13 +71,14 @@ export function MedicationEducationCard({
               <div className="flex items-start gap-1.5">
                 <Pill className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground">
-                  {item.name}
-                  <SourceSup
+                  <SourceLink
                     sources={sources}
                     typeLabel={typeLabel}
                     unverifiedLabel={unverifiedLabel}
                     onNavigate={onNavigate}
-                  />
+                  >
+                    {item.name}
+                  </SourceLink>
                 </p>
               </div>
 

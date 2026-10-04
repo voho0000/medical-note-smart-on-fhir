@@ -21,7 +21,8 @@ interface MedicationSafetySectionProps {
   moreLabel: string
   lessLabel: string
   disclaimer: string
-  renderSources?: (keys: string[], unsupportedKeys?: string[]) => ReactNode
+  /** Wraps the alert's title so the title itself opens the cited records. */
+  renderSources?: (keys: string[], unsupportedKeys: string[] | undefined, children: ReactNode) => ReactNode
   /** The newest cited date when every cited record is over a year old
    *  (「依據資料已逾 1 年」); labels the alert, never hides it. */
   staleEvidenceDate?: (alert: SafetyAlert) => string | undefined
@@ -61,7 +62,9 @@ export function MedicationSafetySection({
           return (
             <li key={alert.id} className="border-b border-border pb-1.5 last:border-b-0 last:pb-0">
               <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
-                {alert.title}
+                {renderSources
+                  ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys, alert.title)
+                  : alert.title}
                 {staleDate ? (
                   <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
                     {staleEvidenceLabel!.replace("{date}", staleDate)}
@@ -70,7 +73,6 @@ export function MedicationSafetySection({
               </p>
               <p className="mt-0.5 text-xs leading-snug text-foreground/85">
                 {alert.detail}
-                {renderSources ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys) : null}
               </p>
               {alert.recommendation ? (
                 <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{alert.recommendation}</p>

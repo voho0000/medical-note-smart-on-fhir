@@ -31,7 +31,7 @@ import {
   NAV_CLAIM_TIMEOUT_MS,
   type ResourceNavTarget,
 } from "@/src/application/stores/resource-navigation.store"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import { InfoHint } from "@/src/shared/components/InfoHint"
@@ -75,7 +75,7 @@ import {
   SummaryGenerationButton,
 } from "./components/SummaryGenerationButton"
 import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
-import { SourceSup } from "./components/SourceSup"
+import { SourceLink } from "./components/SourceLink"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
 import {
@@ -389,12 +389,12 @@ export default function MedicalSummaryFeature() {
     [navFallbackMsg],
   )
 
-  // Render a safety alert's cited source keys as a navigable citation — the
-  // same SourceSup the summary sections use. Resolves each key against the
-  // safety catalog; unknown keys show as unverified (never dropped).
+  // A safety alert's title opens its cited records — the same SourceLink the
+  // summary sections use. Resolves each key against the safety catalog;
+  // unknown keys show as unverified (never dropped).
   const renderSafetySources = useCallback(
-    (keys: string[], unsupportedKeys: string[] = []) => {
-      if (!keys?.length) return null
+    (keys: string[], unsupportedKeys: string[] = [], children: ReactNode) => {
+      if (!keys?.length) return children
       const unsupported = new Set(unsupportedKeys)
       const refs: ResolvedSourceRef[] = keys.map((key, i) => {
         const e = resolveSafetySource(key)
@@ -410,12 +410,14 @@ export default function MedicalSummaryFeature() {
         }
       })
       return (
-        <SourceSup
+        <SourceLink
           sources={refs}
           typeLabel={typeLabel}
           unverifiedLabel={ms.unverified}
           onNavigate={navigateToResource}
-        />
+        >
+          {children}
+        </SourceLink>
       )
     },
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],

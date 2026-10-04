@@ -13,7 +13,7 @@ import { ChevronDown, Flag } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
-import { SourceSup } from "./SourceSup"
+import { SourceLink } from "./SourceLink"
 import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 interface ProblemsCardProps {
@@ -139,21 +139,27 @@ export function ProblemsCard({
             const suspectKeys = problem.suspectSourceKeys?.length
               ? new Set(problem.suspectSourceKeys)
               : undefined
-            const sup = (keys: readonly string[] | undefined) => {
-              if (!keys?.length) return null
+            // The cited text is the link: no citation marks beside it.
+            const cited = (
+              keys: readonly string[] | undefined,
+              children: ReactNode,
+              variant: "text" | "token" = "text",
+              className?: string,
+            ) => {
+              if (!keys?.length) return children
               return (
-                <SourceSup
+                <SourceLink
                   sources={resolveClaimSources([...keys], byKey, problem.documentEvidence)}
                   typeLabel={typeLabel}
                   unverifiedLabel={unverifiedLabel}
                   suspectKeys={suspectKeys}
                   suspectLabel={sourceTypeMismatchLabel}
                   onNavigate={onNavigate}
-                  tone="quiet"
-                  // Centred in its line, not raised: a raised pill that
-                  // wraps to a new line sits over the line above.
-                  className="ml-0.5 align-middle [line-height:0.8rem]"
-                />
+                  variant={variant}
+                  className={className}
+                >
+                  {children}
+                </SourceLink>
               )
             }
             // Per-column citations: each claim carries the records behind it.
@@ -161,7 +167,6 @@ export function ProblemsCard({
             const perColumn = Boolean(
               problem.basisSourceKeys || problem.metricSourceKeys || problem.medicationSourceKeys,
             )
-            const managedBySup = sup(problem.managedBySourceKey ? [problem.managedBySourceKey] : undefined)
             const managedByDate = !problem.managedByDate
               ? undefined
               : problem.managedByScope === "organization"
@@ -210,7 +215,12 @@ export function ProblemsCard({
               >
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0" data-problem-column="problem">
                   <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground break-words [grid-area:name]">
-                    {problem.label}
+                    {/* The name opens the records behind the problem when no
+                        basis line carries them. */}
+                    {cited(
+                      perColumn ? (problem.basis ? undefined : problem.basisSourceKeys) : problem.sourceKeys,
+                      problem.label,
+                    )}
                     {problem.inferredFromMedication ? tag(medicationInferredLabel) : null}
                     {problem.singleUnassessedLab ? tag(singleValueLabel) : null}
                     {problem.flag ? (
@@ -219,14 +229,11 @@ export function ProblemsCard({
                         aria-label={verifyLabel}
                       />
                     ) : null}
-                    {perColumn && !problem.basis ? sup(problem.basisSourceKeys) : null}
-                    {perColumn ? null : sup(problem.sourceKeys)}
                   </p>
                   {problem.basis ? (
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:basis]">
                       <span className="text-muted-foreground/80">{basisLabel}</span>
-                      {problem.basis}
-                      {perColumn ? sup(problem.basisSourceKeys) : null}
+                      {perColumn ? cited(problem.basisSourceKeys, problem.basis) : problem.basis}
                     </p>
                   ) : null}
                 </div>
@@ -238,7 +245,7 @@ export function ProblemsCard({
                         title={problem.metric}
                       >
                         <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
-                        {problem.metricSegments?.length
+                        {cited(perColumn ? problem.metricSourceKeys : undefined, problem.metricSegments?.length
                           ? problem.metricSegments.map((segment, segmentIndex) => segment.abnormal ? (
                             // Same rule and colour as the lab tables; the
                             // arrow and the label carry it beyond colour.
@@ -255,27 +262,25 @@ export function ProblemsCard({
                           ) : (
                             <span key={segmentIndex}>{segment.text}</span>
                           ))
-                          : problem.metric}
+                          : problem.metric)}
                         {problem.metricMeta ? (
                           <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
                         ) : null}
                       </RowFillClamp>
-                      {/* Kept outside the two-line clamp: the review tag and
-                          the citations must never be cut off. */}
+                      {/* Kept outside the two-line clamp: the review tag must
+                          never be cut off. */}
                       {problem.metricNeedsReview ? (
                         <span className="inline-flex shrink-0 items-center rounded border border-amber-500/40 px-1 text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300">
                           {metricNeedsReviewLabel}
                         </span>
                       ) : null}
-                      {perColumn ? <span className="shrink-0">{sup(problem.metricSourceKeys)}</span> : null}
                     </div>
                   ) : null}
                 </div>
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0 @min-[38rem]:space-y-0.5" data-problem-column="care">
                   {managedByLine ? (
                     <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words [grid-area:org] @min-[28rem]:text-right @min-[38rem]:text-left" data-problem-managed-by>
-                      {managedByLine}
-                      {managedBySup}
+                      {cited(problem.managedBySourceKey ? [problem.managedBySourceKey] : undefined, managedByLine)}
                     </p>
                   ) : null}
                   {medicationItems.length > 0 ? (
@@ -285,17 +290,19 @@ export function ProblemsCard({
                     >
                       {medicationItems.map((item, itemIndex) => {
                         if (!medicationsOpen && itemIndex >= INITIAL_MEDICATIONS) return null
+                        // Each token opens its own record; the record's full
+                        // name stays in the title.
                         return (
                           <span
                             key={item.key}
                             title={item.fullName}
                             className={cn(
-                              "inline-block max-w-full truncate rounded-full border border-border bg-muted px-1.5 text-[0.6875rem] leading-[1.125rem] text-foreground",
+                              "inline-block max-w-full truncate rounded-full border border-border bg-muted text-[0.6875rem] leading-[1.125rem] text-foreground",
                               !medicationsOpen && itemIndex >= INITIAL_MEDICATIONS_WIDE && "@min-[38rem]:hidden",
                             )}
                             data-problem-medication
                           >
-                            {item.name}
+                            {cited([item.key], item.name, "token", "block truncate rounded-full px-1.5")}
                           </span>
                         )
                       })}
@@ -311,13 +318,11 @@ export function ProblemsCard({
                               : null}
                           </>
                         )}
-                      {perColumn ? <span className="shrink-0">{sup(problem.medicationSourceKeys)}</span> : null}
                     </div>
                   ) : problem.medications ? (
                     // A result from before per-medicine items: the joined names.
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:meds]">
-                      {problem.medications}
-                      {perColumn ? sup(problem.medicationSourceKeys) : null}
+                      {perColumn ? cited(problem.medicationSourceKeys, problem.medications) : problem.medications}
                     </p>
                   ) : null}
                 </div>

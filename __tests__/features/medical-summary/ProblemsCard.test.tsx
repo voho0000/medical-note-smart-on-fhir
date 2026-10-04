@@ -9,6 +9,16 @@ const sourceIndex: MedicalSummaryResult['sourceIndex'] = [
   { key: 'E1', num: 4, verified: true, resourceType: 'Encounter', resourceId: 'enc-1', display: 'Endocrinology clinic' },
 ]
 
+const onNavigate = jest.fn()
+beforeEach(() => onNavigate.mockClear())
+
+/** A token's visible text, without the screen-reader hint the link adds. */
+function visibleText(element: Element): string {
+  const clone = element.cloneNode(true) as Element
+  clone.querySelectorAll('.sr-only').forEach((node) => node.remove())
+  return clone.textContent ?? ''
+}
+
 function renderCard(problem: SummaryProblem) {
   const result = { headline: '', problems: [problem], medicationEducation: [], sourceIndex } as unknown as MedicalSummaryResult
   return render(
@@ -34,13 +44,14 @@ function renderCard(problem: SummaryProblem) {
       typeLabel={(resourceType) => resourceType ?? ''}
       unverifiedLabel="來源不存在"
       sourceTypeMismatchLabel="來源類型不符"
+      onNavigate={onNavigate}
     />,
   )
 }
 
 describe('ProblemsCard', () => {
-  it('puts each column\'s own citation beside the claim it supports', () => {
-    renderCard({
+  it('lets each column\'s claim open the records behind it, with no citation marks', () => {
+    const { container } = renderCard({
       label: 'Type 2 diabetes mellitus',
       basis: '1 claim record',
       kind: 'careplan',
@@ -56,14 +67,17 @@ describe('ProblemsCard', () => {
       managedBySourceKey: 'E1',
     })
 
-    expect(within(screen.getByText(/1 claim record/)).getByRole('button', { name: /^1 · Condition/ })).toBeInTheDocument()
-    // The metric's citation sits beside its (clamped) text, in the metric cell.
-    const metricCell = screen.getByText(/HbA1c 6\.6%/).closest('[data-problem-column="metric"]') as HTMLElement
-    expect(within(metricCell).getByRole('button', { name: /^2 · DiagnosticReport/ })).toBeInTheDocument()
-    expect(within(screen.getByText(/甲醫學中心/)).getByRole('button', { name: /^4 · Encounter/ })).toBeInTheDocument()
-    expect(within(screen.getByText(/Metformin 500mg/)).getByRole('button', { name: /^3 · MedicationRequest/ })).toBeInTheDocument()
-    // No row-level bundle duplicating the column citations.
-    expect(screen.queryByRole('button', { name: /^1,2,3/ })).not.toBeInTheDocument()
+    expect(container.querySelector('sup')).toBeNull()
+    expect(screen.getByRole('button', { name: /^1 claim record\s*（開啟來源：Condition/ })).toBeInTheDocument()
+    // The key values are the link, inside the metric cell.
+    const metricLink = screen.getByRole('button', { name: /^HbA1c 6\.6% \(single\)\s*（開啟來源：DiagnosticReport/ })
+    expect(metricLink.closest('[data-problem-column="metric"]')).not.toBeNull()
+    fireEvent.click(metricLink)
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceType: 'DiagnosticReport', resourceId: 'rep-1' }))
+    expect(screen.getByRole('button', { name: /^甲醫學中心 · 2026-06-12\s*（開啟來源：Encounter/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Metformin 500mg\s*（開啟來源：MedicationRequest/ })).toBeInTheDocument()
+    // The basis line carries the problem's records, so the name is plain text.
+    expect(screen.queryByRole('button', { name: /^Type 2 diabetes mellitus/ })).not.toBeInTheDocument()
   })
 
   it('says when the date is the facility\'s latest record rather than this problem\'s visit', () => {
@@ -102,10 +116,12 @@ describe('ProblemsCard', () => {
       label: 'Type 2 diabetes mellitus', kind: 'medication', inferredFromMedication: true,
       sourceKeys: ['M1'], basisSourceKeys: ['M1'],
     })
-    expect(screen.getByText(/Type 2 diabetes mellitus/)).toHaveTextContent('用藥推定')
+    expect(screen.getByText(/Type 2 diabetes mellitus/).closest('p')).toHaveTextContent('用藥推定')
+    // With no basis line, the name itself opens the problem's records.
+    expect(screen.getByRole('button', { name: /^Type 2 diabetes mellitus\s*（開啟來源：MedicationRequest/ })).toBeInTheDocument()
   })
 
-  it('keeps the single row-level citation for a legacy result', () => {
+  it('lets the name open a legacy result\'s row-level records', () => {
     renderCard({
       label: 'Type 2 diabetes mellitus',
       kind: 'careplan',
@@ -113,7 +129,9 @@ describe('ProblemsCard', () => {
       sourceKeys: ['C1', 'L1'],
     })
 
-    expect(screen.getByRole('button', { name: /^1,2 · / })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Type 2 diabetes mellitus\s*（2 筆來源）/ }))
+    fireEvent.click(screen.getByRole('button', { name: /DiagnosticReport · 2026-04-18/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 'rep-1' }))
     expect(within(screen.getByText(/HbA1c 6\.6%/)).queryByRole('button')).not.toBeInTheDocument()
   })
   it('shows medicines as short-name tokens with the full name, folding past three', () => {
@@ -126,8 +144,12 @@ describe('ProblemsCard', () => {
       medications: items.map((item) => item.fullName).join('、'),
     })
     const tokens = () => [...container.querySelectorAll('[data-problem-medication]')]
-    expect(tokens().map((token) => token.textContent)).toEqual(['SyntheticA 10 mg', 'SyntheticB 10 mg', 'SyntheticC 10 mg'])
+    expect(tokens().map(visibleText)).toEqual(['SyntheticA 10 mg', 'SyntheticB 10 mg', 'SyntheticC 10 mg'])
     expect(tokens()[0]).toHaveAttribute('title', 'SYNTHETIC-A TABLETS 10MG "DEMO"')
+    // Each token opens its own record (M1 is the only one this index holds).
+    fireEvent.click(within(tokens()[0] as HTMLElement).getByRole('button'))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 'med-1' }))
+    expect(within(tokens()[1] as HTMLElement).queryByRole('button')).not.toBeInTheDocument()
     // One "+N" per layout: +2 beside three tokens (layered), +3 beside two
     // (three columns, where the third token is hidden by the container query).
     expect(screen.getByRole('button', { name: '+3 項' })).toHaveClass('hidden')
