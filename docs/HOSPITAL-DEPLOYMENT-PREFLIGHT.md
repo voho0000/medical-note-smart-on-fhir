@@ -31,6 +31,8 @@ npm run build:mediprisma
 
 `build:mediprisma` 在移動 `app/api` 前執行檢查。失敗不執行 Next，也不搬動／恢复舊 stash；先修設定再重跑。檢查不連網，不讀 UID 名單，不輸出 env 值，不驗 TLS／DNS／服務是否存在。通過只代表設定格式符合這個 profile。
 
+未選 profile 時，讀不到個別 env 檔仍交由原 Next build 處理，不新增 hard failure；選用 profile 時才拒絕不完整的 env 讀取。已填值但疑似誤命名的院內／Collector URL，以及上述服務變數的字序錯誤，會在 hospital profile 拒絕，避免把錯字誤當成服務尚未設定；其他不相關公開變數維持原行為。這是窄範圍辨識，不保證找出所有拼字錯誤。
+
 | 公開設定 | 用途與規則 |
 | --- | --- |
 | `NEXT_PUBLIC_CDSS_ADMISSION` + `NEXT_PUBLIC_CDSS_API_ORIGIN` | App 直連獨立 FHIR API；啟用此部署設定時須明確 `firebase` + HTTPS origin，不能用 Collector 代替。FHIR 尚未準備可兩者皆留白，保留既有 admission 行為。其他 OAuth 部署不要選 hospital profile。 |

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, symlinkSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -96,6 +96,19 @@ test('private collaborator lists and credentials never belong in NEXT_PUBLIC var
   assert.deepEqual(check({ FHIR_FIREBASE_ALLOWED_UIDS: 'synthetic-private-uid' }).errors, [])
 })
 
+test('hospital profile rejects likely misnamed service settings without exposing keys or values', () => {
+  for (const key of ['NEXT_PUBLIC_INSTITUTION_LAB_REPORT_URL', 'NEXT_PUBLIC_COLLECTOR_URL',
+    'NEXT_PUBLIC_COLLECTOR_API_ORIGIN', 'NEXT_PUBLIC_API_CDSS_ORIGIN', 'NEXT_PUBLIC_ADMISSION_CDSS']) {
+    const result = check({ [key]: 'synthetic-secret-value' })
+    assert.match(result.errors.join('\n'), /Unrecognized public service setting/)
+    assert.ok(!JSON.stringify(result).includes(key))
+    assert.doesNotMatch(JSON.stringify(result), /synthetic-secret-value/)
+    assert.deepEqual(checkDeploymentEnv({ [key]: 'anything' }).errors, [])
+  }
+  assert.deepEqual(check({ NEXT_PUBLIC_INSTITUTION_LAB_REPORT_URL: '',
+    NEXT_PUBLIC_COLLECTOR_TIMEOUT_MS: '5000', NEXT_PUBLIC_LAB_DATA_REPORT_URL: 'https://team.hospital.test/submit' }).errors, [])
+})
+
 // Real @next/env, isolated env files and child processes. No network or services.
 function fixture(run) {
   const dir = mkdtempSync(join(tmpdir(), 'deployment-preflight-'))
@@ -133,6 +146,33 @@ test('CLI with no profile is silent and does not restrict local test endpoints',
   const result = exec()
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.stdout + result.stderr, '')
+}))
+
+test('unreadable env file preserves opt-out behavior but fails an explicitly selected profile', (t) => fixture(({ dir, exec }) => {
+  const envFile = join(dir, '.env')
+  writeFileSync(envFile, 'SYNTHETIC_PRIVATE_VALUE=must-not-be-printed\n')
+  chmodSync(envFile, 0)
+  try {
+    try {
+      readFileSync(envFile)
+      t.skip('This account/platform can still read mode-000 files; permission repro unavailable')
+      return
+    } catch { /* Permission failure is the condition under test. */ }
+    const optOut = exec()
+    assert.equal(optOut.status, 0, optOut.stderr)
+    assert.equal(optOut.stdout + optOut.stderr, '')
+    const optIn = exec(undefined, hospital)
+    assert.equal(optIn.status, 1)
+    assert.match(optIn.stderr, /Could not read a build env file/)
+    assert.doesNotMatch(optIn.stdout + optIn.stderr, /must-not-be-printed|SYNTHETIC_PRIVATE_VALUE/)
+  } finally { chmodSync(envFile, 0o600) }
+}))
+
+test('CLI rejects the documented institution URL word-order trap', () => fixture(({ exec }) => {
+  const result = exec(undefined, { ...hospital, NEXT_PUBLIC_INSTITUTION_LAB_REPORT_URL: 'https://gw.hospital.test/collector/v1/lab-reports' })
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /Unrecognized public service setting/)
+  assert.doesNotMatch(result.stdout, /syntax passed/)
 }))
 
 test('failed build preflight exits before moving API files or invoking Next', () => fixture(({ dir, exec }) => {

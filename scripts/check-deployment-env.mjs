@@ -7,12 +7,15 @@ import { checkDeploymentEnv } from './deployment-env.mjs'
 // .env.production > .env, including Next's variable expansion rules.
 process.env.NODE_ENV ||= 'production'
 let loadFailed = false
+let envReadFailed = false
 try {
   const require = createRequire(import.meta.url)
   const nextRequire = createRequire(require.resolve('next/package.json'))
   nextRequire('@next/env').loadEnvConfig(process.cwd(), false, {
     info() {},
-    error() { loadFailed = true },
+    // Next skips unreadable env files after logging. Do not turn that into a
+    // fatal error for existing builds that have not selected this profile.
+    error() { envReadFailed = true },
   })
 } catch { loadFailed = true }
 if (loadFailed) {
@@ -21,6 +24,10 @@ if (loadFailed) {
 }
 const result = checkDeploymentEnv(process.env)
 if (result.enabled) {
+  if (envReadFailed) {
+    console.error('[deployment] Could not read a build env file. Check file permissions locally; values are not printed.')
+    process.exit(1)
+  }
   for (const note of result.notes) console.log(`[deployment] ${note}`)
   for (const error of result.errors) console.error(`[deployment] ${error}`)
   if (result.errors.length) process.exit(1)

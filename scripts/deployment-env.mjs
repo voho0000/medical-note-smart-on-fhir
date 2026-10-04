@@ -63,7 +63,18 @@ export function checkDeploymentEnv(env) {
   if (env.NEXT_PUBLIC_FIREBASE_EMULATOR === '1') errors.push('NEXT_PUBLIC_FIREBASE_EMULATOR must not be enabled in the hospital profile.')
   if (env.NEXT_PUBLIC_APPCHECK_DEBUG) errors.push('NEXT_PUBLIC_APPCHECK_DEBUG must be unset in the hospital profile.')
 
+  const serviceKeys = ['NEXT_PUBLIC_CDSS_ADMISSION', 'NEXT_PUBLIC_CDSS_API_ORIGIN',
+    'NEXT_PUBLIC_COLLECTOR_ORIGIN', 'NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL']
+  const tokenSets = serviceKeys.map(key => key.split('_').sort().join('_'))
   for (const [key, value] of Object.entries(env)) {
+    if (value && key.startsWith('NEXT_PUBLIC_') && !serviceKeys.includes(key)) {
+      const tokens = key.split('_')
+      const misnamedUrl = (tokens.includes('INSTITUTION') && tokens.includes('REPORT') || tokens.includes('COLLECTOR')) &&
+        (tokens.includes('ORIGIN') || tokens.includes('URL'))
+      if (misnamedUrl || tokenSets.includes([...tokens].sort().join('_'))) {
+        errors.push('Unrecognized public service setting. Use NEXT_PUBLIC_CDSS_ADMISSION, NEXT_PUBLIC_CDSS_API_ORIGIN, NEXT_PUBLIC_COLLECTOR_ORIGIN or NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL; check spelling and word order.')
+      }
+    }
     if (value && key.startsWith('NEXT_PUBLIC_') &&
         /(?:^|_)(?:ALLOWED_UIDS|COLLABORATOR_UIDS|TOKEN|PRIVATE_KEY|CLIENT_SECRET|ADMIN_PASSWORD|SERVICE_ACCOUNT)(?:_|$)/.test(key)) {
       // Do not print arbitrary key names either; they are untrusted input.
