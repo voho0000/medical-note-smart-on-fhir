@@ -17,6 +17,7 @@ function renderCard(problem: SummaryProblem) {
       title="問題清單與負責院所"
       subtitle=""
       metaLabel="{count} 項"
+      columnLabels={{ problem: "問題與依據", metric: "關鍵指標與趨勢", care: "最近照護院所與用藥" }}
       basisLabel="依據:"
       organizationLatestLabel="該院最近紀錄"
       metricNeedsReviewLabel="需核對"

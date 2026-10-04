@@ -915,6 +915,7 @@ export default function MedicalSummaryFeature() {
                 title={ms.problemsTitle}
                 subtitle={ms.problemsSubtitle}
                 metaLabel={ms.problemsMeta}
+                columnLabels={ms.problemColumns}
                 basisLabel={ms.problemBasisLabel}
                 organizationLatestLabel={ms.problemManagedByOrganizationLatest}
                 metricNeedsReviewLabel={ms.problemMetricNeedsReview}
@@ -952,6 +953,7 @@ export default function MedicalSummaryFeature() {
                   othersAll: ms.reportsAll,
                   unavailable: ms.reportsUnavailable,
                   hiddenPoints: ms.reportsHiddenPoints,
+                  unverifiedTag: ms.reportsUnverifiedTag,
                   hiddenPointsNote: ms.reportsHiddenPointsNote,
                   conclusionTag: ms.reportsConclusionTag,
                   openingTag: ms.reportsOpeningTag,

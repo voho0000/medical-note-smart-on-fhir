@@ -76,6 +76,7 @@ import {
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
+import { verifyReportQuote } from '@/src/core/utils/report-quote.utils'
 import { reportNarrative } from '@/src/core/utils/report-narrative.utils'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
@@ -1303,6 +1304,7 @@ const REPORT_HIGHLIGHTS_RULES =
   'Omit normal findings and incidental age-related findings unless they are clinically meaningful. ' +
   '"text" states the finding only: never a date, a modality or examination name, a hospital, a recommendation, or a diagnosis the cited text does not state. ' +
   'Keep the source\'s uncertainty words in "text" (r/o, rule out, favor, suspect, suspicious, possible, probable, likely, cannot be ruled out, age undetermined, DDx, 疑似, 待排除, 不排除, 可能): write "Suspicious for bronchiectasis", never "Bronchiectasis", when the report says "suspicious for bronchiectasis". ' +
+  'Copy the L prefix of each report key exactly; never replace L with H or invent a different key. ' +
   'Every point needs at least one entry in "quotes": one contiguous sentence or clause copied character-for-character from one of the cited reports, with that report\'s key in "source". ' +
   'Never translate, abbreviate, expand, correct spelling, merge two places, or add words inside a quote. Never quote the header line the app wrote, an administrative line (patient identity, order or specimen numbers, names of staff, sign-off times), or across a "[…]" line, which marks text the app omitted. ' +
   'List the keys of the reports with nothing notable in "unremarkable". ' +
@@ -2925,6 +2927,17 @@ export function finalizeReportHighlights(
   }
 }
 
+/** A hospital model sometimes copies every L report key as H. Only offer
+ * the same-number listed report as a candidate: callers must still verify
+ * an actual quote against that report before accepting any citation. */
+function reportKeyCandidate(rawKey: string, itemByKey: ReadonlyMap<string, ReportDigestItem>): string {
+  const key = normaliseSummarySourceKey(rawKey)
+  if (itemByKey.has(key)) return key
+  const drift = /^H(\d+)$/.exec(key)
+  const candidate = drift ? 'L' + drift[1] : key
+  return itemByKey.has(candidate) ? candidate : key
+}
+
 function finalizeReportPoint(
   point: ReportPointDraft,
   itemByKey: ReadonlyMap<string, ReportDigestItem>,
@@ -2933,18 +2946,18 @@ function finalizeReportPoint(
   const sourceKeys = new Set<string>()
   const quotes: ReportFindingPoint['quotes'] = []
   for (const entry of point.quotes) {
-    const key = normaliseSummarySourceKey(entry.source)
+    const key = reportKeyCandidate(entry.source, itemByKey)
     const item = itemByKey.get(key)
-    const verified = item ? verifyDocumentQuote(entry.quote, item.narrative) : null
-    if (!verified || (verified.verification !== 'exact' && verified.verification !== 'whitespace-restored')) {
+    const verified = item ? verifyReportQuote(entry.quote, item.narrative) : null
+    if (!verified) {
       droppedQuotes += 1
       continue
     }
-    const identity = compactWhitespace(verified.quote)
+    const identity = compactWhitespace(verified)
     if (quotes.some((existing) => existing.key === key && compactWhitespace(existing.quote) === identity)) continue
     // A quote that opens on the previous sentence's full stop (". Thickened
     // mitral valve…") reads as broken; the stop carries no finding.
-    quotes.push({ key, quote: verified.quote.replace(/^[\s.,;:]+/, '') })
+    quotes.push({ key, quote: verified.replace(/^[\s.,;:]+/, '') })
     // A verified quote is itself a citation of its report.
     sourceKeys.add(key)
   }
@@ -2954,12 +2967,11 @@ function finalizeReportPoint(
   // worded the same way in a follow-up study). A cited report that says
   // something else — "normal heart size" under "Cardiomegaly" — must not lend
   // the point its date chip; it falls to the footer like any uncited report.
-  for (const key of point.sources.map(normaliseSummarySourceKey)) {
+  for (const key of point.sources.map((rawKey) => reportKeyCandidate(rawKey, itemByKey))) {
     const item = itemByKey.get(key)
     if (!item || sourceKeys.has(key)) continue
     const repeatsVerifiedQuote = quotes.some((quote) => {
-      const verified = verifyDocumentQuote(quote.quote, item.narrative)
-      return verified?.verification === 'exact' || verified?.verification === 'whitespace-restored'
+      return verifyReportQuote(quote.quote, item.narrative) !== null
     })
     if (repeatsVerifiedQuote) sourceKeys.add(key)
   }

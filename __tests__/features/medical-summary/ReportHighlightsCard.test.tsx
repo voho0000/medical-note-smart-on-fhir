@@ -27,6 +27,7 @@ const LABELS = {
   othersAll: ms.reportsAll,
   unavailable: ms.reportsUnavailable,
   hiddenPoints: ms.reportsHiddenPoints,
+  unverifiedTag: ms.reportsUnverifiedTag,
   hiddenPointsNote: ms.reportsHiddenPointsNote,
   conclusionTag: ms.reportsConclusionTag,
   openingTag: ms.reportsOpeningTag,
@@ -181,7 +182,7 @@ describe('ReportHighlightsCard', () => {
     expect(screen.queryByText(/因與原文不符未顯示/)).toBeNull()
   })
 
-  it('folds hidden points away, and opens them as unverified AI wording with their reports', () => {
+  it('shows unverified AI wording immediately with a label and navigable reports', () => {
     const onNavigate = jest.fn()
     const { container } = render(
       <ReportHighlightsCard
@@ -190,11 +191,12 @@ describe('ReportHighlightsCard', () => {
         onNavigate={onNavigate}
       />,
     )
-    expect(screen.queryByText('Synthetic unmatched finding')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /2 項因與原文不符未顯示/ }))
+    expect(screen.getByText(/Synthetic unmatched finding/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: /因與原文不符未顯示/ })).toBeNull()
     expect(screen.getByText(/未通過原文比對，僅供參考/)).toBeInTheDocument()
     const item = container.querySelector('[data-unverified-point]')!
     expect(item).toHaveTextContent('Synthetic unmatched finding')
+    expect(within(item).getByText('未通過原文比對')).toBeVisible()
     fireEvent.click(item.querySelector('[data-report-chip="L1"]')!)
     expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ resourceId: 'dr-L1' }))
   })

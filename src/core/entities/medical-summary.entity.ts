@@ -529,11 +529,10 @@ export interface ReportHighlights {
   totalReports: number
   /** Quotes that failed the verbatim check or named no listed report. */
   droppedQuoteCount: number
-  /** Points not shown because no quote of theirs survived. */
+  /** Points with no surviving verified quote; shown with an unverified label. */
   hiddenPointCount: number
-  /** Those points, kept for a clinician who opens them on purpose: the
-   *  model's line and the listed reports it cited. Never verified; the UI
-   *  folds them away and says so. */
+  /** The model's unverified lines and cited reports. The UI shows them
+   *  directly with an explicit label so clinicians can check the originals. */
   hiddenPoints?: UnverifiedReportPoint[]
   /** Points shown as their quote because the text dropped an uncertainty
    *  marker the quote carries. The counter the uncertainty guard is judged on. */

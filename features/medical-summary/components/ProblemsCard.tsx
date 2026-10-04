@@ -17,6 +17,7 @@ interface ProblemsCardProps {
   subtitle: string
   /** "{count} 項 · 依臨床重要性" */
   metaLabel: string
+  columnLabels: { problem: string; metric: string; care: string }
   basisLabel: string
   /** Shown before the date when it is the organization's latest record
    *  rather than a visit for this problem, e.g. 該院最近紀錄. */
@@ -50,6 +51,7 @@ export function ProblemsCard({
   title,
   subtitle,
   metaLabel,
+  columnLabels,
   basisLabel,
   organizationLatestLabel,
   metricNeedsReviewLabel,
@@ -98,6 +100,11 @@ export function ProblemsCard({
           scan down; narrower than that it stacks into two lines so neither the
           metric nor the managing clinic gets squeezed to one word per line. */}
       <div className="@container">
+        <div className="hidden gap-x-2 border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[30rem]:grid @min-[30rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.1fr)_1rem]" data-problem-column-headings>
+          <span>{columnLabels.problem}</span>
+          <span>{columnLabels.metric}</span>
+          <span>{columnLabels.care}</span>
+        </div>
         <ul>
           {visible.map((problem, index) => {
             // Finalize-detected evidence-type mismatches (依據:心電圖 citing a
@@ -141,6 +148,7 @@ export function ProblemsCard({
                 className="grid grid-cols-1 gap-x-2 gap-y-0.5 border-b border-border py-1.5 last:border-b-0 @min-[30rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.1fr)_1rem] @min-[30rem]:items-start"
               >
                 <div className="min-w-0">
+                  <p className="sr-only @min-[30rem]:hidden">{columnLabels.problem}</p>
                   <p className="text-[0.8125rem] font-semibold leading-snug text-foreground break-words">
                     {problem.label}
                     {problem.inferredFromMedication ? (
@@ -164,6 +172,9 @@ export function ProblemsCard({
                   ) : null}
                 </div>
                 <div className="min-w-0" data-problem-column="metric">
+                  {problem.metric || problem.metricMeta ? (
+                    <p className="sr-only @min-[30rem]:hidden">{columnLabels.metric}</p>
+                  ) : null}
                   {problem.metric ? (
                     <p className="text-xs leading-snug text-foreground break-words">
                       {problem.metric}
@@ -182,6 +193,9 @@ export function ProblemsCard({
                   ) : null}
                 </div>
                 <div className="min-w-0" data-problem-column="care">
+                  {managedByLine || problem.medications ? (
+                    <p className="sr-only @min-[30rem]:hidden">{columnLabels.care}</p>
+                  ) : null}
                   {managedByLine ? (
                     <p className="text-xs leading-snug text-foreground break-words">
                       {managedByLine}

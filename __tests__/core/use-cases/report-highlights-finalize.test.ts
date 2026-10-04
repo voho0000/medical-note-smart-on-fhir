@@ -633,3 +633,50 @@ describe('a reply whose every point failed verification', () => {
     expect(after).toMatchObject({ summarized: true, hiddenPointCount: 0, droppedQuoteCount: 0 })
   })
 })
+
+describe('report value typography', () => {
+  it('keeps a finding without an unverified label and restores the original RVSP quote', () => {
+    const clinicalData: any = { diagnosticReports: [report('echo-format', '2026-10-02', 'Echo', 'RVSP: 58mmHg')] }
+    const catalog = buildSourceCatalog(clinicalData)
+    const key = catalog[0].key
+    const result = useCase.finalizeResult({ ...useCase.createEmptyAiResult(), reports: moduleOf([
+      { organ: 'heart', points: [point('RVSP 58mmHg', [key], [[key, 'RVSP 58mmHg']])] },
+    ]) }, catalog, { clinicalData, audience: 'medical' }).reportHighlights!
+    expect(result.hiddenPointCount).toBe(0)
+    expect(result.droppedQuoteCount).toBe(0)
+    expect(result.groups[0].points[0].quotes).toEqual([{key, quote: 'RVSP: 58mmHg'}])
+  })
+})
+
+describe('hospital-model report key prefix drift', () => {
+  const data: any = { diagnosticReports: [
+    report('echo-1', '2026-10-02', 'Echo', 'Moderate pulmonary hypertension (RVSP: 58mmHg).'),
+    report('echo-2', '2026-10-01', 'Echo', 'Moderate pulmonary hypertension (RVSP: 58mmHg).'),
+    report('echo-3', '2026-09-30', 'Echo', 'No pulmonary hypertension.'),
+  ] }
+  const catalog = buildSourceCatalog(data)
+  const key = (id: string) => catalog.find(entry => entry.resourceId === id)!.key
+  const wrong = (id: string) => key(id).replace(/^L/, 'H')
+  const run = (quote: string, source = wrong('echo-1')) => useCase.finalizeResult({
+    ...useCase.createEmptyAiResult(), reports: moduleOf([{organ:'heart',points:[
+      point('Moderate pulmonary hypertension (RVSP 58mmHg)', [source,wrong('echo-2'),wrong('echo-3')], [[source,quote]])
+    ]}])
+  },catalog,{clinicalData:data,audience:'medical'}).reportHighlights!
+  it('restores only same-number listed reports with matching original quotes', () => {
+    const result = run('Moderate pulmonary hypertension (RVSP 58 mmHg).')
+    expect(result.hiddenPointCount).toBe(0)
+    expect(result.groups[0].points[0].quotes).toEqual([{key:key('echo-1'),quote:'Moderate pulmonary hypertension (RVSP: 58mmHg).'}])
+    expect(result.groups[0].points[0].sources.map(source=>source.key)).toEqual([key('echo-1'),key('echo-2')])
+    expect(result.others.map(source=>source.key)).toEqual([key('echo-3')])
+  })
+  it.each([
+    ['Moderate pulmonary hypertension (RVSP 59mmHg).', wrong('echo-1')],
+    ['Moderate pulmonary hypertension (RVSP 58mmHg).', 'H999'],
+    ['Moderate pulmonary hypertension (RVSP 58mmHg).', wrong('echo-1').replace('H','D')],
+    ['Moderate pulmonary hypertension (RVSP 58mmHg).', wrong('echo-3')],
+  ])('keeps changed quotes and unresolved or unrelated keys unverified', (quote,source) => {
+    const result=run(quote,source)
+    expect(result.hiddenPointCount).toBe(1)
+    expect(result.groups).toEqual([])
+  })
+})

@@ -1,11 +1,12 @@
 // 影像與病理重點 — the key findings across the imaging and pathology reports,
 // one row per organ. The model only selected the findings and stated each in
-// a line; every point shown carries at least one quote the app verified
+// a line; every verified point carries at least one quote the app verified
 // verbatim against its report, and every chip (modality, date) is the app's,
 // read from the report itself — never from the line. A point whose line
 // dropped the report's uncertainty is shown as the report's own words, tagged
 // 原文. Every report no point cites folds into the footer, so nothing in the
-// digest disappears silently.
+// digest disappears silently. Unverified AI points remain visible with an
+// explicit label and links to their cited reports.
 "use client"
 
 import { useState } from "react"
@@ -56,7 +57,9 @@ export interface ReportHighlightsCardLabels {
   unavailable: string
   /** "{count}" — points not shown because no quote matched. */
   hiddenPoints: string
-  /** Note above those points once opened: AI wording, not verified. */
+  /** Label on each AI point whose wording was not verified. */
+  unverifiedTag: string
+  /** Note above the unverified AI points. */
   hiddenPointsNote: string
   conclusionTag: string
   openingTag: string
@@ -90,8 +93,8 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   // Nothing to list at all: the section has no content of its own.
   const [othersOpen, setOthersOpen] = useState(groups.length === 0)
   const [openPoints, setOpenPoints] = useState<ReadonlySet<string>>(new Set())
-  const [hiddenOpen, setHiddenOpen] = useState(false)
-  if (groups.length === 0 && others.length === 0) {
+  const unverifiedPoints = highlights.hiddenPoints ?? []
+  if (groups.length === 0 && others.length === 0 && unverifiedPoints.length === 0) {
     if (!labels.noReports || highlights.totalReports > 0) return null
     return (
       <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="medical-summary-reports-title">
@@ -106,6 +109,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   const newestYear = [
     ...groups.flatMap((group) => group.points.flatMap((point) => point.sources.map((source) => source.date))),
     ...others.map((row) => row.date),
+    ...unverifiedPoints.flatMap((point) => point.sources.map((source) => source.date)),
   ]
     .filter((date): date is string => Boolean(date))
     .sort()
@@ -308,6 +312,29 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
         <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{labels.unavailable}</p>
       ) : null}
 
+      {unverifiedPoints.length > 0 ? (
+        <div className="mt-2 border-t border-border pt-2" data-hidden-points>
+          <p className="text-xs leading-snug text-muted-foreground">{labels.hiddenPointsNote}</p>
+          <ul className="mt-1 space-y-1">
+            {unverifiedPoints.map((point, index) => (
+              <li key={point.organ + '-' + index} className="break-words text-[0.8125rem] leading-snug text-foreground" data-unverified-point>
+                <span className="mr-1 inline-block rounded border border-border bg-muted/40 px-1 py-px text-xs font-medium text-muted-foreground" data-unverified-tag>
+                  {labels.unverifiedTag}
+                </span>
+                {point.text}
+                {point.sources.map((source) => chip(source))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {highlights.hiddenPointCount > unverifiedPoints.length ? (
+        <p className="mt-0.5 text-xs text-muted-foreground/80">
+          {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount - unverifiedPoints.length))}
+        </p>
+      ) : null}
+
       {others.length > 0 ? (
         <div className={cn(groups.length > 0 && "mt-0.5 border-t border-border")}>
           <button
@@ -321,42 +348,6 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
           </button>
           {othersOpen ? <ul className="pb-0.5">{others.map(otherRow)}</ul> : null}
         </div>
-      ) : null}
-
-      {highlights.hiddenPointCount > 0 ? (
-        highlights.hiddenPoints?.length ? (
-          // Points no verified quote supported stay folded: a clinician may
-          // open them for reference, labelled as unverified AI wording, with
-          // the cited reports one click away.
-          <div className="mt-0.5" data-hidden-points>
-            <button
-              type="button"
-              onClick={() => setHiddenOpen((value) => !value)}
-              aria-expanded={hiddenOpen}
-              className="flex min-h-[44px] w-full items-center gap-1.5 text-left text-xs text-muted-foreground/80 transition-colors hover:text-foreground lg:min-h-8"
-            >
-              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 -rotate-90 transition-transform", hiddenOpen && "rotate-0")} aria-hidden="true" />
-              {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount))}
-            </button>
-            {hiddenOpen ? (
-              <div className="border-l border-dashed border-border pb-0.5 pl-2">
-                <p className="text-[0.6875rem] leading-snug text-muted-foreground">{labels.hiddenPointsNote}</p>
-                <ul className="mt-0.5 space-y-0.5">
-                  {highlights.hiddenPoints.map((point, index) => (
-                    <li key={`${point.organ}-${index}`} className="break-words text-xs leading-snug text-muted-foreground" data-unverified-point>
-                      {point.text}
-                      {point.sources.map((source) => chip(source))}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-0.5 text-xs text-muted-foreground/80">
-            {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount))}
-          </p>
-        )
       ) : null}
     </section>
   )
