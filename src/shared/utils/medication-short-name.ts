@@ -35,9 +35,12 @@ export function formatIngredientStrength(ingredientText: string | undefined): st
     .map((part) => {
       // A strength may open on a bare decimal point (".1 MG" → "0.1 mg").
       const match = part.match(/^(.*?[A-Za-z)])\s+(\.?\d[\s\S]*)$/)
-      if (!match) return part.split(' ').map(titleWord).join(' ')
+      // The master sometimes appends synonyms: "OXYBUTYNIN CHLORIDE (=OXIBUTININA
+      // HCL=…"; the first name is the one shown.
+      const name = (match ? match[1] : part).replace(/\s*\(=.*$/, '')
+      if (!match) return name.split(' ').map(titleWord).join(' ')
       const strength = match[2].replace(/(^|[^\d])\.(\d)/g, '$10.$2')
-      return `${match[1].split(' ').map(titleWord).join(' ')} ${strengthCase(strength)}`
+      return `${name.split(' ').map(titleWord).join(' ')} ${strengthCase(strength)}`
     })
     .join(' + ')
 }

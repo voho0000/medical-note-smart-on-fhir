@@ -17,6 +17,7 @@ describe('formatIngredientStrength', () => {
 
   it('leaves an ingredient without strength readable and empty input empty', () => {
     expect(formatIngredientStrength('FLURBIPROFEN')).toBe('Flurbiprofen')
+    expect(formatIngredientStrength('OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG')).toBe('Oxybutynin Chloride 5 mg')
     expect(formatIngredientStrength('  ')).toBeUndefined()
     expect(formatIngredientStrength(undefined)).toBeUndefined()
   })
