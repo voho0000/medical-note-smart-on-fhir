@@ -194,7 +194,7 @@ describe('ReportHighlightsCard', () => {
     expect(screen.getByText(/Synthetic unmatched finding/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /因與原文不符未顯示/ })).toBeNull()
     expect(screen.getByText(/未通過原文比對，僅供參考/)).toBeInTheDocument()
-    const item = container.querySelector('[data-unverified-point]')!
+    const item = container.querySelector<HTMLElement>('[data-unverified-point]')!
     expect(item).toHaveTextContent('Synthetic unmatched finding')
     expect(within(item).getByText('未通過原文比對')).toBeVisible()
     fireEvent.click(item.querySelector('[data-report-chip="L1"]')!)
