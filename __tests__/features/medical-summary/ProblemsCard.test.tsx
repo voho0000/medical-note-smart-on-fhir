@@ -17,7 +17,7 @@ function renderCard(problem: SummaryProblem) {
       title="問題清單與負責院所"
       subtitle=""
       metaLabel="{count} 項"
-      columnLabels={{ problem: "問題、依據與負責院所", metric: "關鍵指標與用藥" }}
+      columnLabels={{ problem: "問題與依據", metric: "關鍵指標", care: "負責院所與用藥" }}
       metricLabel="指標"
       medicationsMoreLabel="+{count} 項"
       basisLabel="依據:"
@@ -56,7 +56,9 @@ describe('ProblemsCard', () => {
     })
 
     expect(within(screen.getByText(/1 claim record/)).getByRole('button', { name: /^1 · Condition/ })).toBeInTheDocument()
-    expect(within(screen.getByText(/HbA1c 6\.6%/)).getByRole('button', { name: /^2 · DiagnosticReport/ })).toBeInTheDocument()
+    // The metric's citation sits beside its (clamped) text, in the metric cell.
+    const metricCell = screen.getByText(/HbA1c 6\.6%/).closest('[data-problem-column="metric"]') as HTMLElement
+    expect(within(metricCell).getByRole('button', { name: /^2 · DiagnosticReport/ })).toBeInTheDocument()
     expect(within(screen.getByText(/甲醫學中心/)).getByRole('button', { name: /^4 · Encounter/ })).toBeInTheDocument()
     expect(within(screen.getByText(/Metformin 500mg/)).getByRole('button', { name: /^3 · MedicationRequest/ })).toBeInTheDocument()
     // No row-level bundle duplicating the column citations.
@@ -82,7 +84,8 @@ describe('ProblemsCard', () => {
       label: 'Arterial stiffness', kind: 'other', metric: 'baPWV 1544；1547 cm/s', metricNeedsReview: true,
       sourceKeys: ['L1'], basisSourceKeys: ['L1'], metricSourceKeys: ['L1'],
     })
-    expect(screen.getByText(/baPWV 1544；1547 cm\/s/)).toHaveTextContent('需核對')
+    // Beside the text, outside the two-line clamp, so it is never cut off.
+    expect(screen.getByText(/baPWV 1544；1547 cm\/s/).closest('[data-problem-column="metric"]')).toHaveTextContent('需核對')
   })
 
   it('says when the managing visit was inferred from refills', () => {
@@ -124,6 +127,9 @@ describe('ProblemsCard', () => {
     const tokens = () => [...container.querySelectorAll('[data-problem-medication]')]
     expect(tokens().map((token) => token.textContent)).toEqual(['SyntheticA 10 mg', 'SyntheticB 10 mg', 'SyntheticC 10 mg'])
     expect(tokens()[0]).toHaveAttribute('title', 'SYNTHETIC-A TABLETS 10MG "DEMO"')
+    // One "+N" per layout: +2 beside three tokens (layered), +3 beside two
+    // (three columns, where the third token is hidden by the container query).
+    expect(screen.getByRole('button', { name: '+3 項' })).toHaveClass('hidden')
     fireEvent.click(screen.getByRole('button', { name: '+2 項' }))
     expect(tokens()).toHaveLength(5)
     fireEvent.click(screen.getByRole('button', { name: '收合' }))

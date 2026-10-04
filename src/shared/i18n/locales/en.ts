@@ -417,7 +417,7 @@ export const en = {
     problemsMeta: '{count} items · by clinical importance',
     problemsLegend: '= to verify; open a source to read the original record',
     problemsShowAll: 'Show all {count}',
-    problemColumns: {"problem":"Problem, basis and care facility","metric":"Key values and medicines"},
+    problemColumns: {"problem":"Problem and basis","metric":"Key values","care":"Care facility and medicines"},
     problemMetricLabel: 'Key value',
     problemMedicationsMore: '+{count} more',
     problemBasisLabel: 'basis: ',

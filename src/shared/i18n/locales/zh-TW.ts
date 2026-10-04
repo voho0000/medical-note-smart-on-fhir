@@ -417,7 +417,7 @@ export const zhTW = {
     problemsMeta: '{count} 項 · 依臨床重要性',
     problemsLegend: '= 待核對；點來源可展開原始紀錄',
     problemsShowAll: '顯示全部 {count} 項',
-    problemColumns: {"problem":"問題、依據與負責院所","metric":"關鍵指標與用藥"},
+    problemColumns: {"problem":"問題與依據","metric":"關鍵指標","care":"負責院所與用藥"},
     problemMetricLabel: '指標',
     problemMedicationsMore: '+{count} 項',
     problemBasisLabel: '依據:',

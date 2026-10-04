@@ -1,10 +1,11 @@
 // 問題清單與負責院所 — the complete whole-person problem list: what the
 // patient has, who follows it, and with what values and medicines. One markup,
-// laid out by the card's own width (the right panel is resizable): two
-// columns when there is room — problem, basis and managing facility on the
-// left; key values and medicine tokens on the right — and stacked rows when
-// narrow. Medicines are tokens with the drug master's short name; the record's
-// full name stays in each token's title.
+// laid out by the card's own width (the right panel is resizable): three
+// columns when there is room — problem and basis; key values (two lines at
+// most, the review tag and citations kept beside them); managing facility and
+// the first medicine tokens — and layered rows when narrow. Medicines are
+// tokens with the drug master's short name; the record's full name stays in
+// each token's title (owner, 2026-10-04).
 "use client"
 
 import { useState } from "react"
@@ -21,7 +22,7 @@ interface ProblemsCardProps {
   subtitle: string
   /** "{count} 項 · 依臨床重要性" */
   metaLabel: string
-  columnLabels: { problem: string; metric: string }
+  columnLabels: { problem: string; metric: string; care: string }
   /** Small label before the metric when the columns are stacked, e.g. 指標. */
   metricLabel: string
   /** "+{count} 項" — the medicines folded behind the first few. */
@@ -53,8 +54,10 @@ interface ProblemsCardProps {
 // a 12-problem patient stays one click away rather than pushing 影像與病理重點
 // off.
 const INITIAL_VISIBLE = 8
-// A row shows its first few medicines; the rest open on request.
+// A row shows its first few medicines (two in the narrower third column of
+// the three-column layout); the rest open on request.
 const INITIAL_MEDICATIONS = 3
+const INITIAL_MEDICATIONS_WIDE = 2
 
 export function ProblemsCard({
   result,
@@ -109,12 +112,14 @@ export function ProblemsCard({
         </div>
       </div>
 
-      {/* @container: two columns from 34rem of card width, stacked below; in
-          between (28–34rem) the managing facility sits beside the name. */}
+      {/* @container: three columns from 38rem of card width; below that the
+          same cells dissolve (display: contents) into layered rows — name and
+          facility on one line from 28rem, everything stacked under it. */}
       <div className="@container">
-        <div className="hidden gap-x-4 border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[34rem]:grid @min-[34rem]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-problem-column-headings>
+        <div className="hidden gap-x-3 border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[38rem]:grid @min-[38rem]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,1.35fr)]" data-problem-column-headings>
           <span>{columnLabels.problem}</span>
           <span>{columnLabels.metric}</span>
+          <span>{columnLabels.care}</span>
         </div>
         <ul>
           {visible.map((problem, index) => {
@@ -156,8 +161,25 @@ export function ProblemsCard({
               .join(" · ")
             const medicationItems = problem.medicationItems ?? []
             const medicationsOpen = openMedications.has(index)
-            const shownMedications = medicationsOpen ? medicationItems : medicationItems.slice(0, INITIAL_MEDICATIONS)
-            const foldedMedications = medicationItems.length - shownMedications.length
+            const toggleMedications = () => setOpenMedications((current) => {
+              const next = new Set(current)
+              if (next.has(index)) next.delete(index)
+              else next.add(index)
+              return next
+            })
+            const moreButton = (count: number, className: string) => (
+              <button
+                type="button"
+                onClick={toggleMedications}
+                aria-expanded={medicationsOpen}
+                className={cn(
+                  "relative shrink-0 rounded-full px-1 text-[0.6875rem] leading-[1.125rem] text-primary hover:text-primary/80 before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] lg:before:-inset-y-1",
+                  className,
+                )}
+              >
+                {medicationsOpen ? showLessLabel : medicationsMoreLabel.replace("{count}", String(count))}
+              </button>
+            )
             const tag = (label: string) => (
               <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
                 {label}
@@ -166,86 +188,104 @@ export function ProblemsCard({
             return (
               <li
                 key={`${problem.label}-${index}`}
-                className="grid grid-cols-1 gap-y-1 border-b border-border py-2 last:border-b-0 @min-[34rem]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] @min-[34rem]:gap-x-4"
+                className={cn(
+                  "grid gap-x-3 gap-y-0.5 border-b border-border py-1.5 last:border-b-0",
+                  "grid-cols-1 [grid-template-areas:'name'_'org'_'basis'_'metric'_'meds']",
+                  "@min-[28rem]:grid-cols-[minmax(0,1fr)_auto] @min-[28rem]:[grid-template-areas:'name_org'_'basis_basis'_'metric_metric'_'meds_meds']",
+                  "@min-[38rem]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,1.35fr)] @min-[38rem]:[grid-template-areas:none] @min-[38rem]:items-start",
+                )}
               >
-                <div className="min-w-0" data-problem-column="problem">
-                  <div className="flex flex-col @min-[28rem]:flex-row @min-[28rem]:items-baseline @min-[28rem]:justify-between @min-[28rem]:gap-3 @min-[34rem]:flex-col @min-[34rem]:items-stretch @min-[34rem]:gap-0">
-                    <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground break-words">
-                      {problem.label}
-                      {problem.inferredFromMedication ? tag(medicationInferredLabel) : null}
-                      {problem.singleUnassessedLab ? tag(singleValueLabel) : null}
-                      {problem.flag ? (
-                        <Flag
-                          className="ml-1 inline h-3 w-3 shrink-0 align-[-0.125em] text-amber-500 dark:text-amber-300"
-                          aria-label={verifyLabel}
-                        />
-                      ) : null}
-                      {perColumn && !problem.basis ? sup(problem.basisSourceKeys) : null}
-                      {perColumn ? null : sup(problem.sourceKeys)}
-                    </p>
-                    {managedByLine ? (
-                      <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words @min-[28rem]:shrink-0 @min-[28rem]:text-right @min-[34rem]:text-left" data-problem-managed-by>
-                        {managedByLine}
-                        {managedBySup}
-                      </p>
+                <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0" data-problem-column="problem">
+                  <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground break-words [grid-area:name]">
+                    {problem.label}
+                    {problem.inferredFromMedication ? tag(medicationInferredLabel) : null}
+                    {problem.singleUnassessedLab ? tag(singleValueLabel) : null}
+                    {problem.flag ? (
+                      <Flag
+                        className="ml-1 inline h-3 w-3 shrink-0 align-[-0.125em] text-amber-500 dark:text-amber-300"
+                        aria-label={verifyLabel}
+                      />
                     ) : null}
-                  </div>
+                    {perColumn && !problem.basis ? sup(problem.basisSourceKeys) : null}
+                    {perColumn ? null : sup(problem.sourceKeys)}
+                  </p>
                   {problem.basis ? (
-                    <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words">
+                    <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:basis]">
                       <span className="text-muted-foreground/80">{basisLabel}</span>
                       {problem.basis}
                       {perColumn ? sup(problem.basisSourceKeys) : null}
                     </p>
                   ) : null}
                 </div>
-                <div className="min-w-0 space-y-1" data-problem-column="metric">
+                <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0" data-problem-column="metric">
                   {problem.metric ? (
-                    <p className="text-xs leading-snug tabular-nums text-foreground break-words">
-                      <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[34rem]:sr-only">{metricLabel}</span>
-                      {problem.metric}
+                    <div className="flex min-w-0 items-start gap-0.5 [grid-area:metric]">
+                      <p
+                        className="min-w-0 flex-1 text-xs leading-snug tabular-nums text-foreground break-words @min-[38rem]:line-clamp-2"
+                        title={problem.metric}
+                      >
+                        <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
+                        {problem.metric}
+                        {problem.metricMeta ? (
+                          <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
+                        ) : null}
+                      </p>
+                      {/* Kept outside the two-line clamp: the review tag and
+                          the citations must never be cut off. */}
                       {problem.metricNeedsReview ? (
-                        <span className="ml-1 inline-flex items-center rounded border border-amber-500/40 px-1 align-baseline text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300">
+                        <span className="inline-flex shrink-0 items-center rounded border border-amber-500/40 px-1 text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300">
                           {metricNeedsReviewLabel}
                         </span>
                       ) : null}
-                      {problem.metricMeta ? (
-                        <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
-                      ) : null}
-                      {perColumn ? sup(problem.metricSourceKeys) : null}
+                      {perColumn ? <span className="shrink-0">{sup(problem.metricSourceKeys)}</span> : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0 @min-[38rem]:space-y-0.5" data-problem-column="care">
+                  {managedByLine ? (
+                    <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words [grid-area:org] @min-[28rem]:text-right @min-[38rem]:text-left" data-problem-managed-by>
+                      {managedByLine}
+                      {managedBySup}
                     </p>
                   ) : null}
                   {medicationItems.length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-1" data-problem-medications>
-                      {shownMedications.map((item) => (
-                        <span
-                          key={item.key}
-                          title={item.fullName}
-                          className="inline-block max-w-full truncate rounded-full border border-border bg-muted px-1.5 text-[0.6875rem] leading-[1.125rem] text-foreground"
-                          data-problem-medication
-                        >
-                          {item.name}
-                        </span>
-                      ))}
-                      {foldedMedications > 0 || (medicationsOpen && medicationItems.length > INITIAL_MEDICATIONS) ? (
-                        <button
-                          type="button"
-                          onClick={() => setOpenMedications((current) => {
-                            const next = new Set(current)
-                            if (next.has(index)) next.delete(index)
-                            else next.add(index)
-                            return next
-                          })}
-                          aria-expanded={medicationsOpen}
-                          className="relative rounded-full px-1 text-[0.6875rem] leading-[1.125rem] text-primary hover:text-primary/80 before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] lg:before:-inset-y-1"
-                        >
-                          {medicationsOpen ? showLessLabel : medicationsMoreLabel.replace("{count}", String(foldedMedications))}
-                        </button>
-                      ) : null}
-                      {perColumn ? sup(problem.medicationSourceKeys) : null}
+                    <div
+                      className="flex min-w-0 flex-wrap items-center gap-1 [grid-area:meds]"
+                      data-problem-medications
+                    >
+                      {medicationItems.map((item, itemIndex) => {
+                        if (!medicationsOpen && itemIndex >= INITIAL_MEDICATIONS) return null
+                        return (
+                          <span
+                            key={item.key}
+                            title={item.fullName}
+                            className={cn(
+                              "inline-block max-w-full truncate rounded-full border border-border bg-muted px-1.5 text-[0.6875rem] leading-[1.125rem] text-foreground",
+                              !medicationsOpen && itemIndex >= INITIAL_MEDICATIONS_WIDE && "@min-[38rem]:hidden",
+                            )}
+                            data-problem-medication
+                          >
+                            {item.name}
+                          </span>
+                        )
+                      })}
+                      {medicationsOpen
+                        ? (medicationItems.length > INITIAL_MEDICATIONS_WIDE ? moreButton(0, "") : null)
+                        : (
+                          <>
+                            {medicationItems.length > INITIAL_MEDICATIONS
+                              ? moreButton(medicationItems.length - INITIAL_MEDICATIONS, "@min-[38rem]:hidden")
+                              : null}
+                            {medicationItems.length > INITIAL_MEDICATIONS_WIDE
+                              ? moreButton(medicationItems.length - INITIAL_MEDICATIONS_WIDE, "hidden @min-[38rem]:inline")
+                              : null}
+                          </>
+                        )}
+                      {perColumn ? <span className="shrink-0">{sup(problem.medicationSourceKeys)}</span> : null}
                     </div>
                   ) : problem.medications ? (
                     // A result from before per-medicine items: the joined names.
-                    <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words">
+                    <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:meds]">
                       {problem.medications}
                       {perColumn ? sup(problem.medicationSourceKeys) : null}
                     </p>
