@@ -11,6 +11,8 @@ import type { LabDataReportPayload, LabDataReportResponse } from '../types'
 const SUBMIT_TIMEOUT_MS = 60_000
 // A connection test stores nothing, but a cold Function still takes its time.
 const CONNECTION_TEST_TIMEOUT_MS = 30_000
+// Shared institution receiver/nginx contract: UTF-8 bytes of the final wire JSON.
+export const INSTITUTION_LAB_REPORT_MAX_BODY_BYTES = 64 * 1024 * 1024
 
 /**
  * SHA-256 of the exact payload. The Function stores one report per key and
@@ -112,6 +114,7 @@ function destinationUrl(destination: LabDataReportDestination): string | null {
 type Posted =
   | { response: Response; result: LabDataReportResponse }
   | { ok: false; status: 'timeout' | 'network' }
+  | { ok: false; status: 413; reason: 'payload_too_large' }
 
 /**
  * The answer as far as it has the expected shape. Another receiver (the
@@ -147,6 +150,11 @@ async function post(
 
   try {
     const [headers, text] = await Promise.all([destinationHeaders(destination), body()])
+    // Measure the exact fetch body, including submissionKey and JSON escaping.
+    // Blob.size counts UTF-8 bytes, not UTF-16 string length. Never trim or reroute.
+    if (destination === 'institution' && new Blob([text]).size > INSTITUTION_LAB_REPORT_MAX_BODY_BYTES) {
+      return { ok: false, status: 413, reason: 'payload_too_large' }
+    }
     const response = await fetch(url, {
       method: 'POST',
       headers,

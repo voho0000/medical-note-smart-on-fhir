@@ -3,6 +3,7 @@
  */
 // Node environment: WebCrypto's subtle.digest is what browsers use here.
 import {
+  INSTITUTION_LAB_REPORT_MAX_BODY_BYTES,
   labDataReportSubmissionKey,
   resolveInstitutionReportUrl,
   resolveLabDataReportUrl,
@@ -123,6 +124,96 @@ describe('sending to a destination', () => {
     expect(await testLabDataReportConnection('institution', { url: null }))
       .toEqual({ ok: false, status: 'unconfigured' })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([-1, 0, 1])('checks the institution wire body at 64 MiB with a %d-byte delta', async (delta) => {
+    expect(INSTITUTION_LAB_REPORT_MAX_BODY_BYTES).toBe(64 * 1024 * 1024)
+    // Use a small payload with a mocked size instead of allocating 64 MiB per case.
+    const size = jest.spyOn(Blob.prototype, 'size', 'get')
+      .mockReturnValue(INSTITUTION_LAB_REPORT_MAX_BODY_BYTES + delta)
+    respond(201, { success: true, reportId: 'GW-boundary' })
+    try {
+      const before = JSON.stringify(payload)
+      const result = await submitLabDataReport(payload, {
+        destination: 'institution', url: 'https://gateway.example.test/r',
+      })
+      expect(size).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(payload)).toBe(before)
+      if (delta > 0) {
+        expect(result).toEqual({ ok: false, status: 413, reason: 'payload_too_large' })
+        expect(fetchMock).not.toHaveBeenCalled() // No institution request or team fallback.
+      } else {
+        expect(result).toEqual({ ok: true, reportId: 'GW-boundary' })
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+          ...payload, submissionKey: expect.stringMatching(/^[0-9a-f]{64}$/),
+        })
+      }
+    } finally {
+      size.mockRestore()
+    }
+  })
+
+  it('counts real UTF-8 Chinese/emoji wire bytes, including JSON escaping and submissionKey', async () => {
+    const chinese = { ...payload, description: '腫瘤🧪\n"檢驗"' }
+    const size = jest.spyOn(Blob.prototype, 'size', 'get') // Real Blob encoding, no size mock.
+    respond(201, { success: true, reportId: 'GW-Chinese' })
+    try {
+      expect(await submitLabDataReport(chinese, {
+        destination: 'institution', url: 'https://gateway.example.test/r',
+      })).toEqual({ ok: true, reportId: 'GW-Chinese' })
+      const wire = fetchMock.mock.calls[0][1].body as string
+      expect(size).toHaveBeenCalledTimes(1)
+      expect(size.mock.results[0].value).toBe(Buffer.byteLength(wire, 'utf8'))
+      expect(size.mock.results[0].value).toBeGreaterThan(wire.length)
+      expect(JSON.parse(wire)).toEqual({
+        ...chinese, submissionKey: expect.stringMatching(/^[0-9a-f]{64}$/),
+      })
+    } finally {
+      size.mockRestore()
+    }
+  })
+
+  it('rejects when submissionKey pushes an otherwise fitting institution report over the bound', async () => {
+    const rawBytes = Buffer.byteLength(JSON.stringify(payload), 'utf8')
+    const realSize = Object.getOwnPropertyDescriptor(Blob.prototype, 'size')!.get!
+    const size = jest.spyOn(Blob.prototype, 'size', 'get').mockImplementation(function (this: Blob) {
+      return realSize.call(this) > rawBytes
+        ? INSTITUTION_LAB_REPORT_MAX_BODY_BYTES + 1
+        : INSTITUTION_LAB_REPORT_MAX_BODY_BYTES
+    })
+    try {
+      expect(await submitLabDataReport(payload, {
+        destination: 'institution', url: 'https://gateway.example.test/r',
+      })).toEqual({ ok: false, status: 413, reason: 'payload_too_large' })
+      expect(size).toHaveBeenCalledTimes(1)
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      size.mockRestore()
+    }
+  })
+
+  it('does not apply the institution size limit or change headers/body for the team', async () => {
+    const size = jest.spyOn(Blob.prototype, 'size', 'get')
+      .mockReturnValue(INSTITUTION_LAB_REPORT_MAX_BODY_BYTES + 1)
+    respond(200, { success: true, reportId: 'LDR-team' })
+    try {
+      expect(await submitLabDataReport(payload, { url: 'https://team.example.test/submitLabDataReport' }))
+        .toEqual({ ok: true, reportId: 'LDR-team' })
+      expect(size).not.toHaveBeenCalled()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, request] = fetchMock.mock.calls[0]
+      expect(url).toBe('https://team.example.test/submitLabDataReport')
+      expect(request.headers).toEqual({
+        'Content-Type': 'application/json', Authorization: 'Bearer id-token',
+        'x-proxy-key': 'proxy-key', 'X-Firebase-AppCheck': 'app-check',
+      })
+      expect(JSON.parse(request.body)).toEqual({
+        ...payload, submissionKey: expect.stringMatching(/^[0-9a-f]{64}$/),
+      })
+    } finally {
+      size.mockRestore()
+    }
   })
 
   it('tests a connection with the flag alone, and needs the answer to say so', async () => {
