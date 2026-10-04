@@ -28,7 +28,10 @@ export function formatIngredientStrength(ingredientText: string | undefined): st
   const text = ingredientText?.replace(/\s+/g, ' ').trim()
   if (!text) return undefined
   return text
-    .split(/\s*[;；]\s*/)
+    // Components join with ";" or, in the NHI master, "+" right after a
+    // strength ("3.2 MG/ML+POTASSIUM CHLORIDE 1.4 MG/ML"); "SENNOSIDE A+B" is
+    // one name.
+    .split(/\s*[;；]\s*|(?<=[\d%A-Za-z)])\s*\+\s*(?=[A-Za-z]{2,})/)
     .map((part) => {
       // A strength may open on a bare decimal point (".1 MG" → "0.1 mg").
       const match = part.match(/^(.*?[A-Za-z)])\s+(\.?\d[\s\S]*)$/)

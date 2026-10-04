@@ -10,6 +10,9 @@ describe('formatIngredientStrength', () => {
 
   it('keeps every component of a combination', () => {
     expect(formatIngredientStrength('AMLODIPINE 5 MG; VALSARTAN 80 MG')).toBe('Amlodipine 5 mg + Valsartan 80 mg')
+    expect(formatIngredientStrength('SODIUM CHLORIDE 3.2 MG/ML+POTASSIUM CHLORIDE 1.4 MG/ML'))
+      .toBe('Sodium Chloride 3.2 mg/mL + Potassium Chloride 1.4 mg/mL')
+    expect(formatIngredientStrength('SENNOSIDE A+B(CALCIUM) 12 MG')).toBe('Sennoside A+B(CALCIUM) 12 mg')
   })
 
   it('leaves an ingredient without strength readable and empty input empty', () => {
