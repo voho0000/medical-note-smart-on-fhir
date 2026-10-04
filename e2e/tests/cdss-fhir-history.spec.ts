@@ -16,9 +16,11 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
   await page.setViewportSize({ width: 1440, height: 900 })
   const writes: object[] = []
   page.on('request', request => { if (request.url().endsWith('/cdss/v1/saves')) writes.push(request.postDataJSON()) })
+  let syntheticFirebaseToken: string | undefined
   if (process.env.FHIR_E2E_AUTH_MODE === 'firebase') {
     if (!process.env.FHIR_E2E_FIREBASE_STATE) throw new Error('Private synthetic Firebase test state required')
     const credential = JSON.parse(readFileSync(process.env.FHIR_E2E_FIREBASE_STATE, 'utf8'))
+    syntheticFirebaseToken = credential.token
     await context.route('**/identitytoolkit.googleapis.com/**', async route => {
       const url = route.request().url()
       if (url.includes('accounts:signInWithPassword')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({
@@ -143,5 +145,45 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
     await save.click()
     await expect(page.getByText('紀錄未儲存，請稍後重試。')).toBeVisible()
     expect(writes).toHaveLength(1)
+  }
+  if (process.env.FHIR_E2E_AUTH_MODE === 'firebase') {
+    if (!syntheticFirebaseToken) throw new Error('Synthetic Firebase test token unavailable')
+    // Seed server-supported historical values directly, then use the real App
+    // reader. The current writer remains strict and never emits these formats.
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openFeaturePanel(page)
+    await page.getByRole('tab', { name: /個人化照護指引/ }).click()
+    for (const [name, patch] of [
+      ['legacy-uuid', { patient_session_id: 'ABCDEFAB-1234-0000-0000-ABCDEFABCDEF' }],
+      ['compact-time', { saved_at: '2026-10-03T12:34+0800' }],
+    ] as const) {
+      const legacySave = { ...writes[0], ...patch, save_id: randomUUID() }
+      const seeded = await context.request.post(saveResponse.url(), { data: legacySave, headers: {
+        Origin: 'http://localhost:3007', Authorization: `Bearer ${syntheticFirebaseToken}`,
+      } })
+      expect(seeded.status()).toBe(201)
+      const legacyListResponse = page.waitForResponse(response => response.url().endsWith('/cdss/v1/history') && response.request().method() === 'POST')
+      await page.getByTestId('cdss-history-records').click()
+      const legacyHistory = await (await legacyListResponse).json()
+      const recordIndex = legacyHistory.records.findIndex((record: { saveId: string }) => record.saveId === legacySave.save_id)
+      expect(recordIndex).toBeGreaterThanOrEqual(0)
+      const legacyReadResponse = page.waitForResponse(response => response.url().endsWith('/cdss/v1/history/read') && response.request().method() === 'POST')
+      await dialog.getByRole('button', { name: new RegExp(history.records[0].packId) }).nth(recordIndex).click()
+      const legacyDetail = await (await legacyReadResponse).json()
+      expect(legacyDetail.save).toEqual(legacySave)
+      await expect(dialog.getByText('歷史快照・醫師身分尚未驗證')).toBeVisible()
+      await expect(dialog.getByText(/Invalid Date/)).toHaveCount(0)
+      if (name === 'compact-time') {
+        expect(legacyDetail.savedAt).toBe('2026-10-03T12:34+0800')
+        const displayTime = await page.evaluate(value => new Date(value).toLocaleString('zh-TW'), '2026-10-03T12:34:00+08:00')
+        await expect(dialog.getByText(`儲存時間：${displayTime}`, { exact: true })).toBeVisible()
+      }
+      await expect(dialog.getByTestId('cdss-history-recommendation').first().getByRole('heading', { level: 4 }))
+        .toHaveText(legacyDetail.save.result.recommendations[0].title)
+      await page.screenshot({ path: info.outputPath(`history-${name}.png`) })
+      await page.keyboard.press('Escape')
+      await expect(dialog).not.toBeVisible()
+    }
+    expect(writes).toHaveLength(1) // Only the original manual App save; history sends no saves.
   }
 })

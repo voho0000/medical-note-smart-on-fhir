@@ -58,4 +58,6 @@ node node_modules/@playwright/test/cli.js test --config playwright.fhir.config.t
 
 專用profile使用localhost3007，不借用devserver；關閉trace/video以免記錄token/帳密。只有成功授權後的App與歷史快照畫面截圖，不截登入密碼或callback URL。預設e2e跳過本機專用測試。
 
+Firebase E2E 另以合成帳號直接儲存兩筆 v2 歷史格式：舊版 patient_session_id UUID，以及 saved_at=`2026-10-03T12:34+0800`。再由真實 App 查清單／調閱，驗證 HAPI 回傳的快照原樣保留、日期可顯示及建議可讀取；App 不額外發送儲存。這些格式由測試直接送至後端，最新 App writer 的限制維持原狀。
+
 Jest驗hash/遮蔽/retry/準備中取消、來源、history錯病人/UUID/size及LiveFeature；`cdss-history-detail.test.tsx` 驗後端支援的舊版 UUID／時間／事件格式、快照原樣保留、損壞資料拒絕、最新 writer 仍維持限制，以及中英文歷史建議完整顯示且不發儲存請求。真實Chromium在三種配置儲存→201→history→同snapshot/version1，亦核對畫面中的建議各欄位與實際儲存內容，手機320/390/430、平板768、桌面1024/1440與橫向檢查。VM容量、專屬HTTPS、開機/登出/>72h/備份還原仍待FHIR VM-ACCEPTANCE.md實機執行。正式病人、醫師綁定與EMR寫回延後。

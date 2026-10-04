@@ -103,7 +103,9 @@ test.each([false, true])('saved detail presents the full stored recommendation a
     expect(screen.getByText(value)).toBeVisible()
   }
   const displayedTime = new Date(storedTimestampForDisplay(stored.savedAt)).toLocaleString(english ? 'en' : 'zh-TW')
-  expect(screen.getByText(`${english ? 'Saved at: ' : '儲存時間：'}${displayedTime}`)).toBeVisible()
+  // ICU can emit thin/non-breaking spaces. Compare the exact localized text
+  // without Testing Library replacing those spaces only on the DOM side.
+  expect(screen.getByText(`${english ? 'Saved at: ' : '儲存時間：'}${displayedTime}`, { normalizer: value => value })).toBeVisible()
   expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument()
   expect(screen.queryByText('CURRENT_ASSESSMENT_TITLE')).not.toBeInTheDocument()
   expect(screen.queryByText('CURRENT_INPUT')).not.toBeInTheDocument()
