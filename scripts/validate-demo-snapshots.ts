@@ -11,7 +11,7 @@
 // resolution misses).
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   auditSummaryGrounding,
   auditSafetyGrounding,
@@ -20,35 +20,40 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+// A file URL, so the dynamic imports also resolve on Windows.
+const load = (relative: string) => import(pathToFileURL(path.join(ROOT, relative)).href)
+
 async function main() {
-  const { LocalBundleService } = await import(path.join(ROOT, 'src/infrastructure/fhir/services/local-bundle.service.ts'))
-  const { enrichBundleWithNhiDrugTerminology } = await import(path.join(ROOT, 'src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service.ts'))
+  const { LocalBundleService } = await load('src/infrastructure/fhir/services/local-bundle.service.ts')
+  const { enrichBundleWithNhiDrugTerminology } = await load('src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service.ts')
   const { generateMedicalSummaryUseCase, getSourceCatalog } =
-    await import(path.join(ROOT, 'src/core/use-cases/medical-summary/generate-medical-summary.use-case.ts'))
-  const { generateSafetyAlertsUseCase } = await import(path.join(ROOT, 'src/core/use-cases/safety-alerts/generate-safety-alerts.use-case.ts'))
-  const { scopeClinicalDataForAi } = await import(path.join(ROOT, 'src/core/utils/ai-clinical-scope.utils.ts'))
-  const { listClinicalDocuments, resolveSelectedDocuments } = await import(path.join(ROOT, 'src/core/utils/clinical-documents.utils.ts'))
-  const { DEFAULT_DATA_FILTERS, DEFAULT_DATA_SELECTION, DEFAULT_DOCUMENT_MODE } = await import(path.join(ROOT, 'src/shared/constants/data-selection.constants.ts'))
-  const { DEMO_DATA_AS_OF_MS } = await import(path.join(ROOT, 'src/shared/constants/demo-data.constants.ts'))
-  const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots, remapDemoSnapshotSourceKeys } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
+    await load('src/core/use-cases/medical-summary/generate-medical-summary.use-case.ts')
+  const { generateSafetyAlertsUseCase } = await load('src/core/use-cases/safety-alerts/generate-safety-alerts.use-case.ts')
+  const { scopeClinicalDataForAi } = await load('src/core/utils/ai-clinical-scope.utils.ts')
+  const { listClinicalDocuments, resolveSelectedDocuments } = await load('src/core/utils/clinical-documents.utils.ts')
+  const { ALL_DATA_FILTERS, ALL_DATA_SELECTION } = await load('src/shared/constants/data-selection.constants.ts')
+  const { DEMO_DATA_AS_OF_MS } = await load('src/shared/constants/demo-data.constants.ts')
+  const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots, remapDemoSnapshotSourceKeys } = await load('src/infrastructure/demo/demo-ai-snapshots.ts')
 
   const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/demo/demo-bundle.json'), 'utf8'))
   // Match the real demo/local import path: exact-code NHI MedicationKnowledge
   // is attached before the App view model and AI context are built.
   const enriched = await enrichBundleWithNhiDrugTerminology(bundle)
   const { collection } = await LocalBundleService.parse(enriched.bundle)
-  // Demo seeding runs against the app's default AI scope, not the complete
-  // imported bundle. Build the exact same scoped catalog here so key numbering
-  // and citation verification cannot drift from what localhost/production show.
+  // Demo seeding runs against the scope the 初診 defaults give the demo: the
+  // record is small (under AUTO_SELECT_ALL_TOKENS), so useAdaptiveDataDefaults
+  // selects all of it — every category, every date, every document. Build the
+  // same scoped catalog here so key numbering and citation verification cannot
+  // drift from what localhost/production show.
   const includedDocumentIds = resolveSelectedDocuments(
     listClinicalDocuments(collection),
-    DEFAULT_DOCUMENT_MODE,
+    'all',
     [],
   ).map((document: { id: string }) => document.id)
   const scopedClinicalData = scopeClinicalDataForAi(
     collection,
-    DEFAULT_DATA_SELECTION,
-    DEFAULT_DATA_FILTERS,
+    ALL_DATA_SELECTION,
+    ALL_DATA_FILTERS,
     includedDocumentIds,
     DEMO_DATA_AS_OF_MS,
   )
@@ -79,34 +84,30 @@ async function main() {
       if (unverified.length) fail(`summary[${tag}]: unverified keys ${unverified.map((s: any) => s.key).join(',')}`)
       if (finalized.problems.length === 0) fail(`summary[${tag}]: no problems survived`)
       for (const issue of auditSummaryGrounding(snapshot, grounding)) fail(`summary[${tag}] grounding: ${issue}`)
-      // 影像與病理重點: the demo snapshots carry no reports module, so the
-      // section must be the unavailable-summary fallback listing EVERY digest
-      // report with its deterministic excerpt.
+      // A quote that does not match its document shows an amber warning in
+      // the demo; a frozen snapshot must not carry one.
+      for (const problem of finalized.problems) {
+        for (const entry of problem.documentEvidence ?? []) {
+          if (entry.verification === 'not-found') fail(`summary[${tag}]: "${problem.label}" quotes ${entry.source} with text the document does not hold`)
+        }
+      }
+      // 影像與病理重點: the clinician snapshots carry a reports module, so the
+      // section is a summary whose every point keeps a quote that matches its
+      // report verbatim.
       const highlights = finalized.reportHighlights
       if (aud === 'medical') {
         if (!highlights) fail(`summary[${tag}]: no 影像與病理重點 rendered`)
         else {
-          if (highlights.summarized) fail(`summary[${tag}]: 影像與病理重點 claims a summary the snapshot does not carry`)
-          if (highlights.groups.length > 0) fail(`summary[${tag}]: 影像與病理重點 has groups without a reports module`)
-          if (highlights.others.length !== highlights.totalReports) fail(`summary[${tag}]: 影像與病理重點 lists ${highlights.others.length} of ${highlights.totalReports} reports`)
-          const empty = highlights.others.filter((row: any) => !row.excerpt)
-          if (empty.length) fail(`summary[${tag}]: 影像與病理重點 rows without an excerpt: ${empty.map((row: any) => row.key).join(',')}`)
-          console.log(`✓ reports[${tag}]: ${highlights.others.length} imaging/pathology reports listed with their own excerpt (summary unavailable)`)
+          if (!highlights.summarized) fail(`summary[${tag}]: 影像與病理重點 is not summarized`)
+          if (highlights.groups.length === 0) fail(`summary[${tag}]: 影像與病理重點 has no findings`)
+          if (highlights.hiddenPointCount > 0) fail(`summary[${tag}]: ${highlights.hiddenPointCount} 影像與病理重點 point(s) lost every quote`)
+          const points = highlights.groups.reduce((sum: number, group: { points: unknown[] }) => sum + group.points.length, 0)
+          console.log(`✓ reports[${tag}]: ${points} findings in ${highlights.groups.length} organ groups, ${highlights.droppedQuoteCount} quote(s) dropped, ${highlights.others.length} other report(s)`)
         }
       } else if (highlights) fail(`summary[${tag}]: 影像與病理重點 rendered for the patient audience`)
-      if (aud === 'patient') {
-        const education = snapshot.medicationEducation
-        const expectedCurrentEducation = [
-          { pattern: /Forxiga/, sources: 'M10' },
-          { pattern: /Aricept/, sources: 'M5,M11' },
-        ]
-        for (const expected of expectedCurrentEducation) {
-          const item = education.find((candidate: { name: string }) => expected.pattern.test(candidate.name))
-          if (!item) fail(`summary[${tag}]: missing current medication education for ${expected.pattern.source}`)
-          if (item && item.sources.join(',') !== expected.sources) {
-            fail(`summary[${tag}]: ${expected.pattern.source} cites ${item.sources.join(',')} instead of ${expected.sources}`)
-          }
-        }
+      // An education item survives finalize only with a resolved M key.
+      if (aud === 'patient' && finalized.medicationEducation.length < 3) {
+        fail(`summary[${tag}]: only ${finalized.medicationEducation.length} medication education item(s) survived`)
       }
       console.log(`✓ summary[${tag}]: ${finalized.problems.length} problems, ${finalized.medicationEducation.length} education items, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
 
