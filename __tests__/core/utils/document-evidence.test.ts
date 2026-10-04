@@ -35,3 +35,13 @@ test('a line break before a full stop is whitespace, not a different sentence', 
   // Words, numbers and negation still have to match exactly.
   expect(verifyDocumentQuote('Subchondral sclerosis at left SI joint.', raw).verification).toBe('not-found')
 })
+
+test('a full-width character quoted half-width is the same passage, shown as the source wrote it', () => {
+  const raw = 'Follow　thyroid function showed hypothyroid, adjust Thyroxine dose 1-＞ 2PC QD.'
+  expect(verifyDocumentQuote('Follow thyroid function showed hypothyroid, adjust Thyroxine dose 1-> 2PC QD.', raw)).toEqual({
+    quote: raw, verification: 'whitespace-restored',
+  })
+  // Width is the only allowance: a changed dose or word is still not found.
+  expect(verifyDocumentQuote('adjust Thyroxine dose 1-> 3PC QD.', raw).verification).toBe('not-found')
+  expect(verifyDocumentQuote('ADJUST Thyroxine dose 1-> 2PC QD.', raw).verification).toBe('not-found')
+})
