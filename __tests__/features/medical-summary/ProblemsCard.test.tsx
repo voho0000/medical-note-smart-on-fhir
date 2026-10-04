@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ProblemsCard } from '@/features/medical-summary/components/ProblemsCard'
 import type { MedicalSummaryResult, SummaryProblem } from '@/src/core/entities/medical-summary.entity'
 
@@ -17,7 +17,9 @@ function renderCard(problem: SummaryProblem) {
       title="問題清單與負責院所"
       subtitle=""
       metaLabel="{count} 項"
-      columnLabels={{ problem: "問題與依據", metric: "關鍵指標與趨勢", care: "最近照護院所與用藥" }}
+      columnLabels={{ problem: "問題、依據與負責院所", metric: "關鍵指標與用藥" }}
+      metricLabel="指標"
+      medicationsMoreLabel="+{count} 項"
       basisLabel="依據:"
       organizationLatestLabel="該院最近紀錄"
       metricNeedsReviewLabel="需核對"
@@ -109,5 +111,22 @@ describe('ProblemsCard', () => {
 
     expect(screen.getByRole('button', { name: /^1,2 · / })).toBeInTheDocument()
     expect(within(screen.getByText(/HbA1c 6\.6%/)).queryByRole('button')).not.toBeInTheDocument()
+  })
+  it('shows medicines as short-name tokens with the full name, folding past three', () => {
+    const items = ['A', 'B', 'C', 'D', 'E'].map((letter, index) => ({
+      key: `M${index + 1}`, name: `Synthetic${letter} 10 mg`, fullName: `SYNTHETIC-${letter} TABLETS 10MG "DEMO"`,
+    }))
+    const { container } = renderCard({
+      label: 'Synthetic condition', kind: 'diagnosis', sourceKeys: ['M1'],
+      medicationSourceKeys: items.map((item) => item.key), medicationItems: items,
+      medications: items.map((item) => item.fullName).join('、'),
+    })
+    const tokens = () => [...container.querySelectorAll('[data-problem-medication]')]
+    expect(tokens().map((token) => token.textContent)).toEqual(['SyntheticA 10 mg', 'SyntheticB 10 mg', 'SyntheticC 10 mg'])
+    expect(tokens()[0]).toHaveAttribute('title', 'SYNTHETIC-A TABLETS 10MG "DEMO"')
+    fireEvent.click(screen.getByRole('button', { name: '+2 項' }))
+    expect(tokens()).toHaveLength(5)
+    fireEvent.click(screen.getByRole('button', { name: '收合' }))
+    expect(tokens()).toHaveLength(3)
   })
 })

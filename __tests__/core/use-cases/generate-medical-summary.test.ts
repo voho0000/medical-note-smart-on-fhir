@@ -1486,6 +1486,26 @@ describe('finalizeResult', () => {
     expect(result.problems[1].metricNeedsReview).toBe(true)
   })
 
+  it('writes each cited medicine as an item: the drug master short name, the record name kept', () => {
+    const medData = {
+      medications: [
+        { id: 'm-1', status: 'active', authoredOn: '2026-08-01', medicationCodeableConcept: { text: 'DEMO-TRAMED CAPSULES 50MG "SYNTH"' }, drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's', ingredientText: 'TRAMADOL HCL 50 MG' } },
+        { id: 'm-2', status: 'active', authoredOn: '2026-08-01', medicationCodeableConcept: { text: 'Demo Plain Tablet' } },
+        { id: 'm-3', status: 'active', authoredOn: '2026-07-01', medicationCodeableConcept: { text: 'DEMO-TRAMED CAPSULES 50MG "SYNTH"' }, drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's', ingredientText: 'TRAMADOL HCL 50 MG' } },
+      ],
+    } as any
+    const medCatalog = buildSourceCatalog(medData)
+    const key = (id: string) => medCatalog.find((entry) => entry.resourceId === id)!.key
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [{ label: 'Pain', kind: 'medication', medicationSources: [key('m-1'), key('m-2'), key('m-3')] }],
+    }, medCatalog, { clinicalData: medData })
+    expect(result.problems[0].medicationItems).toEqual([
+      { key: key('m-1'), name: 'Tramadol HCl 50 mg', fullName: expect.stringContaining('DEMO-TRAMED') },
+      { key: key('m-2'), name: 'Demo Plain Tablet', fullName: 'Demo Plain Tablet' },
+    ])
+  })
+
   it('leaves the metric empty for N/A, a medicine name, a code or a visit date', () => {
     const result = useCase.finalizeResult({
       ...empty,

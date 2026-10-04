@@ -916,6 +916,8 @@ export default function MedicalSummaryFeature() {
                 subtitle={ms.problemsSubtitle}
                 metaLabel={ms.problemsMeta}
                 columnLabels={ms.problemColumns}
+                metricLabel={ms.problemMetricLabel}
+                medicationsMoreLabel={ms.problemMedicationsMore}
                 basisLabel={ms.problemBasisLabel}
                 organizationLatestLabel={ms.problemManagedByOrganizationLatest}
                 metricNeedsReviewLabel={ms.problemMetricNeedsReview}

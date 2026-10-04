@@ -1,6 +1,10 @@
-// 問題清單與負責院所 — the complete whole-person problem list. Four columns
-// because the clinician's question is not only "what does this patient have"
-// but "who is watching it and with what".
+// 問題清單與負責院所 — the complete whole-person problem list: what the
+// patient has, who follows it, and with what values and medicines. One markup,
+// laid out by the card's own width (the right panel is resizable): two
+// columns when there is room — problem, basis and managing facility on the
+// left; key values and medicine tokens on the right — and stacked rows when
+// narrow. Medicines are tokens with the drug master's short name; the record's
+// full name stays in each token's title.
 "use client"
 
 import { useState } from "react"
@@ -17,7 +21,11 @@ interface ProblemsCardProps {
   subtitle: string
   /** "{count} 項 · 依臨床重要性" */
   metaLabel: string
-  columnLabels: { problem: string; metric: string; care: string }
+  columnLabels: { problem: string; metric: string }
+  /** Small label before the metric when the columns are stacked, e.g. 指標. */
+  metricLabel: string
+  /** "+{count} 項" — the medicines folded behind the first few. */
+  medicationsMoreLabel: string
   basisLabel: string
   /** Shown before the date when it is the organization's latest record
    *  rather than a visit for this problem, e.g. 該院最近紀錄. */
@@ -45,6 +53,8 @@ interface ProblemsCardProps {
 // a 12-problem patient stays one click away rather than pushing 影像與病理重點
 // off.
 const INITIAL_VISIBLE = 8
+// A row shows its first few medicines; the rest open on request.
+const INITIAL_MEDICATIONS = 3
 
 export function ProblemsCard({
   result,
@@ -52,6 +62,8 @@ export function ProblemsCard({
   subtitle,
   metaLabel,
   columnLabels,
+  metricLabel,
+  medicationsMoreLabel,
   basisLabel,
   organizationLatestLabel,
   metricNeedsReviewLabel,
@@ -68,6 +80,7 @@ export function ProblemsCard({
   onNavigate,
 }: ProblemsCardProps) {
   const [showAll, setShowAll] = useState(false)
+  const [openMedications, setOpenMedications] = useState<ReadonlySet<number>>(new Set())
   const problems = result.problems ?? []
   if (problems.length === 0) return null
   const byKey = new Map(result.sourceIndex.map((source) => [source.key, source]))
@@ -96,14 +109,12 @@ export function ProblemsCard({
         </div>
       </div>
 
-      {/* @container: at panel width the row is a four-column table the eye can
-          scan down; narrower than that it stacks into two lines so neither the
-          metric nor the managing clinic gets squeezed to one word per line. */}
+      {/* @container: two columns from 34rem of card width, stacked below; in
+          between (28–34rem) the managing facility sits beside the name. */}
       <div className="@container">
-        <div className="hidden gap-x-2 border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[30rem]:grid @min-[30rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.1fr)_1rem]" data-problem-column-headings>
+        <div className="hidden gap-x-4 border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[34rem]:grid @min-[34rem]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-problem-column-headings>
           <span>{columnLabels.problem}</span>
           <span>{columnLabels.metric}</span>
-          <span>{columnLabels.care}</span>
         </div>
         <ul>
           {visible.map((problem, index) => {
@@ -122,6 +133,7 @@ export function ProblemsCard({
                   suspectKeys={suspectKeys}
                   suspectLabel={sourceTypeMismatchLabel}
                   onNavigate={onNavigate}
+                  tone="quiet"
                   className="ml-0.5"
                 />
               )
@@ -142,27 +154,42 @@ export function ProblemsCard({
             const managedByLine = [problem.managedBy, managedByDate]
               .filter(Boolean)
               .join(" · ")
+            const medicationItems = problem.medicationItems ?? []
+            const medicationsOpen = openMedications.has(index)
+            const shownMedications = medicationsOpen ? medicationItems : medicationItems.slice(0, INITIAL_MEDICATIONS)
+            const foldedMedications = medicationItems.length - shownMedications.length
+            const tag = (label: string) => (
+              <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
+                {label}
+              </span>
+            )
             return (
               <li
                 key={`${problem.label}-${index}`}
-                className="grid grid-cols-1 gap-x-2 gap-y-0.5 border-b border-border py-1.5 last:border-b-0 @min-[30rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.1fr)_1rem] @min-[30rem]:items-start"
+                className="grid grid-cols-1 gap-y-1 border-b border-border py-2 last:border-b-0 @min-[34rem]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] @min-[34rem]:gap-x-4"
               >
-                <div className="min-w-0">
-                  <p className="sr-only @min-[30rem]:hidden">{columnLabels.problem}</p>
-                  <p className="text-[0.8125rem] font-semibold leading-snug text-foreground break-words">
-                    {problem.label}
-                    {problem.inferredFromMedication ? (
-                      <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
-                        {medicationInferredLabel}
-                      </span>
+                <div className="min-w-0" data-problem-column="problem">
+                  <div className="flex flex-col @min-[28rem]:flex-row @min-[28rem]:items-baseline @min-[28rem]:justify-between @min-[28rem]:gap-3 @min-[34rem]:flex-col @min-[34rem]:items-stretch @min-[34rem]:gap-0">
+                    <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground break-words">
+                      {problem.label}
+                      {problem.inferredFromMedication ? tag(medicationInferredLabel) : null}
+                      {problem.singleUnassessedLab ? tag(singleValueLabel) : null}
+                      {problem.flag ? (
+                        <Flag
+                          className="ml-1 inline h-3 w-3 shrink-0 align-[-0.125em] text-amber-500 dark:text-amber-300"
+                          aria-label={verifyLabel}
+                        />
+                      ) : null}
+                      {perColumn && !problem.basis ? sup(problem.basisSourceKeys) : null}
+                      {perColumn ? null : sup(problem.sourceKeys)}
+                    </p>
+                    {managedByLine ? (
+                      <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words @min-[28rem]:shrink-0 @min-[28rem]:text-right @min-[34rem]:text-left" data-problem-managed-by>
+                        {managedByLine}
+                        {managedBySup}
+                      </p>
                     ) : null}
-                    {problem.singleUnassessedLab ? (
-                      <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
-                        {singleValueLabel}
-                      </span>
-                    ) : null}
-                    {perColumn && !problem.basis ? sup(problem.basisSourceKeys) : null}
-                  </p>
+                  </div>
                   {problem.basis ? (
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words">
                       <span className="text-muted-foreground/80">{basisLabel}</span>
@@ -171,52 +198,58 @@ export function ProblemsCard({
                     </p>
                   ) : null}
                 </div>
-                <div className="min-w-0" data-problem-column="metric">
-                  {problem.metric || problem.metricMeta ? (
-                    <p className="sr-only @min-[30rem]:hidden">{columnLabels.metric}</p>
-                  ) : null}
+                <div className="min-w-0 space-y-1" data-problem-column="metric">
                   {problem.metric ? (
-                    <p className="text-xs leading-snug text-foreground break-words">
+                    <p className="text-xs leading-snug tabular-nums text-foreground break-words">
+                      <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[34rem]:sr-only">{metricLabel}</span>
                       {problem.metric}
                       {problem.metricNeedsReview ? (
                         <span className="ml-1 inline-flex items-center rounded border border-amber-500/40 px-1 align-baseline text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300">
                           {metricNeedsReviewLabel}
                         </span>
                       ) : null}
+                      {problem.metricMeta ? (
+                        <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
+                      ) : null}
                       {perColumn ? sup(problem.metricSourceKeys) : null}
                     </p>
                   ) : null}
-                  {problem.metricMeta ? (
-                    <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words">
-                      {problem.metricMeta}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="min-w-0" data-problem-column="care">
-                  {managedByLine || problem.medications ? (
-                    <p className="sr-only @min-[30rem]:hidden">{columnLabels.care}</p>
-                  ) : null}
-                  {managedByLine ? (
-                    <p className="text-xs leading-snug text-foreground break-words">
-                      {managedByLine}
-                      {managedBySup}
-                    </p>
-                  ) : null}
-                  {problem.medications ? (
+                  {medicationItems.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1" data-problem-medications>
+                      {shownMedications.map((item) => (
+                        <span
+                          key={item.key}
+                          title={item.fullName}
+                          className="inline-block max-w-full truncate rounded-full border border-border bg-muted px-1.5 text-[0.6875rem] leading-[1.125rem] text-foreground"
+                          data-problem-medication
+                        >
+                          {item.name}
+                        </span>
+                      ))}
+                      {foldedMedications > 0 || (medicationsOpen && medicationItems.length > INITIAL_MEDICATIONS) ? (
+                        <button
+                          type="button"
+                          onClick={() => setOpenMedications((current) => {
+                            const next = new Set(current)
+                            if (next.has(index)) next.delete(index)
+                            else next.add(index)
+                            return next
+                          })}
+                          aria-expanded={medicationsOpen}
+                          className="relative rounded-full px-1 text-[0.6875rem] leading-[1.125rem] text-primary hover:text-primary/80 before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] lg:before:-inset-y-1"
+                        >
+                          {medicationsOpen ? showLessLabel : medicationsMoreLabel.replace("{count}", String(foldedMedications))}
+                        </button>
+                      ) : null}
+                      {perColumn ? sup(problem.medicationSourceKeys) : null}
+                    </div>
+                  ) : problem.medications ? (
+                    // A result from before per-medicine items: the joined names.
                     <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words">
                       {problem.medications}
                       {perColumn ? sup(problem.medicationSourceKeys) : null}
                     </p>
                   ) : null}
-                </div>
-                <div className="flex items-start gap-1 @min-[30rem]:justify-end">
-                  {problem.flag ? (
-                    <Flag
-                      className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300"
-                      aria-label={verifyLabel}
-                    />
-                  ) : null}
-                  {perColumn ? null : sup(problem.sourceKeys)}
                 </div>
               </li>
             )

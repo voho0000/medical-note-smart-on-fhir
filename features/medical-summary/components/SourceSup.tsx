@@ -29,9 +29,12 @@ interface SourceSupProps {
    *  `suspectLabel` so the mismatch is visible, not hidden. */
   suspectKeys?: ReadonlySet<string>
   suspectLabel?: string
+  /** 'quiet': a neutral outline instead of the violet pill, for dense rows
+   *  where many citations sit inside running text. Warnings stay amber. */
+  tone?: 'default' | 'quiet'
 }
 
-export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, className, suspectKeys, suspectLabel }: SourceSupProps) {
+export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, className, suspectKeys, suspectLabel, tone = 'default' }: SourceSupProps) {
   const locale = useOptionalLanguage()?.locale ?? 'zh-TW'
   const [open, setOpen] = useState(false)
   // Hover uses a small close delay so the pointer can travel into the bubble.
@@ -129,7 +132,9 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
             "touch-manipulation transition-transform active:scale-90",
             hasWarning
               ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-              : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-primary/30 dark:bg-primary/10 dark:text-primary dark:hover:bg-primary/15",
+              : tone === "quiet"
+                ? "border-border bg-transparent font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-primary/30 dark:bg-primary/10 dark:text-primary dark:hover:bg-primary/15",
             className,
           )}
         >

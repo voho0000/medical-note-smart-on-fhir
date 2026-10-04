@@ -81,6 +81,7 @@ import { reportNarrative } from '@/src/core/utils/report-narrative.utils'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
+import { formatIngredientStrength } from '@/src/shared/utils/medication-short-name'
 import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
 import { MAX_INVESTIGATION_TREND_POINTS } from '@/src/shared/utils/investigation-trend.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
@@ -1070,7 +1071,7 @@ const SHARED_RULES =
   'At most ~30 words: name problems, not a list of medicines or lab values, and never an ICD or any other code. ' +
   'For "problems" (問題清單與負責院所 — the complete problem list): ' + PROBLEM_INFERENCE_SYNTHESIS_RULE + ' ' + MEDICATION_INFERENCE_RULE +
   'Each problem is a plain condition NAME (e.g. "Type 2 diabetes mellitus" / 第二型糖尿病) — do NOT include ICD or any other codes. ' +
-  'Give each a SHORT "basis" phrase naming the evidence type and count (e.g. "5 abnormal lab results", "pharmacy dispensing", "care plan", "6 visit claims" / "5 次檢驗異常", "藥局調劑", "6 次就診申報"), the matching "kind", and the keys that establish it in "basisSources". ' +
+  'Give each a SHORT "basis" phrase — a few words naming the evidence type and count (e.g. "3 visits, I50.3", "2 ED visits, S72.002A; CT", "5 abnormal lab results", "pharmacy dispensing" / "3 次門診 I50.3", "藥局調劑"); do not write "with ICD" or repeat the medicines, which their own column lists — the matching "kind", and the keys that establish it in "basisSources". ' +
   '"metric" is the data-first key indicator for that problem, written values-first (e.g. "eGFR 33 → 32 ▼", "HbA1c 6.6% (single)" / "HbA1c 6.6% 單次"). When the cloud record holds no test that would show THIS problem, write "Not in cloud record: " followed by the name of that one test — IOP for glaucoma, post-void residual for urinary retention — never a test that belongs to another problem, and never when the sources of this row already hold that evidence; when no single test applies, leave "metric" out — never fill it with a diagnosis code or a visit date. An arrow "→" joins values of the SAME test on DIFFERENT dates only — never two modalities (a CT size and an ultrasound size), two sides of one study, or two values of one day. Write serial values oldest → newest and cite each record they come from in "metricSources" — the app shows the dates of those records, so write no dates. Say plainly when the cloud record holds no relevant test instead of inventing one. ' +
   '"managedBy" is the organization (plus specialty when the data shows one) that currently follows the problem, copied from the record — never guessed. Never a pharmacy (藥局): a pharmacy only dispenses what a hospital or clinic prescribed, so name the prescribing hospital or clinic, or leave managedBy out when the record does not show one. "managedByRef" is the catalog key of the LATEST encounter at that organization; the app renders its date, so do NOT write a date yourself. ' +
   '"medicationSources" lists the M keys of the medicines treating THAT problem only — the app writes their names from those records. Never list a medicine for a problem it does not treat: a medicine dispensed at the same visit as a diagnosis is NOT evidence that it treats that diagnosis — judge by the medicine itself (its ingredient and ATC class), and leave a medicine out when its use is unclear. "metric" is a value or finding, never a medicine. ' +
@@ -1170,6 +1171,7 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
     MEDICATION_INFERENCE_RULE +
     'Never turn a single unassessed lab value into a disease or poor-control problem; without a diagnosis code, name the finding and how long it is documented. ' +
     'This is the complete problem list. Order the list by clinical weight for the doctor about to prescribe: the reason for today\'s visit first when the data shows it; then conditions that are serious or change today\'s prescribing (e.g. cancer, heart failure, CKD, the reason for an anticoagulant, diabetes, the cause of a recent admission); then other chronic conditions; minor or symptom-level problems (e.g. constipation, insomnia, a one-off acute visit) last. A problem inferred from medicines is placed by what the condition is, not by how it was found. ' +
+    'Keep "basis" to a few words naming the evidence and count (e.g. "3 visits, I50.3", "2 ED visits, S72.002A; CT"); do not repeat the medicines, which their own column lists. ' +
     'Each column cites its own keys: basisSources for the condition, metricSources for the values in metric (oldest → newest), medicationSources for the M keys of the medicines treating it; the app writes dates and medicine names. managedBy copies an organization exactly as written and managedByRef is that organization\'s latest encounter key. ',
 }
 
@@ -2561,11 +2563,21 @@ export class GenerateMedicalSummaryUseCase {
       // 模型選、app 寫: with cited medication records the APP writes their
       // names (never clipped, never a name the record does not carry); with
       // cited values the APP writes their date span, oldest first.
-      const medicationNames = [...new Set(medicationKeys
+      const medicationEntries = medicationKeys
         .map((key) => byKey.get(key))
         .filter((entry): entry is SummarySourceCatalogEntry => Boolean(entry?.resourceType.startsWith('Medication')))
-        .map((entry) => entry.display.trim())
-        .filter(Boolean))]
+      const medicationNames = [...new Set(medicationEntries.map((entry) => entry.display.trim()).filter(Boolean))]
+      // One item per medicine for the row's tokens: the drug master's
+      // ingredient and strength when the record resolves to it, else the
+      // record's own name; the full name always travels with it.
+      const medicationItems: NonNullable<SummaryProblem['medicationItems']> = []
+      for (const entry of medicationEntries) {
+        const fullName = entry.display.trim()
+        if (!fullName) continue
+        const name = formatIngredientStrength(medicationById.get(entry.resourceId)?.drugTerminology?.ingredientText) ?? fullName
+        if (medicationItems.some((item) => item.name === name)) continue
+        medicationItems.push({ key: entry.key, name, fullName })
+      }
       const metricDates = metricKeys
         .map((key) => byKey.get(key)?.date)
         .filter((date): date is string => Boolean(date))
@@ -2615,6 +2627,7 @@ export class GenerateMedicalSummaryUseCase {
         medications: medicationNames.length > 0
           ? medicationNames.join('、')
           : p.medications?.trim() || undefined,
+        ...(medicationItems.length > 0 ? { medicationItems } : {}),
         flag: p.flag ?? false,
         ...(medicationOnly ? { inferredFromMedication: true as const } : {}),
         ...(singleUnassessedLab ? { singleUnassessedLab: true as const } : {}),

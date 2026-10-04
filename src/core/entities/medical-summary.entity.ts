@@ -393,6 +393,11 @@ export interface SummaryProblem {
   basisSourceKeys?: string[]
   metricSourceKeys?: string[]
   medicationSourceKeys?: string[]
+  /** The row's medicines one by one, app-written: `name` is the drug
+   *  master's ingredient and strength ("Acetaminophen 500 mg") when the
+   *  record resolves to it, else the record's own name; `fullName` is always
+   *  the record's name. `medications` keeps the joined record names. */
+  medicationItems?: Array<{ key: string; name: string; fullName: string }>
   /** The record behind "managedBy · date". */
   managedBySourceKey?: string
   /** 'organization': no visit for this problem or the named specialty was
