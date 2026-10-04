@@ -8,7 +8,7 @@
 // each token's title (owner, 2026-10-04).
 "use client"
 
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, Flag } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.entity"
@@ -231,8 +231,8 @@ export function ProblemsCard({
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0" data-problem-column="metric">
                   {problem.metric ? (
                     <div className="flex min-w-0 items-start gap-0.5 [grid-area:metric]">
-                      <p
-                        className="min-w-0 flex-1 text-xs leading-snug tabular-nums text-foreground break-words @min-[38rem]:line-clamp-2"
+                      <RowFillClamp
+                        className="min-w-0 flex-1 text-xs leading-snug tabular-nums text-foreground break-words"
                         title={problem.metric}
                       >
                         <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
@@ -257,7 +257,7 @@ export function ProblemsCard({
                         {problem.metricMeta ? (
                           <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
                         ) : null}
-                      </p>
+                      </RowFillClamp>
                       {/* Kept outside the two-line clamp: the review tag and
                           the citations must never be cut off. */}
                       {problem.metricNeedsReview ? (
@@ -345,5 +345,48 @@ export function ProblemsCard({
         ) : null}
       </div>
     </section>
+  )
+}
+
+/**
+ * The key values in the three-column layout: as many lines as the row already
+ * has room for (the care column's facility and tokens usually make it taller
+ * than two lines), never fewer than two, then an ellipsis. The row's height is
+ * set by the other columns, so filling it adds no height. Unclamped when the
+ * columns are stacked (the cell is display: contents).
+ */
+function RowFillClamp({ className, title, children }: { className: string; title?: string; children: ReactNode }) {
+  const ref = useRef<HTMLParagraphElement>(null)
+  const [lines, setLines] = useState<number | null>(2)
+  useLayoutEffect(() => {
+    const text = ref.current
+    const cell = text?.closest<HTMLElement>('[data-problem-column="metric"]')
+    const row = text?.closest<HTMLElement>("li")
+    if (!text || !cell || !row || typeof ResizeObserver === "undefined") return
+    const update = () => {
+      if (getComputedStyle(cell).display === "contents") {
+        setLines(null)
+        return
+      }
+      const lineHeight = parseFloat(getComputedStyle(text).lineHeight)
+      if (!Number.isFinite(lineHeight) || lineHeight <= 0) return
+      const rowStyle = getComputedStyle(row)
+      const room = row.clientHeight - parseFloat(rowStyle.paddingTop) - parseFloat(rowStyle.paddingBottom)
+      setLines(Math.max(2, Math.floor((room + 1) / lineHeight)))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [])
+  return (
+    <p
+      ref={ref}
+      className={className}
+      title={title}
+      style={lines ? { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: lines, overflow: "hidden" } : undefined}
+    >
+      {children}
+    </p>
   )
 }
