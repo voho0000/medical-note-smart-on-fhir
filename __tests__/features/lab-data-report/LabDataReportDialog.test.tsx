@@ -21,6 +21,8 @@ jest.mock('@/src/application/telemetry/launch-context', () => ({
 }))
 jest.mock('@/features/lab-data-report/utils/submit-lab-data-report', () => ({
   submitLabDataReport: jest.fn(),
+  testLabDataReportConnection: jest.fn(),
+  resolveInstitutionReportUrl: jest.fn(() => null),
 }))
 jest.mock('sonner', () => ({
   toast: { loading: jest.fn(() => 'report-toast'), success: jest.fn(), error: jest.fn() },
