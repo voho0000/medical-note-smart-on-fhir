@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { storedTimestampForDisplay } from '@/src/shared/contracts/cdss-stored-save-v2'
 import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '../telemetry/cdss-gateway'
 import { listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
 import { authorizeFhir, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
@@ -31,6 +32,29 @@ function SavedFields({ value, depth = 0 }: { value: unknown; depth?: number }) {
     <dt className="break-words text-muted-foreground">{fieldNames[key] ?? key}</dt>
     <dd className="min-w-0"><SavedFields value={item} depth={depth + 1} /></dd>
   </div>)}</dl>
+}
+
+function SavedRecommendation({ value, english }: { value: unknown; english: boolean }) {
+  const recommendation = object(value)
+  const title = text(recommendation.title)
+  const moduleName = text(recommendation.moduleName)
+  const fields = [
+    ['status', english ? 'Stored status' : '當時狀態'],
+    ['recommendation', english ? 'Recommendation' : '建議'],
+    ['rationale', english ? 'Rationale' : '判斷理由'],
+    ['patientEvidence', english ? 'Patient evidence' : '病人證據'],
+    ['missingData', english ? 'Missing data' : '缺少資料'],
+    ['nextActions', english ? 'Next actions' : '下一步'],
+    ['safetyBoundary', english ? 'Safety boundary' : '安全範圍'],
+  ] as const
+  return <section className="space-y-2 border-t border-border pt-2" data-testid="cdss-history-recommendation">
+    <h4 className="whitespace-pre-wrap break-words font-medium">{title || moduleName}</h4>
+    {title && moduleName && <p className="whitespace-pre-wrap break-words text-muted-foreground">{moduleName}</p>}
+    <dl className="space-y-2">{fields.map(([key, label]) => <div key={key} className="space-y-1">
+      <dt className="font-medium">{label}</dt>
+      <dd className="min-w-0"><SavedFields value={recommendation[key]} /></dd>
+    </div>)}</dl>
+  </section>
 }
 
 export function CdssStorageActions({ input, sourceRecords, english = false }: {
@@ -111,14 +135,10 @@ export function CdssStorageActions({ input, sourceRecords, english = false }: {
         {!loading && !error && selected && <article className="space-y-4 text-sm">
           <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setSelected(null)}>{english ? 'Back to records' : '返回清單'}</Button>
           <header><h3 className="font-semibold">{text(result.title) || selected.packId}</h3>
-            <p>{english ? 'Saved at: ' : '儲存時間：'}{new Date(selected.savedAt).toLocaleString(english ? 'en' : 'zh-TW')}</p>
+            <p>{english ? 'Saved at: ' : '儲存時間：'}{new Date(storedTimestampForDisplay(selected.savedAt)).toLocaleString(english ? 'en' : 'zh-TW')}</p>
             <p className="text-muted-foreground">{english ? 'Historical snapshot · clinician identity unverified' : '歷史快照・醫師身分尚未驗證'}</p></header>
           <p className="whitespace-pre-wrap break-words">{text(result.summary)}</p>
-          {recommendations.map((item, index) => { const recommendation = object(item); return <section key={index} className="space-y-1 border-t border-border pt-2">
-            <h4 className="font-medium">{text(recommendation.moduleName) || text(recommendation.title)}</h4>
-            <SavedFields value={recommendation.patientEvidence} />
-            <SavedFields value={recommendation.nextActions} />
-          </section> })}
+          {recommendations.map((item, index) => <SavedRecommendation key={index} value={item} english={english} />)}
           <details><summary className="min-h-[44px] cursor-pointer py-3 font-medium">{english ? 'Clinician inputs' : '人工輸入'}</summary><SavedFields value={selected.save.physician_inputs} /></details>
           <details><summary className="min-h-[44px] cursor-pointer py-3 font-medium">{english ? 'Clinician decisions' : '醫師決策'}</summary><SavedFields value={selected.save.physician_decisions} /></details>
         </article>}

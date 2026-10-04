@@ -56,13 +56,16 @@ test('unknown receipt shapes, mismatched patients and wrong save IDs are unavail
   const identity = await cdssPatientIdentity(patient)
   const save = { ...identity, schema_version: 2, save_id: saveId, saved_at: index.receivedAt, site: 'vghtpe',
     patient_session_id: saveId, pack_id: 'synthetic', app_version: '0.0.0', build_revision: 'unknown',
-    profile: {}, result: {}, physician_inputs: {}, physician_decisions: {}, source_records: [], events: [] }
+    profile: { facts: { synthetic: true } }, result: { packId: 'synthetic', packVersion: '1' },
+    physician_inputs: {}, physician_decisions: {}, source_records: [], events: [] }
   const detail = { ...index, savedAt: index.receivedAt, save }
   jest.mocked(fetch).mockResolvedValueOnce(response(detail))
   expect((await readCdssHistory(patient, saveId, new AbortController().signal)).save).toEqual(save)
   jest.mocked(fetch).mockResolvedValueOnce(response({ ...detail, save: { ...save, patient_key_sha256: 'b'.repeat(64) } }))
   await expect(readCdssHistory(patient, saveId, new AbortController().signal)).rejects.toThrow('cdss_history_unavailable')
   jest.mocked(fetch).mockResolvedValueOnce(response({ ...detail, saveId: '22222222-2222-4222-8222-222222222222' }))
+  await expect(readCdssHistory(patient, saveId, new AbortController().signal)).rejects.toThrow('cdss_history_unavailable')
+  jest.mocked(fetch).mockResolvedValueOnce(response({ ...detail, savedAt: '2026-10-04T00:00:00Z' }))
   await expect(readCdssHistory(patient, saveId, new AbortController().signal)).rejects.toThrow('cdss_history_unavailable')
 })
 

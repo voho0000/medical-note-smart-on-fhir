@@ -94,14 +94,44 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
   expect(detail.save).toEqual(writes[0])
   expect(detail.versionId).toBe('1')
   await expect(dialog.getByText('歷史快照・醫師身分尚未驗證')).toBeVisible()
+  const recommendations = dialog.getByTestId('cdss-history-recommendation')
+  expect(detail.save.result.recommendations.length).toBeGreaterThan(0)
+  await expect(recommendations).toHaveCount(detail.save.result.recommendations.length)
+  for (const [index, recommendation] of detail.save.result.recommendations.entries()) {
+    const section = recommendations.nth(index)
+    await expect(section.getByRole('heading', { level: 4 })).toHaveText(recommendation.title || recommendation.moduleName)
+    if (recommendation.title && recommendation.moduleName)
+      await expect(section.getByText(recommendation.moduleName, { exact: true }).first()).toBeVisible()
+    for (const [key, label] of [['status', '當時狀態'], ['recommendation', '建議'], ['rationale', '判斷理由'], ['safetyBoundary', '安全範圍']]) {
+      if (typeof recommendation[key] === 'string')
+        await expect(section.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(recommendation[key])
+    }
+    for (const [key, label] of [['missingData', '缺少資料'], ['nextActions', '下一步']]) {
+      const items = section.getByText(label, { exact: true }).locator('..').locator('dd li')
+      await expect(items).toHaveText(recommendation[key] ?? [])
+    }
+  }
   for (const width of [320, 390, 430, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width >= 768 ? 900 : 844 })
     await expect(dialog).toBeVisible()
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     await page.screenshot({ path: info.outputPath(`history-detail-${width}.png`) })
+    await recommendations.last().getByText('安全範圍', { exact: true }).scrollIntoViewIfNeeded()
+    await dialog.getByRole('button', { name: '關閉', exact: true }).scrollIntoViewIfNeeded()
+    await expect(dialog.getByRole('button', { name: '關閉', exact: true })).toBeInViewport()
+    await page.screenshot({ path: info.outputPath(`history-bottom-${width}.png`) })
+    await dialog.evaluate(element => { element.scrollTop = 0 })
   }
   await page.setViewportSize({ width: 844, height: 390 })
+  await expect.poll(async () => {
+    const bounds = await dialog.boundingBox()
+    return bounds !== null && bounds.y >= 0 && bounds.y + bounds.height <= 390
+  }).toBe(true)
+  await expect(dialog.getByRole('button', { name: '返回清單', exact: true })).toBeInViewport()
   await page.screenshot({ path: info.outputPath('history-landscape.png') })
+  await dialog.getByRole('button', { name: '關閉', exact: true }).scrollIntoViewIfNeeded()
+  await expect(dialog.getByRole('button', { name: '關閉', exact: true })).toBeInViewport()
+  await page.screenshot({ path: info.outputPath('history-landscape-bottom.png') })
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
   expect(writes).toHaveLength(1)

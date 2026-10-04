@@ -8,6 +8,10 @@
 
 歷史清單最近10筆／hasMore，單筆驗UUID、病人hash、pack與大小；唯讀原快照，不重新評估或寫回當次answer stores。標示醫師身分未驗證；不另存localStorage/IndexedDB、不執行HTML。可見臨床tab／卡片／既有控制保留。
 
+歷史使用獨立、固定的 `src/shared/contracts/cdss-stored-save-v2.ts`，對齊 FHIR backend 的 `src/contract-v2.mjs`，不引用最新寫入 schema。v2 保留舊版 UUID 字面格式、分鐘精度與 `+0800` 等時間格式；日期、JSON 節點數／深度、4MiB、臨床快照結構及未知版本仍驗證。快照及事件中的原始 UUID／時間不改寫，只有畫面日期轉換副本以供顯示。單筆 envelope 的 savedAt 必須等於快照 saved_at。
+
+歷史建議以唯讀方式呈現儲存的 title、moduleName、status、recommendation、rationale、patientEvidence、missingData、nextActions、safetyBoundary；人工輸入與決策仍可展開。這些是當時結果，調閱不重跑現有規則、不覆盖目前評估。讀取相容性不放寬新寫入規格；未來新格式需另增 reader。
+
 ## 建置設定
 
 ```text
@@ -54,4 +58,4 @@ node node_modules/@playwright/test/cli.js test --config playwright.fhir.config.t
 
 專用profile使用localhost3007，不借用devserver；關閉trace/video以免記錄token/帳密。只有成功授權後的App與歷史快照畫面截圖，不截登入密碼或callback URL。預設e2e跳過本機專用測試。
 
-Jest驗hash/遮蔽/retry/準備中取消、來源、history錯病人/UUID/size及LiveFeature；真實Chromium在兩模式儲存→201→history→同snapshot/version1，手機320/390/430、平板768、桌面1024/1440與橫向檢查。VM容量、專屬HTTPS、開機/登出/>72h/備份還原仍待FHIR VM-ACCEPTANCE.md實機執行。正式病人、醫師綁定與EMR寫回延後。
+Jest驗hash/遮蔽/retry/準備中取消、來源、history錯病人/UUID/size及LiveFeature；`cdss-history-detail.test.tsx` 驗後端支援的舊版 UUID／時間／事件格式、快照原樣保留、損壞資料拒絕、最新 writer 仍維持限制，以及中英文歷史建議完整顯示且不發儲存請求。真實Chromium在两模式儲存→201→history→同snapshot/version1，亦核對畫面中的建議各欄位與實際儲存內容，手機320/390/430、平板768、桌面1024/1440與橫向檢查。VM容量、專屬HTTPS、開機/登出/>72h/備份還原仍待FHIR VM-ACCEPTANCE.md實機執行。正式病人、醫師綁定與EMR寫回延後。

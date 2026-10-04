@@ -4,16 +4,16 @@ import { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { isCollectorSite } from '@/src/application/telemetry/collector'
 import { fhirAccessToken } from './fhir-auth'
-import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
+import { parseStoredCdssSaveV2, storedTimestampV2, storedUuidV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
 import { cdssPatientIdentity } from './patient-identity'
 import { cdssEndpoint } from './cdss-gateway'
 
-const index = z.object({ saveId: z.string().regex(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i),
+const index = z.object({ saveId: storedUuidV2,
   documentId: z.string().regex(/^[A-Za-z0-9.-]{1,64}$/), patientId: z.string().regex(/^[A-Za-z0-9.-]{1,64}$/),
   receivedAt: z.string().datetime({ offset: true }), packId: z.string().min(1).max(80),
   versionId: z.string().max(64).nullable() }).strict()
 const list = z.object({ records: z.array(index).max(10), hasMore: z.boolean() }).strict()
-const record = index.extend({ savedAt: z.string().datetime({ offset: true }), save: cdssGatewaySaveSchema })
+const record = index.extend({ savedAt: storedTimestampV2, save: z.unknown().transform(parseStoredCdssSaveV2) })
 export type CdssHistoryList = z.infer<typeof list>
 export type CdssHistoryRecord = z.infer<typeof record>
 
@@ -58,6 +58,6 @@ export async function readCdssHistory(patient: PatientEntity, saveId: string, si
   const parsed = record.parse(data)
   if (parsed.saveId !== saveId || parsed.save.save_id !== saveId || parsed.save.site !== key.site ||
       parsed.save.patient_key_version !== key.patient_key_version || parsed.save.patient_key_sha256 !== key.patient_key_sha256 ||
-      parsed.packId !== parsed.save.pack_id) throw new Error('cdss_history_unavailable')
+      parsed.packId !== parsed.save.pack_id || parsed.savedAt !== parsed.save.saved_at) throw new Error('cdss_history_unavailable')
   return parsed
 }
