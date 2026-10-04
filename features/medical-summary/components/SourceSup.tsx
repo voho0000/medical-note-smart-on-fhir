@@ -141,7 +141,11 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
           {hasWarning ? (
             <CircleAlert className="mr-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
           ) : null}
-          {sources.map((s) => s.num).join(",")}
+          {/* A quiet pill in a dense row abbreviates a long list ("5 +5");
+              the popover and the accessible name still list every source. */}
+          {tone === "quiet" && sources.length > 3
+            ? `${sources[0].num} +${sources.length - 1}`
+            : sources.map((s) => s.num).join(",")}
         </sup>
       </PopoverTrigger>
       <PopoverContent

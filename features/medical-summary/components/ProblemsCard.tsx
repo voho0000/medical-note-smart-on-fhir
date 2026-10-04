@@ -116,12 +116,20 @@ export function ProblemsCard({
           same cells dissolve (display: contents) into layered rows — name and
           facility on one line from 28rem, everything stacked under it. */}
       <div className="@container">
-        <div className="hidden gap-x-3 border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[38rem]:grid @min-[38rem]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,1.35fr)]" data-problem-column-headings>
-          <span>{columnLabels.problem}</span>
-          <span>{columnLabels.metric}</span>
-          <span>{columnLabels.care}</span>
-        </div>
-        <ul>
+        {/* One grid for the whole list in the three-column layout, each row a
+            subgrid: the columns are sized by every row's content together —
+            the care column only as wide as its facility and medicines need
+            (up to 14rem), the rest shared by the problem (at least 11rem) and the key values — and still line up. */}
+        <ul className="@min-[38rem]:grid @min-[38rem]:grid-cols-[minmax(11rem,1fr)_minmax(0,1.15fr)_fit-content(14rem)] @min-[38rem]:gap-x-3">
+          <li
+            aria-hidden="true"
+            className="hidden border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[38rem]:col-span-3 @min-[38rem]:grid @min-[38rem]:grid-cols-subgrid"
+            data-problem-column-headings
+          >
+            <span>{columnLabels.problem}</span>
+            <span>{columnLabels.metric}</span>
+            <span>{columnLabels.care}</span>
+          </li>
           {visible.map((problem, index) => {
             // Finalize-detected evidence-type mismatches (依據:心電圖 citing a
             // chest X-ray) tint that citation amber instead of hiding it.
@@ -192,7 +200,7 @@ export function ProblemsCard({
                   "grid gap-x-3 gap-y-0.5 border-b border-border py-1.5 last:border-b-0",
                   "grid-cols-1 [grid-template-areas:'name'_'org'_'basis'_'metric'_'meds']",
                   "@min-[28rem]:grid-cols-[minmax(0,1fr)_auto] @min-[28rem]:[grid-template-areas:'name_org'_'basis_basis'_'metric_metric'_'meds_meds']",
-                  "@min-[38rem]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,1.35fr)] @min-[38rem]:[grid-template-areas:none] @min-[38rem]:items-start",
+                  "@min-[38rem]:col-span-3 @min-[38rem]:grid-cols-subgrid @min-[38rem]:[grid-template-areas:none] @min-[38rem]:items-start",
                 )}
               >
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0" data-problem-column="problem">
