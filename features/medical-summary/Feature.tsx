@@ -428,11 +428,17 @@ export default function MedicalSummaryFeature() {
   // (owner, 2026-10-03). Judged on the loaded chart, never on the summary's
   // scope: reports the user left out of the summary are not "none".
   const sourceClinicalData = useClinicalData()
+  const isMedcloudChart = useMemo(
+    () => detectClinicalDataSource(
+      sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0],
+    ) === 'nhi-medcloud',
+    [sourceClinicalData],
+  )
   const reportsNoneLabel = useMemo(() => {
-    const chart = sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0] & { diagnosticReports?: DiagnosticReportEntity[] }
-    if (detectClinicalDataSource(chart) !== 'nhi-medcloud') return undefined
+    if (!isMedcloudChart) return undefined
+    const chart = sourceClinicalData as unknown as { diagnosticReports?: DiagnosticReportEntity[] }
     return (chart.diagnosticReports ?? []).some(isAiScopeReport) ? undefined : ms.reportsNoneMedcloudYear
-  }, [sourceClinicalData, ms.reportsNoneMedcloudYear])
+  }, [isMedcloudChart, sourceClinicalData, ms.reportsNoneMedcloudYear])
 
   // 「依據資料已逾 1 年」: judged at render against the clinical reference date
   // (the demo's own as-of date for demo data), so cached results carry it too.
@@ -927,6 +933,7 @@ export default function MedicalSummaryFeature() {
                 inferredLabel={ms.problemManagedByInferred}
                 medicationInferredLabel={ms.problemInferredFromMedication}
                 singleValueLabel={ms.problemSingleUnassessedLab}
+                medicationReviewLabel={ms.problemMedicationReview}
                 verifyLabel={ms.verifyFlag}
                 legendLabel={ms.problemsLegend}
                 showAllLabel={ms.problemsShowAll}
@@ -962,6 +969,7 @@ export default function MedicalSummaryFeature() {
                   hiddenPointsNote: ms.reportsHiddenPointsNote,
                   conclusionTag: ms.reportsConclusionTag,
                   openingTag: ms.reportsOpeningTag,
+                  moreSources: ms.reportsMoreSources,
                   noReports: reportsNoneLabel,
                 }}
                 onNavigate={navigateToResource}
@@ -994,7 +1002,7 @@ export default function MedicalSummaryFeature() {
                 encounters: ms.coverageEncounters,
                 medications: ms.coverageMeds,
                 labs: ms.coverageLabs,
-                boundary: ms.coverageBoundary,
+                boundary: isMedcloudChart ? ms.coverageBoundaryMedcloud : ms.coverageBoundary,
               }}
               statsVisible={false}
             />

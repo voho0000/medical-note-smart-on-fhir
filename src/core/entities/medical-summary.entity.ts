@@ -37,8 +37,18 @@ const clampedText = (max: number) =>
   z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
 const clampedLineText = (max: number) =>
   z.string().min(1).transform((s) => clampLine(s.trim(), max))
-const optionalClampedLineText = (max: number) =>
-  z.string().transform((s) => clampLine(s.trim(), max)).optional()
+/** An optional one-line field a small model sometimes writes as a list
+ * (VGHBrain wrote "metric": [] on 2026-10-05, which rejected the whole
+ * problem list) or as null: an empty list or null is no value, items join. */
+const optionalClampedLineTextOrList = (max: number) =>
+  z.union([z.string(), z.array(z.string()), z.null()])
+    .transform((value) => {
+      const text = Array.isArray(value)
+        ? value.map((item) => item.trim()).filter(Boolean).join('; ')
+        : (value ?? '').trim()
+      return text ? clampLine(text, max) : undefined
+    })
+    .optional()
 /** A free-text list field some models emit as a JSON array of strings
  * (Qwen 3.6 writes problems.medications as ["A", "B"]). Both shapes carry the
  * same content; join instead of rejecting the whole card. */
@@ -82,15 +92,15 @@ const optionalDocumentEvidence = () =>
 export const SummaryProblemSchema = z.object({
   label: clampedLineText(120),
   /** Short human-readable basis, e.g. "5 次檢驗異常" / "藥局調劑". */
-  basis: optionalClampedLineText(80),
+  basis: optionalClampedLineTextOrList(80),
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
   /** Data-first key indicator, e.g. "eGFR 33 → 32 ▼". */
-  metric: optionalClampedLineText(120),
+  metric: optionalClampedLineTextOrList(120),
   /** Dates/units belonging to `metric`, rendered as its meta line. */
-  metricMeta: optionalClampedLineText(120),
+  metricMeta: optionalClampedLineTextOrList(120),
   /** Organization + specialty as visible in the data (never invented). */
-  managedBy: optionalClampedLineText(80),
+  managedBy: optionalClampedLineTextOrList(80),
   /** Catalog key of the latest encounter at that organization. The APP reads
    *  its date — the model never writes a date for this row. */
   managedByRef: z.string().optional(),
@@ -344,6 +354,11 @@ export interface SummarySourceCatalogEntry {
   getContentText?: () => string
   /** Only set for Encounter entries whose class is recognisable. */
   encounterClass?: EncounterClass
+  /** Medication entries only: the ingredient and the ATC pharmacological
+   *  subgroup from the drug master ("donepezil · N06D ANTI-DEMENTIA DRUGS"),
+   *  printed beside the key so a medicine is chosen by what it is, not by the
+   *  dispensing batch it sits in. */
+  medicationClass?: string
 }
 
 /** A cited source resolved against the catalog. `verified: false` means the
@@ -398,6 +413,9 @@ export interface SummaryProblem {
    *  record resolves to it, else the record's own name; `fullName` is always
    *  the record's name. `medications` keeps the joined record names. */
   medicationItems?: Array<{ key: string; name: string; fullName: string }>
+  /** Keys of `medicationItems` whose ATC class clearly does not treat this
+   *  problem (medicationFitsProblem): shown 待核對, never removed. */
+  medicationReviewKeys?: string[]
   /** An app-written lab metric in pieces, present only when one of its values
    *  is abnormal: each value carries its own record's flag (source
    *  interpretation, else an audited reference range). Joined, the pieces are

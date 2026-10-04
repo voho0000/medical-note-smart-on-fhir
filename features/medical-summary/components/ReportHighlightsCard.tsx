@@ -24,6 +24,8 @@ import { useOptionalLanguage } from "@/src/application/providers/language.provid
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 
 const HAN = /[㐀-鿿]/
+/** Report chips a point shows before "+N". */
+const CHIPS_SHOWN = 2
 
 /** Quote marks that match the quote's own script — a quote stays in the
  *  report's original language, whatever the interface language is. */
@@ -63,6 +65,8 @@ export interface ReportHighlightsCardLabels {
   hiddenPointsNote: string
   conclusionTag: string
   openingTag: string
+  /** "{count}" — accessible name of the "+N" that shows a point's other reports. */
+  moreSources: string
   /** Said when the scope holds no imaging or pathology report at all, e.g.
    *  「過去一年無檢查報告」 for a 雲端病歷 year; without it the section is
    *  not drawn. */
@@ -148,6 +152,29 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
       >
         {label}
       </button>
+    )
+  }
+
+  // A finding seen on many serial studies would line up a chip per study
+  // ("MRI 07-08" ×8): the first few, the rest one click away.
+  const chips = (id: string, sources: ReportFindingSource[], quotes?: ReportFindingPoint["quotes"]) => {
+    const open = openPoints.has(id)
+    const hidden = sources.length - CHIPS_SHOWN
+    return (
+      <>
+        {(open ? sources : sources.slice(0, CHIPS_SHOWN)).map((source) => chip(source, quotes))}
+        {!open && hidden > 0 ? (
+          <button
+            type="button"
+            onClick={() => togglePoint(id)}
+            aria-label={labels.moreSources.replace("{count}", String(hidden))}
+            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[0.6875rem] leading-[1.125rem] tabular-nums text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
+            data-report-more-sources
+          >
+            +{hidden}
+          </button>
+        ) : null}
+      </>
     )
   }
 
@@ -274,7 +301,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                                 {point.text}
                               </span>
                             )}
-                            {point.sources.map((source) => chip(source, point.quotes))}
+                            {chips(id, point.sources, point.quotes)}
                           </p>
                           {open && !showAsQuote ? (
                             <ul className="mt-0.5 space-y-0.5 border-l border-border pl-2">
@@ -322,7 +349,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                   {labels.unverifiedTag}
                 </span>
                 {point.text}
-                {point.sources.map((source) => chip(source))}
+                {chips(`unverified-${index}`, point.sources)}
               </li>
             ))}
           </ul>

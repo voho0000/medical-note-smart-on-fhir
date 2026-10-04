@@ -42,6 +42,8 @@ interface ProblemsCardProps {
   medicationInferredLabel: string
   /** Tag on a lab problem resting on one unassessed value, e.g. 單次數值. */
   singleValueLabel: string
+  /** Why a medicine token carries the 待核對 flag, e.g. 藥物分類與此問題不符，待核對. */
+  medicationReviewLabel: string
   verifyLabel: string
   legendLabel: string
   showAllLabel: string
@@ -76,6 +78,7 @@ export function ProblemsCard({
   inferredLabel,
   medicationInferredLabel,
   singleValueLabel,
+  medicationReviewLabel,
   verifyLabel,
   legendLabel,
   showAllLabel,
@@ -291,18 +294,33 @@ export function ProblemsCard({
                       {medicationItems.map((item, itemIndex) => {
                         if (!medicationsOpen && itemIndex >= INITIAL_MEDICATIONS) return null
                         // Each token opens its own record; the record's full
-                        // name stays in the title.
+                        // name stays in the title. A medicine whose class does
+                        // not treat this problem carries the 待核對 flag.
+                        const review = problem.medicationReviewKeys?.includes(item.key) ?? false
                         return (
                           <span
                             key={item.key}
-                            title={item.fullName}
+                            title={review ? `${item.fullName} — ${medicationReviewLabel}` : item.fullName}
                             className={cn(
-                              "inline-block max-w-full truncate rounded-full border border-border bg-muted text-[0.6875rem] leading-[1.125rem] text-foreground",
+                              "inline-block max-w-full truncate rounded-full border bg-muted text-[0.6875rem] leading-[1.125rem] text-foreground",
+                              review ? "border-amber-500/60" : "border-border",
                               !medicationsOpen && itemIndex >= INITIAL_MEDICATIONS_WIDE && "@min-[38rem]:hidden",
                             )}
                             data-problem-medication
+                            data-medication-review={review || undefined}
                           >
-                            {cited([item.key], item.name, "token", "block truncate rounded-full px-1.5")}
+                            {cited(
+                              [item.key],
+                              review ? (
+                                <>
+                                  <Flag className="mr-0.5 inline h-2.5 w-2.5 align-[-0.1em] text-amber-500 dark:text-amber-300" aria-hidden="true" />
+                                  {item.name}
+                                  <span className="sr-only">（{medicationReviewLabel}）</span>
+                                </>
+                              ) : item.name,
+                              "token",
+                              "block truncate rounded-full px-1.5",
+                            )}
                           </span>
                         )
                       })}

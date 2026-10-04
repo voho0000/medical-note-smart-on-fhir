@@ -31,6 +31,7 @@ const LABELS = {
   hiddenPointsNote: ms.reportsHiddenPointsNote,
   conclusionTag: ms.reportsConclusionTag,
   openingTag: ms.reportsOpeningTag,
+  moreSources: ms.reportsMoreSources,
 }
 
 const source = (key: string, kind: ReportFindingSource['kind'], date: string): ReportFindingSource => ({
@@ -266,5 +267,24 @@ describe('ReportHighlightsCard — repeated original wording', () => {
     const { container } = render(<ReportHighlightsCard highlights={highlights} labels={LABELS} />)
     expect(screen.getAllByText('“Anteroseptal infarct, age undetermined”')).toHaveLength(1)
     expect(container.querySelectorAll('[data-report-organ="heart"] [data-report-chip]')).toHaveLength(2)
+  })
+})
+
+describe('ReportHighlightsCard — many serial studies on one finding', () => {
+  it('shows the first two report chips and folds the rest behind +N', () => {
+    const mri = ['2026-07-08', '2026-07-08', '2026-04-17', '2026-04-17', '2026-01-20'].map((date, index) => source(`L${10 + index}`, 'mri', date))
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          groups: [{ organ: 'brain', label: '腦', points: [{ text: 'No active brain metastasis', displayAs: 'text', quotes: [{ key: 'L10', quote: 'No definite active brain metastasis.' }], sources: mri }] }],
+        }}
+        labels={LABELS}
+        onNavigate={jest.fn()}
+      />,
+    )
+    expect(container.querySelectorAll('[data-report-chip]')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: ms.reportsMoreSources.replace('{count}', '3') }))
+    expect(container.querySelectorAll('[data-report-chip]')).toHaveLength(5)
   })
 })

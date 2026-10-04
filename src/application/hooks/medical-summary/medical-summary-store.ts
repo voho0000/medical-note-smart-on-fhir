@@ -15,7 +15,9 @@ export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 // A v16 entry carries 開藥前必看, 就診主因, 最近 90 天 and the per-report
 // highlight list, none of which renders any more, so it must not be restored;
 // older entries intentionally regenerate.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary33', scanKey)
+// v18: problem rows carry medicationReviewKeys (a medicine whose class does
+// not treat the row, tagged 待核對), written at finalize; a v17 entry lacks it.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary34', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

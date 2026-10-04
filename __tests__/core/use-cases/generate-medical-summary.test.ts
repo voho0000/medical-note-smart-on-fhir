@@ -905,7 +905,8 @@ describe('初診快覽 prompt contract', () => {
     for (const profile of [undefined, 'local-small'] as const) {
       const medcloud = system('nhi-medcloud', profile)
       expect(medcloud).toContain('NHI MediCloud (雲端病歷)')
-      expect(medcloud).toContain("is that visit's PRIMARY diagnosis")
+      expect(medcloud).toContain("provides only each visit's primary diagnosis code")
+      expect(medcloud).toContain('it can be used as the diagnosis')
       expect(medcloud).not.toContain('健康存摺')
       expect(medcloud).not.toContain('{{')
       const healthBank = system('nhi-health-bank', profile)
@@ -938,9 +939,10 @@ describe('初診快覽 prompt contract', () => {
 
   it('retains the anti-hallucination contract the six-card layout established', () => {
     const content = useCase.buildBatchModuleMessages({ ...promptInput, dataSource: 'nhi-medcloud' })[0].content
-    // Owner decision 2026-10-03: a visit's code is its primary diagnosis and
-    // is released plainly; citations must still be condition-specific.
-    expect(content).toContain('is that visit\'s PRIMARY diagnosis')
+    // Owner decisions 2026-10-03/05: a 雲端病歷 visit carries only its primary
+    // diagnosis code, which can be used as the diagnosis; citations must still
+    // be condition-specific.
+    expect(content).toContain('it can be used as the diagnosis')
     expect(content).not.toContain('are BILLING codes')
     expect(content).toContain('MUST be CONDITION-SPECIFIC')
     expect(content).toContain('Temporal honesty')
@@ -1566,6 +1568,27 @@ describe('finalizeResult', () => {
       { key: key('m-1'), name: 'Tramadol HCl 50 mg', fullName: expect.stringContaining('DEMO-TRAMED') },
       { key: key('m-2'), name: 'Demo Plain Tablet', fullName: 'Demo Plain Tablet' },
     ])
+  })
+
+  it('keeps a medicine whose class treats something else on the row, tagged for review', () => {
+    const med = (id: string, text: string, atcCode: string) => ({
+      id, status: 'active', authoredOn: '2026-08-27', medicationCodeableConcept: { text },
+      drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's', atcCode },
+    })
+    const medData = {
+      medications: [
+        med('eye', 'DEMO-XALA EYE DROPS', 'S01EE01'),
+        med('dementia', 'DEMO-DONE TABLETS 5MG', 'N06DA02'),
+      ],
+    } as any
+    const medCatalog = buildSourceCatalog(medData)
+    const key = (id: string) => medCatalog.find((entry) => entry.resourceId === id)!.key
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [{ label: 'Primary open-angle glaucoma', kind: 'diagnosis', medicationSources: [key('eye'), key('dementia')] }],
+    }, medCatalog, { clinicalData: medData })
+    expect(result.problems[0].medicationItems?.map((item) => item.key)).toEqual([key('eye'), key('dementia')])
+    expect(result.problems[0].medicationReviewKeys).toEqual([key('dementia')])
   })
 
   it('leaves the metric empty for N/A, a medicine name, a code or a visit date', () => {

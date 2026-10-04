@@ -264,7 +264,7 @@ export class GenerateSafetyAlertsUseCase {
         ? '\n\nSOURCE LIST (cite these keys in "sources"):\n' +
           input.catalog
             .map((c) =>
-              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display]
+              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display, c.medicationClass ?? '']
                 .filter(Boolean)
                 .join(' | ')}`,
             )

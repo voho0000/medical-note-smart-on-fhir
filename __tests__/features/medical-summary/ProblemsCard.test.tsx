@@ -37,6 +37,7 @@ function renderCard(problem: SummaryProblem) {
       inferredLabel="由慢箋推定"
       medicationInferredLabel="用藥推定"
       singleValueLabel="單次數值"
+      medicationReviewLabel="藥物分類與此問題不符，待核對"
       verifyLabel="待核對"
       legendLabel="= 待核對"
       showAllLabel="顯示全部 {count} 項"
@@ -168,5 +169,20 @@ describe('ProblemsCard', () => {
     expect(flagged).toHaveClass('text-clinical-abnormal')
     expect(flagged).toHaveTextContent('467↑（偏高）')
     expect(container.querySelectorAll('[data-metric-abnormal]')).toHaveLength(1)
+  })
+})
+
+describe('ProblemsCard medicine review', () => {
+  it('flags a medicine whose class does not fit the problem, and still shows it', () => {
+    const { container } = renderCard({
+      label: 'Primary open-angle glaucoma', kind: 'diagnosis', sourceKeys: ['M1'],
+      medicationSourceKeys: ['M1'],
+      medicationItems: [{ key: 'M1', name: 'Metformin 500 mg', fullName: 'Metformin 500mg' }],
+      medicationReviewKeys: ['M1'],
+    })
+    const token = container.querySelector('[data-problem-medication]')!
+    expect(token).toHaveAttribute('data-medication-review', 'true')
+    expect(token).toHaveAttribute('title', expect.stringContaining('藥物分類與此問題不符'))
+    expect(token).toHaveTextContent('Metformin 500 mg（藥物分類與此問題不符，待核對）')
   })
 })

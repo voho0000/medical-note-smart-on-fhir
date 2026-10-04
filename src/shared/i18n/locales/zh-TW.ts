@@ -369,6 +369,7 @@ export const zhTW = {
     coverageMeds: '用藥 {count}',
     coverageLabs: '檢驗 {count}',
     coverageBoundary: '健康存摺涵蓋邊界：自費項目不含；部分院所檢驗值未上傳；最近數週就醫可能尚未出現。本摘要非完整病歷。',
+    coverageBoundaryMedcloud: '雲端病歷涵蓋邊界：約近一年的跨院申報與調劑紀錄；自費項目不含；部分院所檢驗值未上傳；最近數週就醫可能尚未出現。本摘要非完整病歷。',
     secondLayerNote: '原始 FHIR 資源保留於左側面板，作為第二層證據視圖，供稽核。',
     summaryGenerationProvenance: '由 {model} 於 {time} 產生',
     summaryGenerationProvenanceWithDuration: '由 {model} 於 {time} 產生，總耗時 {duration}',
@@ -427,6 +428,7 @@ export const zhTW = {
     problemManagedByInferred: '由慢箋推定',
     problemInferredFromMedication: '用藥推定',
     problemSingleUnassessedLab: '單次數值',
+    problemMedicationReview: '藥物分類與此問題不符，待核對',
     // 影像與病理重點 — 依器官整理的重點；每項都有逐字核對過的原文引句
     reportsTitle: '影像與病理重點',
     // English, like the findings they label (owner decision 2026-10-02).
@@ -453,6 +455,7 @@ export const zhTW = {
     reportsHiddenPointsNote: '以下是 AI 的原始整理，未通過原文比對，僅供參考；請點報告看原文。',
     reportsConclusionTag: '結論段',
     reportsOpeningTag: '原文開頭',
+    reportsMoreSources: '顯示其餘 {count} 份報告',
     // 民眾版覆蓋 — 定位是「幫你看懂自己的健康存摺」。
     patient: {
       title: '我的健康摘要',
@@ -473,6 +476,7 @@ export const zhTW = {
       regenerate: '重新產生',
       generating: 'AI 整理中…',
       coverageBoundary: '這份摘要來自您的健康存摺（健保就醫紀錄）。自費項目與最近幾週的就醫，可能還沒有出現在裡面。',
+      coverageBoundaryMedcloud: '這份摘要來自您的健保雲端病歷（約近一年的就醫紀錄）。自費項目與最近幾週的就醫，可能還沒有出現在裡面。',
       secondLayerNote: '此頁由 AI 整理，實際病情與治療安排請以醫療團隊的說明為準。',
       sourceTypes: {
         Encounter: '就醫紀錄',
