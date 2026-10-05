@@ -201,3 +201,47 @@ test.each([false, true])('history de-identification rejection explains how to re
   expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項')
   view.unmount()
 })
+
+
+test('switching the same patient to a de-identified source clears visible history', async () => {
+  jest.mocked(listCdssHistory).mockReset().mockResolvedValueOnce({ records: [{ saveId: '11111111-1111-4111-8111-111111111111', documentId: '1', patientId: '2', receivedAt: '2026-10-03T00:00:00Z', packId: 'synthetic', versionId: '1' }], hasMore: false })
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  await screen.findByRole('button', { name: /synthetic/ })
+  view.rerender(<CdssStorageActions input={{ ...input, patient: { ...input.patient, deidentified: true } }} sourceRecords={() => []} />)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /synthetic/ })).not.toBeInTheDocument()
+  view.unmount()
+})
+
+
+test('switching the same patient to de-identified cancels pending save notifications', async () => {
+  jest.clearAllMocks()
+  let complete!: () => void
+  jest.mocked(saveCdssSnapshot).mockImplementation(() => new Promise<void>(resolve => { complete = resolve }))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  view.rerender(<CdssStorageActions input={{ ...input, patient: { ...input.patient, deidentified: true } }} sourceRecords={() => []} />)
+  expect(cancelCdssGatewayRequests).toHaveBeenCalledTimes(1)
+  await act(async () => complete())
+  expect(toast.success).not.toHaveBeenCalled()
+  expect(toast.error).not.toHaveBeenCalled()
+  view.unmount()
+})
+
+test('switching the same patient to de-identified cancels a pending history lookup', async () => {
+  let signal!: AbortSignal
+  let complete!: (result: Awaited<ReturnType<typeof listCdssHistory>>) => void
+  jest.mocked(listCdssHistory).mockImplementation((_patient, requestSignal) => {
+    signal = requestSignal
+    return new Promise(resolve => { complete = resolve })
+  })
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  view.rerender(<CdssStorageActions input={{ ...input, patient: { ...input.patient, deidentified: true } }} sourceRecords={() => []} />)
+  expect(signal.aborted).toBe(true)
+  await act(async () => complete({ records: [], hasMore: false }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByText('尚無儲存紀錄。')).not.toBeInTheDocument()
+  view.unmount()
+})

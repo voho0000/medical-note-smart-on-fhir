@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { isDeidentifiedPatient } from '@/src/core/entities/patient.entity'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -73,7 +74,7 @@ export function CdssStorageActions(props: StorageProps) {
   // Provider loading also includes Firestore profile writes; a known account can already authorize FHIR.
   const { user } = useAuth()
   const ownerUid = user?.uid
-  return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid])} {...props} ownerUid={ownerUid} />
+  return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
 }
 
 function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid }: StorageProps & { ownerUid?: string }) {
