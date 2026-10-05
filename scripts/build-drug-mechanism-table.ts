@@ -21,7 +21,6 @@
 // Sends only ATC codes and ingredient names; every response is cached.
 
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalizeIngredient, splitIngredients } from '../src/core/utils/ingredient-name.utils'
@@ -31,7 +30,12 @@ const TERMINOLOGY_DIR = path.join(ROOT, 'vendor/nhi-fhir-bridge-nhi-drug-termino
 const OUT = path.join(ROOT, 'src/shared/constants/drug-mechanism.generated.ts')
 const ACB_FILE = path.join(ROOT, 'scripts/data/anticholinergic-burden.json')
 const cacheArg = process.argv.indexOf('--cache')
-const CACHE = cacheArg > 0 ? process.argv[cacheArg + 1] : path.join(os.tmpdir(), 'mediprisma-drug-mechanism-cache.json')
+// Default cache inside the repository's ignored node_modules/.cache — not the
+// shared OS temp directory, where a predictable file name could be planted or
+// symlinked by another user.
+const CACHE = cacheArg > 0
+  ? path.resolve(process.argv[cacheArg + 1])
+  : path.join(ROOT, 'node_modules', '.cache', 'mediprisma', 'drug-mechanism-cache.json')
 
 type Row = string[]
 interface Ingredient {
@@ -49,7 +53,11 @@ interface Ingredient {
 
 const cache: Record<string, unknown> = fs.existsSync(CACHE) ? JSON.parse(fs.readFileSync(CACHE, 'utf8')) : {}
 let unsaved = 0
-const saveCache = () => { fs.writeFileSync(CACHE, JSON.stringify(cache)); unsaved = 0 }
+const saveCache = () => {
+  fs.mkdirSync(path.dirname(CACHE), { recursive: true, mode: 0o700 })
+  fs.writeFileSync(CACHE, JSON.stringify(cache), { mode: 0o600 })
+  unsaved = 0
+}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function getJson<T>(url: string, tries = 4): Promise<T | undefined> {
