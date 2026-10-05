@@ -175,6 +175,8 @@ describe('OverviewMedsSection — 複製現在用藥', () => {
     expect(listed).toContain('- Amoxicillin/Clavulanate 1 tab BID （已用完 6 天）')
     expect(lastToast().title).toBe('已複製 3 項（現在用藥 2 項＋最後另列 1 項），可直接貼進病歷。')
     expect(lastToast().cancel?.label).toBe('改回不放')
+    // In the paste now, so the toast no longer calls it left out.
+    expect(lastToast().description).not.toContain('沒有放入')
 
     await act(async () => {
       lastToast().cancel?.onClick()
@@ -192,6 +194,29 @@ describe('OverviewMedsSection — 複製現在用藥', () => {
     expect((area as HTMLTextAreaElement).value).toContain('- Amlodipine 1 tab QD')
     expect(toastSuccess).not.toHaveBeenCalled()
     expect(mockTrack).not.toHaveBeenCalled()
+  })
+
+  it('closes the hand-copy text when the list changes under it', async () => {
+    writeText.mockRejectedValue(new Error('denied'))
+    const { rerender } = render(<OverviewMedsSection data={DATA} fit={{ bounded: false }} />)
+    await act(async () => {
+      fireEvent.click(card().getByRole('button', { name: '複製' }))
+    })
+    await screen.findByRole('textbox', { name: '要複製的用藥內容' })
+    const other: OverviewMedsData = { ...DATA, items: [item('x1', 'Metformin', { daysRemaining: 10 })], count: 1 }
+    rerender(<OverviewMedsSection data={other} fit={{ bounded: false }} />)
+    expect(screen.queryByRole('textbox', { name: '要複製的用藥內容' })).toBeNull()
+  })
+
+  it('reports nothing for a copy that comes back after the list changed', async () => {
+    let finish: () => void = () => {}
+    writeText.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+    const { rerender } = render(<OverviewMedsSection data={DATA} fit={{ bounded: false }} />)
+    fireEvent.click(card().getByRole('button', { name: '複製' }))
+    const other: OverviewMedsData = { ...DATA, items: [item('x1', 'Metformin', { daysRemaining: 10 })], count: 1 }
+    rerender(<OverviewMedsSection data={other} fit={{ bounded: false }} />)
+    await act(async () => { finish() })
+    expect(toastSuccess).not.toHaveBeenCalled()
   })
 
   it('編輯 opens the one format\'s editor right here; saving makes 複製 use it', async () => {

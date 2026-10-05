@@ -288,13 +288,22 @@ function frequencyTokens(frequency: string): string[] {
   return frequency.trim().split(/[\s,&+/]+/).filter(Boolean)
 }
 
-/** 頻次 with glued codes pulled apart: 「QDACPO」 → 「QD AC PO」. A token that
- *  does not fully cut into known codes stays exactly as the source wrote it. */
+/** 頻次 with glued codes pulled apart: 「QDACPO」 → 「QD AC PO」. Unless every
+ *  part cuts into known codes, the whole string stays as the source wrote it. */
 export function splitFrequencyCodes(frequency: string): string {
-  if (/[\u3400-\u9fff]/.test(frequency)) return frequency.trim()
-  return frequencyTokens(frequency)
-    .map((token) => segmentFrequencyToken(token)?.map((piece) => piece.code).join(' ') ?? token)
-    .join(' ')
+  const trimmed = frequency.trim()
+  if (/[\u3400-\u9fff]/.test(trimmed)) return trimmed
+  // All or nothing, like the Chinese: a full SIG ("Take 1/2 tablet BID") has
+  // words and separators that carry meaning, and re-joining its tokens with
+  // spaces would turn half a tablet into "1 2". Only a string made entirely of
+  // codes we recognise is re-spaced; anything else prints as the source wrote it.
+  const out: string[] = []
+  for (const token of frequencyTokens(trimmed)) {
+    const pieces = segmentFrequencyToken(token)
+    if (!pieces) return trimmed
+    out.push(...pieces.map((piece) => piece.code))
+  }
+  return out.join(' ')
 }
 
 /** 頻次 in Chinese, or `null` when any part of it is not a code we know — the

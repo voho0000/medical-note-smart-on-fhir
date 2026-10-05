@@ -332,6 +332,9 @@ describe('splitFrequencyCodes', () => {
     expect(splitFrequencyCodes('ASOR')).toBe('ASOR')
     expect(splitFrequencyCodes('QD ASOR')).toBe('QD ASOR')
     expect(splitFrequencyCodes('每日一次')).toBe('每日一次')
+    // A full SIG keeps its words and separators: half a tablet stays 1/2.
+    expect(splitFrequencyCodes('Take 1/2 tablet BID')).toBe('Take 1/2 tablet BID')
+    expect(splitFrequencyCodes('QDAC ASOR')).toBe('QDAC ASOR')
   })
 
   it('is what the built-in formats write', () => {

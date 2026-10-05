@@ -8,7 +8,7 @@
 // itself (by decision, 2026-10-05: a notice the clinician must close is one
 // more thing to do).
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, ClipboardCopy, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -76,9 +76,16 @@ export function useMedCopyActions(
   const api = useMedicationCopy(sources)
   const { copied, copy } = useCopyToClipboard(1500)
   const [stored, setReceipt] = useState<CopyReceipt | null>(null)
-  const [fallbackText, setFallbackText] = useState<string | null>(null)
+  const [fallback, setFallback] = useState<{ sources: readonly unknown[]; text: string } | null>(null)
   const [textOpen, setTextOpen] = useState(false)
+  // Both are tied to the list they were made from: text from another
+  // patient's list (or a list since reloaded) is never offered.
   const receipt = stored && stored.sources === sources ? stored : null
+  const fallbackText = fallback && fallback.sources === sources ? fallback.text : null
+  // The list on screen now — the clipboard answers asynchronously, and a
+  // copy that comes back after the list changed reports nothing.
+  const sourcesNow = useRef(sources)
+  useEffect(() => { sourcesNow.current = sources }, [sources])
   // One toast per surface: a second copy replaces the first.
   const toastId = `med-copy:${surface}`
 
@@ -89,10 +96,11 @@ export function useMedCopyActions(
   const copyWith = useCallback(async function copyWithFormat(format: MedCopyFormat): Promise<void> {
     const result = api.build(format)
     const ok = await copy(result.text)
+    if (sourcesNow.current !== sources) return
     if (!ok) {
       setReceipt(null)
       toast.dismiss(toastId)
-      setFallbackText(result.text)
+      setFallback({ sources, text: result.text })
       return
     }
     // Usage analytics: which surface's copy was used. Never the text.
@@ -115,7 +123,8 @@ export function useMedCopyActions(
           .replace('{ended}', String(result.listedExcludedCount))
         : strings.receiptCopied.replace('{count}', String(result.currentCount))
     const notes = [
-      excluded.length > 0
+      // Once listed last they are in the paste, so not "left out".
+      excluded.length > 0 && !listed
         ? strings.receiptExcluded
           .replace('{count}', String(excluded.length))
           .replace('{names}', joinNames(excluded, locale))
@@ -152,7 +161,7 @@ export function useMedCopyActions(
     textOpen: textOpen && receipt !== null,
     copyWith,
     setTextOpen,
-    closeFallback: () => setFallbackText(null),
+    closeFallback: () => setFallback(null),
   }
 }
 
