@@ -257,19 +257,47 @@ async function main() {
   }
 
   // ---- anticholinergic burden
-  const acbSource = JSON.parse(fs.readFileSync(ACB_FILE, 'utf8')) as { entries: Array<{ score: 1 | 2 | 3; names: string[] }> }
-  const acb = new Map<string, 1 | 2 | 3>()
+  // Labels: "ACB 3" / "ACB 2" (the ACB scale), "Beers strong" (Beers 2023
+  // Table 7 without an ACB score of 2–3; "ACB 1 · Beers strong" for
+  // clidinium), "ACB 1".
+  const acbSource = JSON.parse(fs.readFileSync(ACB_FILE, 'utf8')) as {
+    entries: Array<{ acb?: 1 | 2 | 3; beers2023?: boolean; names: string[] }>
+  }
+  const labelOf = (entry: { acb?: number; beers2023?: boolean }) =>
+    entry.acb && entry.acb >= 2 ? `ACB ${entry.acb}`
+      : entry.beers2023 ? (entry.acb ? `ACB ${entry.acb} · Beers strong` : 'Beers strong')
+        : `ACB ${entry.acb}`
+  const rank = (label: string) => (/ACB 3|Beers/.test(label) ? 3 : /ACB 2/.test(label) ? 2 : 1)
+  // Intestinal-local corticosteroids and haemorrhoid preparations act where
+  // they are applied, like the topical codes.
+  const LOCAL_ACB = /^(S|D|R01|A01|A07EA|C05)/
+  const anticholinergicByAtc = new Map<string, string>()
+  const anticholinergicByName = new Map<string, string>()
   const unmatchedAcb: string[] = []
+  const nameOnlyMatches: string[] = []
   for (const entry of acbSource.entries) {
+    const label = labelOf(entry)
+    for (const name of entry.names) anticholinergicByName.set(name, label)
     let matched = false
-    for (const name of entry.names) {
-      for (const e of ingredients) {
-        if (isCombination(e) || isTopical(e.atc)) continue
-        if (e.name.toLowerCase() === name || codesByName.get(name)?.includes(e)) {
-          acb.set(e.atc, Math.max(acb.get(e.atc) ?? 0, entry.score) as 1 | 2 | 3)
-          matched = true
-        }
+    for (const e of ingredients) {
+      if (isCombination(e) || LOCAL_ACB.test(e.atc)) continue
+      // A code is the ingredient most of its products contain, not its ATC
+      // name: the drug master files a butylscopolamine injection under A04AD01
+      // "scopolamine", and a few 10 mg butylscopolamine tablets under A03BB01
+      // as "SCOPOLAMINE HBR".
+      const counts = new Map<string, number>()
+      for (const [text, n] of e.texts) {
+        if (!text.includes('+')) counts.set(normalizeIngredient(text), (counts.get(normalizeIngredient(text)) ?? 0) + n)
       }
+      const main = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0]
+      const hit = main ? entry.names.includes(main) : entry.names.includes(e.name.toLowerCase())
+      if (!hit) {
+        if (entry.names.includes(e.name.toLowerCase())) nameOnlyMatches.push(`${e.atc} ${e.name}: ${main}`)
+        continue
+      }
+      const current = anticholinergicByAtc.get(e.atc)
+      if (!current || rank(label) > rank(current)) anticholinergicByAtc.set(e.atc, label)
+      matched = true
     }
     if (!matched) unmatchedAcb.push(entry.names[0])
   }
@@ -287,8 +315,8 @@ async function main() {
     const codes = codesByName.get(name) ?? []
     // The anticholinergic code wins: "chlorpheniramine" in a cold remedy is
     // the systemic antihistamine, not an eye drop.
-    const e = codes.find((c) => acb.has(c.atc)) ?? bestCode(name)
-    if (e && (mechanism.has(e.atc) || acb.has(e.atc))) atcByIngredient.set(name, e.atc)
+    const e = codes.find((c) => anticholinergicByAtc.has(c.atc)) ?? bestCode(name)
+    if (e && (mechanism.has(e.atc) || anticholinergicByAtc.has(e.atc))) atcByIngredient.set(name, e.atc)
   }
 
   // ---- report
@@ -305,7 +333,8 @@ async function main() {
   const componentResolved = [...componentProducts].filter(([name]) => atcByIngredient.has(name)).reduce((n, [, c]) => n + c, 0)
   console.log(`combination ingredients resolvable: ${atcByIngredient.size}/${componentProducts.size} names, ${share(componentResolved, componentTotal)} of ingredient mentions`)
   console.log(`  most frequent unresolved: ${[...componentProducts].filter(([name]) => !atcByIngredient.has(name)).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, n]) => `${name} (${n})`).join(', ')}`)
-  console.log(`anticholinergic codes: ${acb.size}; list entries with no code in the drug master: ${unmatchedAcb.join(', ') || 'none'}`)
+  console.log(`anticholinergic codes: ${anticholinergicByAtc.size}; list entries with no single-ingredient code in the drug master: ${unmatchedAcb.join(', ') || 'none'}`)
+  console.log(`codes named like a listed drug whose products contain something else (not matched):\n  ${nameOnlyMatches.join('\n  ') || 'none'}`)
   console.log(`unresolved single ingredients (most products first):\n  ${unresolved.slice(0, 40).map((e) => `${e.atc} ${e.name || [...e.texts.keys()][0]} (${e.products})`).join('\n  ')}`)
 
   // ---- write
@@ -332,8 +361,13 @@ async function main() {
     ' *  single-ingredient code. */',
     `export const ATC_BY_INGREDIENT: Readonly<Record<string, string>> = ${record(atcByIngredient)}`,
     '',
-    '/** Anticholinergic burden (ACB 1–3) by systemic single-ingredient code. */',
-    `export const ACB_BY_ATC: Readonly<Record<string, 1 | 2 | 3>> = ${record(acb)}`,
+    '/** Anticholinergic burden by systemic single-ingredient code: "ACB 1"–"ACB 3"',
+    ' *  (ACB scale 2012), "Beers strong" (AGS Beers 2023 Table 7), or both. */',
+    `export const ANTICHOLINERGIC_BY_ATC: Readonly<Record<string, string>> = ${record(anticholinergicByAtc)}`,
+    '',
+    '/** The same, by ingredient name, for the ingredients of combination products',
+    ' *  (belladonna is only ever one). */',
+    `export const ANTICHOLINERGIC_BY_INGREDIENT: Readonly<Record<string, string>> = ${record(anticholinergicByName)}`,
     '',
   ]
   fs.writeFileSync(OUT, lines.join('\n'))

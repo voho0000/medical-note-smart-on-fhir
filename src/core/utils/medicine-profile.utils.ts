@@ -9,7 +9,8 @@
 // others). Built by scripts/build-drug-mechanism-table.ts.
 
 import {
-  ACB_BY_ATC,
+  ANTICHOLINERGIC_BY_ATC,
+  ANTICHOLINERGIC_BY_INGREDIENT,
   ATC_BY_INGREDIENT,
   MECHANISM_BY_ATC,
 } from '@/src/shared/constants/drug-mechanism.generated'
@@ -28,20 +29,22 @@ export interface MedicineProfile {
   /** True when every ingredient has a mechanism. Only then does a missing
    *  `anticholinergic` mean "not anticholinergic" rather than "unknown". */
   complete: boolean
-  /** "ACB 3", "ACB 1", or "antimuscarinic" when the mechanism is one the ACB
-   *  scale does not score; for a combination, followed by the ingredient
+  /** "ACB 3" / "ACB 2" / "ACB 1" (ACB scale 2012), "Beers strong" (AGS Beers
+   *  2023 Table 7, no ACB score of 2–3), "ACB 1 · Beers strong", or
+   *  "antimuscarinic" when the medicine's main action is one neither list
+   *  names; for a combination, followed by the ingredient
    *  ("ACB 3 (chlorpheniramine)"). */
   anticholinergic?: string
 }
 
-interface Component { name: string; atc?: string; mechanism?: string; acb?: number }
+interface Component { name: string; atc?: string; mechanism?: string; listed?: string }
 
 // Eye, ear, skin, nose and mouth preparations and inhaled antimuscarinics act
 // where they are applied; burden scales do not count them.
 const LOCAL_USE = /^(S|D|R01|A01|R03BB)/
 
 function anticholinergicOf(c: Component): string | undefined {
-  if (c.acb) return `ACB ${c.acb}`
+  if (c.listed) return c.listed
   // Only when antimuscarinic is the medicine's first listed mechanism:
   // mirtazapine lists it after its serotonin and α2 actions and is not a
   // burden drug.
@@ -49,18 +52,26 @@ function anticholinergicOf(c: Component): string | undefined {
   return ANTIMUSCARINIC_MECHANISM.test(primary) && !LOCAL_USE.test(c.atc ?? '') ? 'antimuscarinic' : undefined
 }
 
-const component = (name: string, atc?: string): Component =>
-  ({ name, atc, mechanism: mechanismOf(atc), acb: atc ? ACB_BY_ATC[atc] : undefined })
+const strength = (label: string) => (/ACB 3|Beers/.test(label) ? 3 : /ACB 2|antimuscarinic/.test(label) ? 2 : 1)
+
+const component = (name: string, atc?: string, listedByName = false): Component => ({
+  name,
+  atc,
+  mechanism: mechanismOf(atc),
+  // An ingredient of a combination is also read by name: belladonna never
+  // has a single-ingredient code of its own.
+  listed: (atc ? ANTICHOLINERGIC_BY_ATC[atc] : undefined) ?? (listedByName ? ANTICHOLINERGIC_BY_INGREDIENT[name] : undefined),
+})
 
 export function medicineProfile(input: { atcCode?: string; ingredientText?: string }): MedicineProfile {
   const ingredients = input.ingredientText ? splitIngredients(input.ingredientText) : []
   if (ingredients.length > 1) {
-    const components = ingredients.map((name) => component(name, ATC_BY_INGREDIENT[name]))
+    const components = ingredients.map((name) => component(name, ATC_BY_INGREDIENT[name], true))
     const known = components.filter((c) => c.mechanism)
     const strongest = components
       .map((c) => ({ c, label: anticholinergicOf(c) }))
-      .filter((x) => x.label)
-      .sort((a, b) => (b.c.acb ?? 0) - (a.c.acb ?? 0))[0]
+      .filter((x): x is { c: Component; label: string } => !!x.label)
+      .sort((a, b) => strength(b.label) - strength(a.label))[0]
     return {
       ...(known.length ? { mechanism: known.slice(0, 3).map((c) => `${c.name}: ${c.mechanism}`).join('; ') } : {}),
       complete: known.length === components.length,
@@ -76,13 +87,13 @@ export function medicineProfile(input: { atcCode?: string; ingredientText?: stri
   }
 }
 
-/** Whether a SOURCE LIST line says "anticholinergic": ACB 2–3 or an
- *  antimuscarinic mechanism. ACB 1 ("possible") stays off the line but still
- *  counts as anticholinergic when an alert says so. */
-export const showsAnticholinergic = (label?: string): boolean => !!label && !/^ACB 1\b/.test(label)
+/** Whether a SOURCE LIST line says "anticholinergic": ACB 2–3, Beers strong,
+ *  or an antimuscarinic mechanism. ACB 1 alone ("possible") stays off the line
+ *  but still counts as anticholinergic when an alert says so. */
+export const showsAnticholinergic = (label?: string): boolean => !!label && !/^ACB 1(?! · Beers)/.test(label)
 
 /** The words a SOURCE LIST line prints: "anticholinergic ACB 3",
- *  "anticholinergic ACB 3 (chlorpheniramine)", or "anticholinergic" for an
- *  antimuscarinic the ACB scale does not score. */
+ *  "anticholinergic Beers strong", "anticholinergic ACB 3 (chlorpheniramine)",
+ *  or "anticholinergic" for an antimuscarinic neither list names. */
 export const anticholinergicLineLabel = (label: string): string =>
-  `anticholinergic${label.replace(/^antimuscarinic/, '').replace(/^(?=ACB)/, ' ')}`
+  label.startsWith('antimuscarinic') ? `anticholinergic${label.slice('antimuscarinic'.length)}` : `anticholinergic ${label}`

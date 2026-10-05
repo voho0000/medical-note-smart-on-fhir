@@ -5,13 +5,17 @@
 // Salt, ester and hydrate words that follow the base name ("CHLORPHENIRAMINE
 // MALEATE 5 MG"). The first word is never dropped, so "POTASSIUM CHLORIDE"
 // keeps "potassium".
+// "Butylbromide" and "methylbromide" are not salts here: butylscopolamine and
+// methscopolamine are other medicines than scopolamine.
 const SALT_WORDS = new Set([
-  'acetate', 'anhydrous', 'besilate', 'besylate', 'bitartrate', 'bromide', 'butyrate', 'calcium',
-  'chloride', 'citrate', 'dihydrate', 'dipotassium', 'dipropionate', 'disodium', 'embonate', 'fumarate',
-  'gluconate', 'hbr', 'hcl', 'hemihydrate', 'hydrate', 'hydrobromide', 'hydrochloride', 'hyclate',
-  'lactate', 'magnesium', 'maleate', 'malate', 'mesilate', 'mesylate', 'monohydrate', 'monosodium',
-  'napsylate', 'nitrate', 'oxalate', 'pamoate', 'phosphate', 'potassium', 'propionate', 'sesquihydrate',
-  'sodium', 'succinate', 'sulfate', 'sulphate', 'tartrate', 'tosylate', 'trihydrate', 'valerate',
+  'acetate', 'anhydrous', 'besilate', 'besylate', 'bisulfate', 'bitartrate', 'bromide', 'butyrate',
+  'calcium', 'chloride', 'citrate', 'decanoate', 'dihydrate', 'dihydrobromide', 'dihydrochloride',
+  'dimaleate', 'dipotassium', 'dipropionate', 'disodium', 'edisylate', 'embonate', 'enanthate', 'fumarate',
+  'gluconate', 'hbr', 'hcl', 'hemifumarate', 'hemihydrate', 'hemitartrate', 'hydrate', 'hydrobromide',
+  'hydrochloride', 'hydrogen', 'hyclate', 'lactate', 'magnesium', 'maleate', 'malate', 'mesilate',
+  'mesylate', 'monohydrate', 'monohydrochloride', 'monosodium', 'napsylate', 'nitrate', 'oxalate',
+  'palmitate', 'pamoate', 'phosphate', 'potassium', 'propionate', 'sesquihydrate', 'sodium', 'succinate',
+  'sulfate', 'sulphate', 'tartrate', 'tosylate', 'trihydrate', 'trihydrochloride', 'valerate',
 ])
 
 /** "BUTYLSCOPOLAMINE BROMIDE (=HYOSCINE BUTYLBROMIDE) 10 MG" → "butylscopolamine";
@@ -20,6 +24,8 @@ export function normalizeIngredient(text: string): string {
   const words = text
     .toLowerCase()
     .replace(/\([^)]*\)/g, ' ')
+    // A synonym whose bracket never closes: "OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG".
+    .replace(/\(.*$/, ' ')
     // The strength, written "10 MG" or ".25 MG/GM", ends the name.
     .replace(/\s+\.?\d.*$/, '')
     // Stereo prefixes: "DL-METHIONINE", "ARGININE L-".

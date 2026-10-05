@@ -14,6 +14,11 @@ describe('normalizeIngredient', () => {
     expect(normalizeIngredient('METHYLEPHEDRINE DL- HCL 25 MG')).toBe('methylephedrine')
     expect(normalizeIngredient('L-ARGININE 10 MG/ML')).toBe('arginine')
     expect(normalizeIngredient('POTASSIUM CHLORIDE 600 MG')).toBe('potassium')
+    expect(normalizeIngredient('OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG')).toBe('oxybutynin')
+    expect(normalizeIngredient('LEVOCETIRIZINE DIHYDROCHLORIDE 5 MG')).toBe('levocetirizine')
+    // Quaternary derivatives stay other medicines.
+    expect(normalizeIngredient('SCOPOLAMINE BUTYLBROMIDE 10 MG')).toBe('scopolamine butylbromide')
+    expect(normalizeIngredient('SCOPOLAMINE HBR .01 MG')).toBe('scopolamine')
     expect(splitIngredients('LOSARTAN POTASSIUM 50 MG+HYDROCHLOROTHIAZIDE 12.5 MG')).toEqual(['losartan', 'hydrochlorothiazide'])
   })
 })
@@ -51,11 +56,28 @@ describe('medicineProfile', () => {
     expect(medicineProfile({ atcCode: 'R03BB04' }).anticholinergic).toBeUndefined() // inhaled tiotropium
   })
 
-  it('keeps ACB 1 off the line and words the rest plainly', () => {
+  it('follows the ACB scale and Beers 2023 as published', () => {
+    expect(medicineProfile({ atcCode: 'N05AB04' }).anticholinergic).toBe('Beers strong') // prochlorperazine: Beers only
+    expect(medicineProfile({ atcCode: 'R06AX02' }).anticholinergic).toBe('ACB 2') // cyproheptadine
+    expect(medicineProfile({ atcCode: 'A03BB01' }).anticholinergic).toBeUndefined() // butylscopolamine: on neither list
+    // A butylscopolamine injection filed as scopolamine: no ACB score, though
+    // its mechanism is antimuscarinic.
+    expect(medicineProfile({ atcCode: 'A04AD01' }).anticholinergic).toBe('antimuscarinic')
+    // Belladonna has no single-ingredient code; a combination reads it by name.
+    expect(medicineProfile({ ingredientText: 'PHENOBARBITAL 16 MG+BELLADONNA EXTRACT 4 MG' }).anticholinergic)
+      .toBe('ACB 2 (belladonna extract)')
+    expect(medicineProfile({ ingredientText: 'CHLORDIAZEPOXIDE 5 MG+CLIDINIUM BROMIDE 2.5 MG' }).anticholinergic)
+      .toBe('ACB 1 · Beers strong (clidinium)')
+  })
+
+  it('keeps ACB 1 alone off the line and words the rest plainly', () => {
     expect(showsAnticholinergic('ACB 1')).toBe(false)
+    expect(showsAnticholinergic('ACB 1 (codeine)')).toBe(false)
+    expect(showsAnticholinergic('ACB 1 · Beers strong (clidinium)')).toBe(true)
     expect(showsAnticholinergic('ACB 2')).toBe(true)
     expect(showsAnticholinergic('antimuscarinic')).toBe(true)
     expect(anticholinergicLineLabel('ACB 3')).toBe('anticholinergic ACB 3')
+    expect(anticholinergicLineLabel('Beers strong')).toBe('anticholinergic Beers strong')
     expect(anticholinergicLineLabel('ACB 3 (chlorpheniramine)')).toBe('anticholinergic ACB 3 (chlorpheniramine)')
     expect(anticholinergicLineLabel('antimuscarinic')).toBe('anticholinergic')
   })
