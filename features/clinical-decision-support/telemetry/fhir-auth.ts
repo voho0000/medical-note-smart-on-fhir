@@ -26,7 +26,7 @@ export async function fhirAccessToken(): Promise<string | null> {
     if (!token) throw new Error('cdss_auth_unavailable')
     return token
   }
-  if (process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot') return null
+  if (['intranet', 'intranet-pilot'].includes(process.env.NEXT_PUBLIC_CDSS_ADMISSION || '')) return null
   if (!fhirOAuthEnabled() || !fhirAuthStatus()) throw new Error('cdss_auth_unavailable')
   return access!.token
 }

@@ -21,7 +21,7 @@ beforeEach(() => {
   // jsdom does not supply the newer browser AbortSignal static methods.
   if (!AbortSignal.timeout) Object.defineProperty(AbortSignal, 'timeout', { configurable: true, value: () => new AbortController().signal })
   if (!AbortSignal.any) Object.defineProperty(AbortSignal, 'any', { configurable: true, value: (signals: AbortSignal[]) => signals[0] })
-  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet-pilot'
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet'
   window.history.replaceState({}, '', '/?site=vghtpe')
   jest.mocked(fetch).mockReset().mockResolvedValue(response({ records: [index], hasMore: false }))
   jest.mocked(captureCollectorAuth).mockClear()

@@ -14,6 +14,18 @@ beforeEach(() => {
 })
 afterEach(() => { delete process.env.NEXT_PUBLIC_CDSS_ADMISSION })
 
+test.each([null, { isAnonymous: true, getIdToken: mockGetIdToken }])('intranet admission does not require Firebase or an OAuth popup', async user => {
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet'
+  mockAuth.currentUser = user
+  const popup = jest.spyOn(window, 'open').mockImplementation(() => null)
+  try {
+    expect(await fhirAccessToken()).toBeNull()
+    expect(mockGetIdToken).not.toHaveBeenCalled()
+    expect(fhirOAuthEnabled()).toBe(false)
+    expect(popup).not.toHaveBeenCalled()
+  } finally { popup.mockRestore() }
+})
+
 test('FHIR reuses the signed-in Firebase account without opening an OAuth login', async () => {
   const popup = jest.spyOn(window, 'open').mockImplementation(() => null)
   try {

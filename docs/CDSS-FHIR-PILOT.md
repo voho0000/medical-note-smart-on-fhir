@@ -1,4 +1,6 @@
-# CDSS 獨立 FHIR 儲存與 Firebase 協作者授權
+# CDSS 獨立 FHIR 儲存與院內准入
+
+2026-10-05 使用者改為院內網段准入。正式目標為 `NEXT_PUBLIC_CDSS_ADMISSION=intranet`、`NEXT_PUBLIC_CDSS_API_ORIGIN=https://fhir.mediprisma.tw`；儲存及歷史調閱不要求 Firebase 登入、不取 ID token。API 以 nginx 覆寫的來源 IP 判斷 `10.97.0.0/16`、`10.100.0.0/16`，網段外拒收；HTTPS、Origin、限速及 CDSS 契約檢查保留。這不提供醫師或個別使用者身分。下方 Firebase 模式仍可選，但不是目前院內試行設定。VM API 與正式 App 仍待新版部署及驗收。
 
 2026-10-04 依使用者釐清：Gateway 只做 log／回報資料。App 直接呼叫獨立 FHIR API，沒有 Gateway／Collector FHIR fallback。原工作區衝突保留；未發布 App、未改 pilot/hmc 或 HMC 發布鏈。
 
