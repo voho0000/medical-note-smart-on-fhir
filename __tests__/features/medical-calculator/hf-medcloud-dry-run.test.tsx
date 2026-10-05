@@ -25,8 +25,8 @@ const getToken = jest.fn()
 let identityChanged: (() => void) | undefined
 const onIdentityChanged = jest.fn(callback => { identityChanged = callback; return jest.fn() })
 async function prepare() {
-  fireEvent.click(screen.getByRole('button', { name: '整理健保雲端模型資料' }))
-  await screen.findByRole('combobox', { name: '門診基準日／院所代碼' })
+  fireEvent.click(screen.getByRole('button', { name: '整理模型資料' }))
+  await screen.findByRole('combobox', { name: '門診基準日／院所' })
 }
 beforeEach(() => {
   jest.clearAllMocks()
@@ -117,8 +117,8 @@ it('discards a response after sign-out', async () => {
 it('does not use an old local import while a SMART chart is active', async () => {
   jest.mocked(shouldUseLocalBundle).mockReturnValue(false)
   render(<HfMedcloudDryRun locale="zh-TW" />)
-  fireEvent.click(screen.getByRole('button', { name: '整理健保雲端模型資料' }))
-  expect(await screen.findByText('目前資料不是 medcloud2 健保雲端 Bundle')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '整理模型資料' }))
+  expect(await screen.findByText('請匯入雲端、健康或北榮懷爾抓抓的單一患者病歷')).toBeVisible()
   expect(LocalBundleService.load).not.toHaveBeenCalled()
 })
 
@@ -247,7 +247,7 @@ it('keeps the hospital card on the vghtpe route and opens the full detail withou
   window.history.replaceState({}, '', '/?site=vghtpe')
   render(<HfSamdCalculator locale="zh-TW" />)
   expect(screen.getByText('北榮 SaMD')).toBeVisible()
-  expect(screen.queryByRole('button', { name: '整理健保雲端模型資料' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '整理模型資料' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(screen.getByRole('region', { name: '北榮 SaMD HF 計算機' })).toBeVisible()
@@ -334,4 +334,21 @@ it('keeps a pending prediction running after returning to the list and switching
   importId = 'synthetic-other-import'
   view.rerender(<Harness />)
   expect(screen.queryByText('12.34%')).toBeNull()
+})
+it('prepares a TVGH bridge import but prevents upload with unverified generic ICD-10', async () => {
+  const bundle = hfMedcloudFixture()
+  bundle.meta = { source: 'ehr-fhir-bridge/extension-local' }
+  const encounter = bundle.entry.find((e: { resource: { resourceType: string } }) => e.resource.resourceType === 'Encounter').resource
+  encounter.meta = { source: 'ehr-fhir-bridge/scraper' }
+  delete encounter.serviceProvider
+  encounter.reasonCode[0].coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepare()
+  expect(screen.getByText('病歷來源：北榮懷爾抓抓')).toBeVisible()
+  expect(screen.getByText(/門診缺少可核對的 ICD-10-CM/)).toBeVisible()
+  expect(screen.getByRole('button', { name: '執行院內輸入檢查' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+  expect(requestHfPrediction).not.toHaveBeenCalled()
 })

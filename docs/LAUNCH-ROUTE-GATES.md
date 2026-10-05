@@ -186,3 +186,10 @@ The earlier HF activation entries describe their rollout at that time. Their unr
 ## HF SaMD detail navigation (2026-10-05)
 
 The owner requested the same master/detail flow as ordinary calculators. The gated 北榮 SaMD card now opens an inline calculator detail page with 返回, rather than a modal dialog. Returning to the list or switching an already visited right-panel tab preserves in-flight validation/prediction and results in the existing mounted session; changing the patient/import still aborts and discards the old request. No clinical surface or authorization gate is removed. Page refresh or leaving the app does not guarantee that an in-flight operation continues. This supersedes earlier references to a SaMD result dialog.
+## HF SaMD imported bridge sources (2026-10-05)
+
+Owner requested health-bank and TVGH EHR bridge imports in addition to medcloud2.
+The existing site/intranet and medical-audience entry gates remain unchanged.
+New source formats can prepare model inputs; missing recognized index diagnoses
+are shown explicitly and prevent uploading invalid inputs. Existing cloud input
+eligibility is preserved. No previously visible clinical surface is removed.

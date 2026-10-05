@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
+import { hfRecordSource, type HfRecordSource } from '@/src/core/hf-risk/record-source'
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
 import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
@@ -11,6 +12,7 @@ import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction } from
 
 interface Context {
   importId: string
+  source: HfRecordSource
   bundle: object
   visits: HfVisit[]
   selection: HfSelection
@@ -34,7 +36,7 @@ export function useMedcloudHfDryRun() {
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleResult = result?.importId === activeImportId && result.input === current?.input ? result.value : null
   const visiblePrediction = prediction?.importId === activeImportId && prediction.input === current?.input ? prediction.value : null
-  const visibleMessage = (localMode || message?.code === 'source-not-medcloud') && message && message.importId === activeImportId ? message.code : null
+  const visibleMessage = (localMode || message?.code === 'source-unsupported') && message && message.importId === activeImportId ? message.code : null
   useEffect(() => () => { controller.current?.abort(); controller.current = null; unsubscribeAuth.current?.(); unsubscribeAuth.current = null }, [activeImportId, localMode])
 
   async function prepare() {
@@ -47,13 +49,13 @@ export function useMedcloudHfDryRun() {
     setMessage(null)
     const importId = LocalBundleService.getActiveImportId()
     try {
-      if (!shouldUseLocalBundle() || !importId) throw new Error('source-not-medcloud')
+      if (!shouldUseLocalBundle() || !importId) throw new Error('source-unsupported')
       const bundle = await LocalBundleService.load()
       if (LocalBundleService.getActiveImportId() !== importId || !shouldUseLocalBundle()) throw new Error('source-changed')
       const visits = medcloudHfVisits(bundle)
       if (!visits.length) throw new Error('no-visit')
       const selection: HfSelection = { provider: visits[0].provider, encounter: visits[0].reference, claim: 'P1_CD_mortality_1m' }
-      setContext({ importId, bundle: bundle!, visits, selection, input: buildMedcloudHfInput(bundle, selection) })
+      setContext({ importId, source: hfRecordSource(bundle!), bundle: bundle!, visits, selection, input: buildMedcloudHfInput(bundle, selection) })
     } catch (error) {
       setContext(null)
       setMessage({ importId, code: error instanceof Error ? error.message : 'bundle-invalid' })

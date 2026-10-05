@@ -1,3 +1,4 @@
+import { normalizeHfRecordSource, type HfRecordSource } from './record-source'
 import { fhirDay, taipeiToday, HF_DRY_RUN_CLAIMS, HF_NAMESPACE, MEDCLOUD_PROVIDER_SYSTEM, type FhirRecord, type HfInput, type HfSelection } from './contract'
 import { HF_LABS, normalizeHfLab } from './labs'
 
@@ -10,15 +11,13 @@ const VOID = ['entered-in-error', 'cancelled', 'not-done', 'refuted']
 function coding(concept: FhirRecord | undefined): FhirRecord[] {
   return Array.isArray(concept?.coding) ? concept.coding.filter((item: unknown) => !!item && typeof item === 'object') : []
 }
-function records(input: unknown): { entry: FhirRecord[]; bundle: FhirRecord } {
+function records(input: unknown): { entry: FhirRecord[]; bundle: FhirRecord; source: HfRecordSource } {
   const bundle = input as FhirRecord | null
   if (!bundle || bundle.resourceType !== 'Bundle' || !Array.isArray(bundle.entry)) throw new Error('bundle-invalid')
   const entry = bundle.entry.filter((item: FhirRecord) => item?.resource && typeof item.resource === 'object')
   if (entry.filter((item: FhirRecord) => item.resource.resourceType === 'Patient').length !== 1) throw new Error('patient-count')
-  const medcloud = bundle.meta?.source === 'https://medcloud2.nhi.gov.tw/'
-    || (bundle.meta?.tag ?? []).some((tag: FhirRecord) => tag.code === 'MEDCLOUD')
-  if (!medcloud) throw new Error('source-not-medcloud')
-  return { entry, bundle }
+  const normalized = normalizeHfRecordSource(bundle)
+  return { entry: normalized.bundle.entry.filter((item: FhirRecord) => item?.resource), bundle: normalized.bundle, source: normalized.source }
 }
 function lookup(entry: FhirRecord[]) {
   const index = new Map<string, FhirRecord>()
@@ -59,7 +58,7 @@ function diagnoses(resource: FhirRecord, resolve: ReturnType<typeof lookup>, ind
 }
 export interface HfVisit { reference: string; provider: string; providerName?: string; date: string }
 export function medcloudHfVisits(input: unknown, today = taipeiToday()): HfVisit[] {
-  const { entry } = records(input)
+  const { entry, source } = records(input)
   const resolve = lookup(entry)
   const patient = entry.find(item => item.resource.resourceType === 'Patient')!.resource
   return entry.flatMap(item => {
@@ -70,14 +69,14 @@ export function medcloudHfVisits(input: unknown, today = taipeiToday()): HfVisit
       || VOID.includes(resource.status) || !date || date > today || !provider
       || resolve(resource.subject?.reference) !== patient
       || (resource.type ?? []).some((type: FhirRecord) => coding(type).some(code => code.code === '08' && /case-type/.test(code.system ?? '')))
-      || !diagnoses(resource, resolve, date).length) return []
+      || (source === 'medcloud' && !diagnoses(resource, resolve, date).length)) return []
     const providerName = resolve(resource.serviceProvider?.reference)?.name
     return [{ reference: item.fullUrl ?? 'Encounter/' + resource.id, provider, ...(typeof providerName === 'string' ? { providerName } : {}), date }]
   }).sort((a, b) => b.date.localeCompare(a.date))
 }
 /** A fresh UUID namespace per preparation; no names, identifiers, raw IDs or narrative leave the browser. */
 export function buildMedcloudHfInput(input: unknown, selection: HfSelection, options: { today?: string; uuid?: () => string } = {}): HfInput {
-  const { entry, bundle: original } = records(input)
+  const { entry, bundle: original, source } = records(input)
   const resolve = lookup(entry)
   const selected = medcloudHfVisits(input, options.today).find(item => item.reference === selection.encounter && item.provider === selection.provider)
   if (!selected || !HF_DRY_RUN_CLAIMS.includes(selection.claim)) throw new Error('index-encounter-invalid')
@@ -99,7 +98,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   gap('source-validation-pending')
   gap('history-coverage-unverified')
   const tags = Array.isArray(original.meta?.tag) ? original.meta.tag : []
-  for (const moduleName of ['imue0008', 'imue0060', 'imue0070', 'imue0020']) {
+  for (const moduleName of source === 'medcloud' ? ['imue0008', 'imue0060', 'imue0070', 'imue0020'] : []) {
     const statuses = tags.filter((tag: FhirRecord) => /\/module-completeness$/.test(tag.system ?? '') && typeof tag.code === 'string' && tag.code.startsWith(moduleName + '-')).map((tag: FhirRecord) => tag.code.slice(moduleName.length + 1))
     if (!statuses.length) gap('module-unknown:' + moduleName)
     else if (statuses.some((status: string) => !['complete', 'empty'].includes(status))) gap('module-incomplete:' + moduleName)
@@ -192,6 +191,8 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   const counts: Record<string, number> = {}
   for (const item of output) counts[item.resource.resourceType] = (counts[item.resource.resourceType] ?? 0) + 1
   if (!counts.Observation) gap('lab-none')
+  const indexEncounter = output.find(item => item.resource.id === encounterIds.get(resolve(selection.encounter)!))?.resource
+  if (!indexEncounter?.diagnosis?.length) gap('index-diagnosis-missing')
   return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, claim: selection.claim,
     gaps: [...gaps].map(([code, count]) => ({ code, count })), counts }
 }
