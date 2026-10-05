@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { randomUUID } from 'node:crypto'
+import { detectHfIntranet } from '@/src/infrastructure/hf-risk/intranet-discovery'
+import { HfSamdCalculator } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
 import { HfMedcloudDryRun } from '@/features/medical-calculator/prognosis/HfMedcloudDryRun'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -8,6 +10,8 @@ import { requestHfDryRun, requestHfPrediction } from '@/src/infrastructure/hf-ri
 import { hfMedcloudFixture } from './hf-medcloud-fixture'
 import type { HfDryRunResult } from '@/src/core/hf-risk/contract'
 
+jest.mock('@/src/infrastructure/hf-risk/intranet-discovery', () => ({ detectHfIntranet: jest.fn() }))
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search) }))
 jest.mock('@/src/infrastructure/fhir/services/local-bundle.service', () => ({ LocalBundleService: { getActiveImportId: jest.fn(), load: jest.fn() } }))
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service', () => ({ shouldUseLocalBundle: jest.fn() }))
 jest.mock('@/src/infrastructure/hf-risk/caller-auth', () => ({ captureHfCallerAuth: jest.fn() }))
@@ -25,6 +29,7 @@ async function prepare() {
 }
 beforeEach(() => {
   jest.clearAllMocks()
+  jest.mocked(detectHfIntranet).mockResolvedValue(false)
   identityChanged = undefined
   process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN = 'https://hf.test'
   Object.defineProperty(global.crypto, 'randomUUID', { configurable: true, value: randomUUID })
@@ -229,4 +234,63 @@ it('keeps the HF input surface usable on a hospital launch query', async () => {
     await prepare()
     expect(screen.getByRole('button',{name:'執行院內輸入檢查'})).toBeEnabled()
   } finally { window.history.replaceState(null,'','/') }
+})
+
+it.each(['/', '/?site=other', '/?site=VGHTPE'])('omits the hospital SaMD calculator on %s', path => {
+  window.history.replaceState({}, '', path)
+  render(<HfSamdCalculator locale="zh-TW" />)
+  expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
+  expect(LocalBundleService.load).not.toHaveBeenCalled()
+})
+it('keeps the hospital card on the vghtpe route and opens the full detail without sending data', async () => {
+  window.history.replaceState({}, '', '/?site=vghtpe')
+  render(<HfSamdCalculator locale="zh-TW" />)
+  expect(screen.getByText('北榮 SaMD')).toBeVisible()
+  expect(screen.queryByRole('button', { name: '整理健保雲端模型資料' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  expect(screen.getByRole('dialog')).toBeVisible()
+  await prepare()
+  fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
+  await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  expect(screen.getByText('輸入檢查通過；資料來源適用性仍待驗證。')).toBeVisible()
+  expect(requestHfDryRun).toHaveBeenCalledTimes(1)
+  expect(requestHfPrediction).not.toHaveBeenCalled()
+})
+it('returns a scored result to the card and keeps its detailed result when reopened', async () => {
+  window.history.replaceState({}, '', '/?site=vghtpe')
+  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
+  render(<HfSamdCalculator locale="zh-TW" />)
+  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  await prepare()
+  fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
+  await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
+  fireEvent.click(screen.getByRole('button', { name: '執行 HF 模型預測' }))
+  await screen.findByRole('region', { name: 'HF 模型預測結果' })
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  expect(screen.getByText('12.34%')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  expect(screen.getByRole('region', { name: 'HF 模型預測結果' })).toBeVisible()
+  expect(requestHfPrediction).toHaveBeenCalledTimes(1)
+})
+it('shows the card without a site marker only after authorized intranet discovery', async () => {
+  window.history.replaceState({}, '', '/')
+  process.env.NEXT_PUBLIC_HF_AUTH_POLICY = 'intranet'
+  const discovery = jest.mocked(detectHfIntranet).mockResolvedValue(true)
+  render(<HfSamdCalculator locale="zh-TW" />)
+  expect(await screen.findByText('北榮 SaMD')).toBeVisible()
+  expect(discovery).toHaveBeenCalledWith('https://hf.test', expect.any(AbortSignal))
+  expect(LocalBundleService.load).not.toHaveBeenCalled()
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+
+})
+it('fails closed when intranet discovery cannot confirm access', async () => {
+  window.history.replaceState({}, '', '/')
+  process.env.NEXT_PUBLIC_HF_AUTH_POLICY = 'intranet'
+  const discovery = jest.mocked(detectHfIntranet).mockResolvedValue(false)
+  render(<HfSamdCalculator locale="zh-TW" />)
+  await waitFor(() => expect(discovery).toHaveBeenCalled())
+  expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
+
 })

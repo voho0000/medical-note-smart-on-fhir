@@ -6,7 +6,7 @@
 // and disease tags. Favorites/Recent mirror MDCalc's own nav model.
 "use client"
 
-import { useMemo, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
 import { Search, ChevronRight, Calculator, Star, Clock, Loader2, Users, Stethoscope } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
 import { CalculatorDetail } from "./components/CalculatorDetail"
+import { HfSamdCalculator } from './prognosis/HfSamdCalculator'
 import { HfPrognosisModels } from './prognosis/HfPrognosisModels'
 import { prognosisAutofillEvidence } from './prognosis/autofill-evidence'
 import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
@@ -154,6 +155,10 @@ export default function MedicalCalculatorFeature() {
           </FilterChip>
         ))}
       </div>
+
+      {audience === 'medical' && (filter === 'all' || filter === 'cardiac') && (!query.trim() || /hf|heart|心衰|北榮|samd|tvgh/i.test(query)) && <Suspense fallback={null}>
+        <HfSamdCalculator locale={locale} />
+      </Suspense>}
 
       {isEmpty ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
