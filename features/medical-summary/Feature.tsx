@@ -436,14 +436,21 @@ export default function MedicalSummaryFeature() {
   // 待核對 beside an alert that calls a medicine anticholinergic against its
   // listed mechanism, naming the medicine by its ingredient, or that raises an
   // anticholinergic alert the Beers rules do not support (none supplied, or
-  // one with no related condition named). Labels, never hides.
+  // one with no related condition in the alert or the problem list). Labels,
+  // never hides.
+  const headline = result?.headline
+  const problemList = result?.problems
   const alertPropertyReview = useCallback(
     (alert: SafetyAlert) => {
       const drugs = [...new Set((alert.propertyReviewKeys ?? []).map((key) => {
         const source = resolveSafetySource(key)
         return source?.medicationClass?.split(" · ")[0] || source?.display || key
       }))]
-      const burden = reviewAnticholinergicAlert(alert, currentAnticholinergics.length)
+      const burden = reviewAnticholinergicAlert(
+        alert,
+        currentAnticholinergics.length,
+        (problemList ?? []).map((problem) => problem.label),
+      )
       // The medicines the alert cites, by ingredient: named when none of
       // them was supplied in the window.
       const cited = [...new Set((alert.sources ?? [])
@@ -461,13 +468,11 @@ export default function MedicalSummaryFeature() {
       ].filter(Boolean)
       return labels.length ? labels.join("；") : undefined
     },
-    [resolveSafetySource, currentAnticholinergics, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
+    [resolveSafetySource, currentAnticholinergics, problemList, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
   )
   // 待核對 under a clinician headline that does not match the problem list —
   // problems the list does not hold, medicines, lab values. Judged only once
   // both requests have answered; labels, never rewrites.
-  const headline = result?.headline
-  const problemList = result?.problems
   const headlineReviewLabel = useMemo(() => {
     if (isPatient || !headline || !problemList?.length) return undefined
     const medicineNames = (safetySourceCatalog ?? [])

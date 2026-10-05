@@ -56,6 +56,11 @@ describe('anticholinergicMedicinesLine', () => {
     expect(reviewAnticholinergicAlert(alert('Anticholinergic with urinary retention', 'ACB 3 medicine in a 90-year-old with urinary retention.'), 1))
       .toBeUndefined()
     expect(reviewAnticholinergicAlert(alert('抗膽鹼藥物與失智', '失智病人使用 ACB 3 藥物。'), 1)).toBeUndefined()
+    // One, with the condition in the problem list though not in the alert: meets the rule.
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'ACB 3 medicine in a 90-year-old.'), 1, ['Urinary retention', 'Hip fracture']))
+      .toBeUndefined()
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'ACB 3 medicine in a 90-year-old.'), 1, ['Hip fracture']))
+      .toBe('one-without-condition')
     // Two or more: meets the rule. Not about anticholinergics: not judged.
     expect(reviewAnticholinergicAlert(alert('Anticholinergic burden: 2 medicines', 'Two ACB 3 medicines.'), 2)).toBeUndefined()
     expect(reviewAnticholinergicAlert(alert('Renal dosing review', 'eGFR 31 with a renally cleared medicine.'), 0)).toBeUndefined()

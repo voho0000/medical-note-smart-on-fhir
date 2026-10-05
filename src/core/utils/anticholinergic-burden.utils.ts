@@ -103,18 +103,21 @@ const QUALIFYING_CONDITION =
 export type AnticholinergicAlertReview = 'none-supplied' | 'one-without-condition'
 
 /**
- * Judged on the alert's title and detail against the count the app made:
- * none supplied in the window, or one without a qualifying condition named.
- * Age is not checked here. Undefined for an alert that is not about
- * anticholinergics, or that meets the rules.
+ * Judged against the count the app made: none supplied in the window, or one
+ * with no qualifying condition in the alert or in the patient's problem list.
+ * The problem list counts: an alert for a patient whose list holds urinary
+ * retention was labelled "names no condition" although the condition was
+ * there (2026-10-05). Age is not checked here. Undefined for an alert that is
+ * not about anticholinergics, or that meets the rules.
  */
 export function reviewAnticholinergicAlert(
   alert: { title: string; detail: string },
   currentCount: number,
+  problemLabels: readonly string[] = [],
 ): AnticholinergicAlertReview | undefined {
   const text = `${alert.title} ${alert.detail}`
   if (!ANTICHOLINERGIC_CLAIM.test(text)) return undefined
   if (currentCount === 0) return 'none-supplied'
-  if (currentCount === 1 && !QUALIFYING_CONDITION.test(text)) return 'one-without-condition'
+  if (currentCount === 1 && !QUALIFYING_CONDITION.test(`${text} ${problemLabels.join(' ')}`)) return 'one-without-condition'
   return undefined
 }
