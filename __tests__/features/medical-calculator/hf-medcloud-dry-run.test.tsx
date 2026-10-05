@@ -372,7 +372,7 @@ it('the hook rejects a missing selected diagnosis even if another same-day visit
 
 it('clears cached HF results on an import event without a parent rerender', async () => {
   jest.mocked(requestHfDryRun).mockResolvedValue(accepted)
-  jest.mocked(requestHfPrediction).mockResolvedValue({ verdict: 'scored', horizonMonths: 1, probability: 0.1234, riskTier: 'low', notes: [] })
+  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
   const { result } = renderHook(() => useMedcloudHfDryRun())
   await act(async () => { await result.current.prepare() })
   await act(async () => { await result.current.validate() })
