@@ -1,5 +1,7 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-10-05 latest owner decision: CDSS save/history must be bound to the signed-in user. On `?site=vghtpe`, Firebase/intranet admission requires a nonanonymous App account; intranet retains the hospital subnet check. Only the original saver may list/read a record. The earlier same-day network-only decision is superseded. Deployment target: `https://fhir.mediprisma.tw`.
+
 Every place the app behaves differently because of *how it was opened* is
 listed here. A gate is one of two kinds, and the kind decides how strict the
 review is:
@@ -29,6 +31,10 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 
 | Where | Kind | Behaviour on the route | Owner decision |
 |---|---|---|---|
+| `patient-identity.ts` / `CdssStorageActions.tsx` | 不顯示（拒絕存讀） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: explicitly de-identified source patients cannot save, list or read CDSS records. The anonymous-name source marker is preserved through local demographic overlays and IPS export/reimport. Switching the same patient between source privacy states clears visible history and cancels pending operations. Show guidance to reimport with 雲抓「去識別化」turned off. Non-de-identified patients with complete identity retain save/history; native masked national IDs using x, X or * remain accepted regardless of mask count. | Explicit owner request in chat, 2026-10-05: CDSS 只接受不選去識別化的病人。 |
+| `features/clinical-decision-support/renderers/CdssStorageActions.tsx` | 不顯示（停用操作） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: guests, anonymous accounts and sessions without an established account UID cannot save or open CDSS history. Signed-in accounts retain these actions, limited to their own server-owned records; logout/account change closes and clears history. Existing site/Beta/role gates still apply. | Explicit owner request in chat, 2026-10-05: 綁定登入 user 才能儲存，僅原儲存者可讀取。 |
+| `features/medical-calculator/prognosis/HfMedcloudDryRun.tsx` | Submission | HF calculator at `/`, `/app/`, `/app-hmc/` and their launch-query variants: default Firebase policy requires existing sign-in; explicit intranet builds allow approved network callers without Firebase. Unset origin or unknown policy disables submission with a configuration notice. New prediction action requires an accepted check for the same input. Existing HF calculator surfaces remain visible. | Owner approved intranet access and formal prediction in chat, 2026-10-05 |
+| `src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook.ts` | Submission | On all routes offering HF SaMD, a supported bridge import may prepare inputs. An unmapped selected index diagnosis prevents validation and prediction at the hook and UI boundaries until the user explicitly supplies HF on that exact existing encounter; unsupported imports and upstream eligibility checks remain enforced. Existing site/intranet entry gates remain unchanged. Cloud visit listing now includes dated visits without recognized diagnoses, so preparation defaults to the newest eligible outpatient visit even when supplementation is needed, rather than the previous newest diagnosed visit. This follows the owner request to use the latest outpatient visit with explicitly supplied HF history (2026-10-06). | Owner requested health-bank/TVGH bridge support in chat, 2026-10-05 |
 | `features/clinical-summary/document-summary/DocumentSummaryCard.tsx` | 不顯示 | All routes: remove the unshipped standalone 歷史 B/C 肝篩檢 section from 文件, restoring the original document-only layout. Source-authored Composition chapters and the existing reports flow remain available. | Owner explicitly requested removal in chat, 2026-09-11 |
 | `app/page.tsx` (tour launcher) | 不打斷 | Guided-tour offer never opens | e5374e97, 2026-08-20 |
 | `app/_components/FirstRunOnboardingDialog.tsx` | 不打斷 | First-run onboarding never opens on either `/app/` or `/app-hmc/` when `medcloud2=auto`; the vghtpe hospital hand-off is covered on both paths | e5374e97; `/app-hmc/` confirmed by owner, 2026-09-09 |
@@ -36,6 +42,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/providers/audience.provider.tsx` | 不打斷 | Opens in clinician mode; a stored 民眾 choice is not restored (storage untouched) | e5374e97 |
 | `src/application/hooks/ai-generation/use-ai-slot-generation.hook.ts` | 不打斷 | The launch owns the automatic summary run; the browser's auto-generate switch does not fire a second one | e5374e97 |
 | `src/application/telemetry/launch-context.ts` | — | Telemetry labels the launch source `medcloud2`; nothing changes for the user | e5374e97 |
+| `features/lab-data-report/components/LabDataReportDialog.tsx` | — | Adds, never hides: on `?site=vghtpe` (with or without `medcloud2=auto`) the 回報檢驗資料問題 form asks 送給 — 團隊和機構（建議, default）/ 僅機構 / 僅連線測試. Elsewhere a report goes to the development team as before. The institution is the hospital Gateway named by `NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL`; until a build sets it, 團隊和機構 sends to the team alone and says so, 僅機構 cannot be sent, and the Gateway is never contacted. 僅連線測試 sends no patient data. | Supervisor's request relayed by the owner in chat, 2026-10-02 |
 | `features/clinical-decision-support/guideline-packs/pilot-gate.ts` | 不顯示 | `?pilotPacks=` is ignored and stored pilot ids do not apply (a tester's per-pack switch must not follow a clinician into a hand-off) | 90a3938c, 2026-09-05 — **stands**; the Beta switch is the way in |
 | `features/settings/components/DisplaySettings.tsx` (pilot-pack checkboxes) | 不顯示 | The per-pack 試辦 checkboxes are not shown | 90a3938c — stands, same reason |
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
@@ -62,6 +69,7 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 
 | Surface | Behaviour | Owner decision |
 |---|---|---|
+| HF SaMD at `/`, `/app/`, `/app-hmc/` and their launch-query variants where the existing site/intranet entry gate permits it | Model/source explanations are collapsed by default; input-check and prediction actions remain above details and sticky while scrolling. The extra physician-identity confirmation checkbox is removed: selecting a HF-history shortcut applies the diagnosis to existing visits for this request; advanced selections apply once code/date/rank are complete. Opening the calculator does not add diagnoses. Case-type 08 records are excluded from supplementation; outpatient shortcuts include the exact index encounter on same-day ties. Missing index diagnoses are explained next to disabled actions, and invalid manual ranks have inline feedback. Unavailable diagnosis shortcuts explain the missing eligible encounters beside their controls; fixed actions contain only buttons and the disabled reason. Returned API errors and warnings remain visible. | Explicit owner requests in chat, 2026-10-06: compact spacing and remove the extra「我是醫師，確認……」checkbox. |
 | 國健署五項慢性病風險 at `/`, `/app/`, `/app-hmc/` and their launch-query variants | Autofilled laboratory dates more than 7 days apart produce the existing source-date warning only; they no longer hide eligible risk percentages or grades. Known disease, diagnostic thresholds, missing inputs and validation-range checks remain unchanged. | Explicit owner request to remove the date-based blocker, 2026-09-16 |
 
 ## Medical Summary display rules (all launch routes)
@@ -150,8 +158,42 @@ AF is listed alongside HF and lipid in the HMC host, including production builds
 
 ## Optional private integrations (all routes)
 
+2026-10-04，使用者指定 FHIR 讀寫暫只開放已登入 Firebase 的 CDSS 協作者。site=vghtpe 的有效CDSS結果保留人工儲存／歷史控制，firebase 模式沿用既有登入、由API查UID名單；不顯示額外FHIR登入鈕。只有明確 oauth2 設定提供「登入 FHIR 授權／斷開 FHIR 授權」。其餘臨床surface與既有Beta／院別規則保留，FHIR不經Gateway；詳見CDSS-FHIR-PILOT.md。
+
 | Surface | Behaviour | Owner decision |
 |---|---|---|
 | CDSS「個人化照護指引」與 CDSS 試辦 pack 控制，在 `/`、`/app/`、`/app-hmc/` 及各啟動參數 | Build without the complete CDSS package group: omit the tab and pack controls. With the packages installed: retain all existing Beta, audience and hospital-launch rules. Main clinical reports, AI summary, calculators and FHIR imports remain available. | Explicit owner clarification in chat, 2026-09-30 |
 | 健康存摺 SDK JSON 匯入，在 `/`、`/app/`、`/app-hmc/` 及各啟動參數 | Missing SDK browser artifact or declaration: advertise FHIR Bundle import only and reject SDK JSON with a clear message. With the vendored artifact: retain SDK conversion without requiring the private source repo. | Explicit owner clarification in chat, 2026-09-30 |
 | 民眾模式（patient）＋ Beta「個人化衛教」，在 `/`、`/app/`、`/app-hmc/` 及各啟動參數 | Build without the complete education package group: retain the existing patient/Beta entry and show「此部署尚未安裝個人化衛教內容。」; personalized education content is unavailable. With the packages installed: retain the original education content and all existing audience/Beta launch rules. | Owner explicitly approved the unavailable-content notice on these three routes in chat, 2026-09-30 |
+
+## HF calculator submission policy (2026-10-05)
+
+The HF calculator remains visible on its existing clinician routes. Unset NEXT_PUBLIC_HF_AUTH_POLICY retains the Firebase caller requirement. Explicit intranet mode removes the Firebase requirement for HF input checks and explicit formal predictions, with network authorization enforced by the SaMD ingress/service; the owner approved all approved hospital network clients in chat. Unknown policy values disable submission with a configuration notice. No route, care pack, traditional calculator or result surface is hidden by this change.
+
+2026-10-05 production activation: the owner authorized enabling HF at https://mediprisma.tw/app/. The /app build receives NEXT_PUBLIC_HF_GATEWAY_ORIGIN and NEXT_PUBLIC_HF_AUTH_POLICY from repository variables; its HF submission gate uses the approved intranet policy. The separate /app-hmc publisher and pilot branch remain unchanged.
+
+## HF SaMD calculator hospital gate (2026-10-05)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| HF AI-SaMD calculator card, input checks, prediction and results on `/`, `/app/`, `/app-hmc/` | Offered in clinician calculator lists with exact `site=vghtpe`, OR after an explicitly configured intranet policy receives a valid HF catalogue from the existing network-authorized `/samd/v1/models` endpoint. A missing/other site and failed/unknown network discovery omit this hospital integration; the probe sends no patient data and does not use `/health` as authorization. The card carries 「北榮 SaMD」 and opens the full input-check/prediction/result detail. Traditional HF calculators retain their existing visibility. This presentation gate does not replace service authorization. | Owner explicitly requested 「僅限site=vghtpe才出現」 and the existing calculator UI, then added confirmed hospital-network clients as an alternative visibility condition in chat, 2026-10-05. |
+
+The earlier HF activation entries describe their rollout at that time. Their unrestricted SaMD presentation is superseded by the hospital gate above; traditional HF calculator visibility is unchanged. The active surface is HfSamdCard with HfMedcloudDetail; HfMedcloudDryRun remains a compatibility wrapper.
+
+## Remove duplicate HF prognosis panel (2026-10-05)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| 「HF 預後模型・公式待串接」 expandable panel in calculator lists on `/`, `/app/`, `/app-hmc/` | Removed entirely from the shared calculator list. Its panel-only SHFM/GWTG-HF pending-formula entries are no longer offered there. Existing registered MAGGIC and LIFE-Preserved calculators remain in the ordinary list, and the 北榮 SaMD card retains its site/intranet gate and detailed results. This supersedes earlier statements that the grouped HF panel remained visible. | Owner explicitly requested removal of this entire panel in chat with a screenshot, 2026-10-05. |
+
+## HF SaMD detail navigation (2026-10-05)
+
+The owner requested the same master/detail flow as ordinary calculators. The gated 北榮 SaMD card now opens an inline calculator detail page with 返回, rather than a modal dialog. Returning to the list or switching an already visited right-panel tab preserves in-flight validation/prediction and results in the existing mounted session; changing the patient/import still aborts and discards the old request. No clinical surface or authorization gate is removed. Page refresh or leaving the app does not guarantee that an in-flight operation continues. This supersedes earlier references to a SaMD result dialog.
+
+## HF SaMD imported bridge sources (2026-10-05)
+
+Owner requested health-bank and TVGH EHR bridge imports in addition to medcloud2.
+The existing site/intranet and medical-audience entry gates remain unchanged.
+New source formats can prepare model inputs; missing recognized index diagnoses
+are shown explicitly and prevent uploading invalid inputs. Existing cloud input
+eligibility is preserved. No previously visible clinical surface is removed.

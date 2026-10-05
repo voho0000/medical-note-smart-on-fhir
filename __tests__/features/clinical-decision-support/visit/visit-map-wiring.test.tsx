@@ -54,6 +54,10 @@ const mockUsePatient = jest.fn()
 const mockUseClinicalData = jest.fn()
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({ usePatient: () => mockUsePatient() }))
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({ useClinicalData: () => mockUseClinicalData() }))
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null }),
+}))
+
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ locale: 'zh-TW' }) }))
 
 jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView', () => ({

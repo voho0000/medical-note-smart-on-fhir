@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Noto_Serif_TC } from 'next/font/google'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -963,6 +963,8 @@ export function VisitBookLayout({
   onAnswerQuestion,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
+  const onSaveTarget = chrome?.onSaveTarget
+  const attachSaveTarget = useCallback((target: HTMLDivElement | null) => onSaveTarget?.(target), [onSaveTarget])
   // Inside the CDSS panel unless the page around it says otherwise, or the
   // address asks for the whole window (`?visit=book`).
   const [urlBook] = useState(isVisitBookMode)
@@ -1905,6 +1907,7 @@ export function VisitBookLayout({
                   ? MARK_WORDS.wait[isEnglish ? 'en' : 'zh']
                   : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
+          {chrome?.onSaveTarget ? <div ref={attachSaveTarget} className={styles.saveRecord} data-testid="cdss-book-save-target" /> : null}
           {/* One button either way (the shared key): pressed from the keyboard,
               focus stays on it as the page moves between panel and window. */}
           {chrome?.onExpand ? (

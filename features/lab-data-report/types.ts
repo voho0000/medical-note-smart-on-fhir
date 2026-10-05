@@ -230,6 +230,8 @@ export interface LabDataReportPayload {
 export interface LabDataReportResponse {
   success: boolean
   reportId?: string
+  /** Set on the answer to a connection test, which stores nothing. */
+  connectionTest?: boolean
   error?: string
   reason?: string
 }

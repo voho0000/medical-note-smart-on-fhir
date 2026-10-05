@@ -8,7 +8,7 @@
 import type {
   PatientEntity,
 } from '@/src/core/entities/patient.entity'
-import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
+import { getPatientDisplayName, isDeidentifiedPatient } from '@/src/core/entities/patient.entity'
 import type {
   AllergyEntity,
   CarePlanEntity,
@@ -162,21 +162,23 @@ export function buildPatient(
   options: { includeIdentifiers?: boolean; maskedLabel?: string } = {},
 ): { entry: IpsBundleEntry; reference: string } {
   const includeIdentifiers = options.includeIdentifiers !== false
+  const deidentified = patient ? isDeidentifiedPatient(patient) : false
   const name = patient?.name?.[0]
   // Carry whatever the source had — text (TW Core/IPS local-script name),
   // family, given — so a round-trip never drops the name. Only when there is
   // no usable name at all do we fall back to the "Unknown Patient" sentinel.
   const nameArray = !includeIdentifiers
-    ? [{ text: options.maskedLabel || 'Identity masked by the exporter' }]
+    ? [{ ...(deidentified ? { use: 'anonymous' } : {}), text: options.maskedLabel || 'Identity masked by the exporter' }]
     : name && (name.text || name.family || name.given?.length)
       ? [
           {
+            ...(deidentified ? { use: 'anonymous' } : {}),
             ...(name.text ? { text: name.text } : {}),
             ...(name.family ? { family: name.family } : {}),
             ...(name.given?.length ? { given: name.given } : {}),
           },
         ]
-      : [{ text: getPatientDisplayName(patient) }]
+      : [{ ...(deidentified ? { use: 'anonymous' } : {}), text: getPatientDisplayName(patient) }]
   const identifiers = includeIdentifiers ? patientIdentifiers(patient) : undefined
 
   const resource: FhirResource = {

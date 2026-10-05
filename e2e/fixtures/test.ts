@@ -10,12 +10,15 @@
 import { test as base } from '@playwright/test'
 import { stubFirebaseAnonymousAuth } from './firebase-auth'
 
-export const test = base.extend({
+export const test = base.extend<{ initializeFirebaseFirestore: boolean }>({
+  initializeFirebaseFirestore: [false, { option: true }],
   // The second argument is Playwright's "hand this to the test" callback. It is
   // conventionally named `use`, but positional — and that name trips
   // react-hooks/rules-of-hooks, which reads it as React's `use`.
-  context: async ({ context }, runTest) => {
-    await stubFirebaseAnonymousAuth(context)
+  context: async ({ context, initializeFirebaseFirestore }, runTest) => {
+    // The explicit FHIR Firebase profile signs in a synthetic real account.
+    // Its chat repositories require an initialized db; all Firestore network calls stay blocked by the fixture.
+    await stubFirebaseAnonymousAuth(context, { initializeFirestore: initializeFirebaseFirestore || process.env.FHIR_E2E_AUTH_MODE === 'firebase' })
     await runTest(context)
   },
 })

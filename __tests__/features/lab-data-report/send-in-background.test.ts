@@ -38,7 +38,7 @@ describe('sendLabDataReportInBackground', () => {
       base,
       raw: { read: Promise.resolve({ ok: true, extract, expiresAt: 0 }), dayZero: null, includeValues: true },
     }, strings)
-    expect(result).toEqual({ ok: true, reportId: 'LDR-1' })
+    expect(result).toEqual({ team: { ok: true, reportId: 'LDR-1' } })
     expect(toast.loading).toHaveBeenNthCalledWith(1, 'reading')
     expect(toast.loading).toHaveBeenNthCalledWith(2, 'sending', { id: 't1' })
     expect((submitLabDataReport as jest.Mock).mock.calls[0][0].rawSource.rows).toHaveLength(1)
@@ -77,5 +77,73 @@ describe('sendLabDataReportInBackground', () => {
     } finally {
       delete (navigator as { clipboard?: unknown }).clipboard
     }
+  })
+
+  describe('to the team and the institution (?site=vghtpe)', () => {
+    const both = {
+      ...strings,
+      institutionReceived: 'hospital {id}',
+      institutionSkipped: 'hospital not set up',
+      inDestination: (destination: string, text: string) => `${destination}: ${text}`,
+    }
+    const answer = (results: Record<string, unknown>) =>
+      (submitLabDataReport as jest.Mock).mockImplementation((_payload, { destination }) => Promise.resolve(results[destination]))
+
+    it('sends the same payload to both and gives both receipts', async () => {
+      answer({ team: { ok: true, reportId: 'LDR-1' }, institution: { ok: true, reportId: 'GW-7' } })
+      const result = await sendLabDataReportInBackground({ base, destinations: ['team', 'institution'] }, both)
+      expect(result).toEqual({ team: { ok: true, reportId: 'LDR-1' }, institution: { ok: true, reportId: 'GW-7' } })
+      const calls = (submitLabDataReport as jest.Mock).mock.calls
+      expect(calls.map(([, options]) => options.destination)).toEqual(['team', 'institution'])
+      expect(calls[1][0]).toBe(calls[0][0])
+      expect(toast.success).toHaveBeenCalledWith('done', expect.objectContaining({ description: 'id LDR-1\nhospital GW-7' }))
+    })
+
+    it('retries only where it failed, keeping the receipt it already has', async () => {
+      answer({ team: { ok: true, reportId: 'LDR-1' }, institution: { ok: false, status: 'network' } })
+      await sendLabDataReportInBackground({ base, destinations: ['team', 'institution'] }, both)
+      const [message, options] = (toast.error as jest.Mock).mock.calls[0]
+      expect(message).toBe('institution: failed')
+      expect(options.description).toBe('id LDR-1')
+
+      answer({ institution: { ok: true, reportId: 'GW-8' } })
+      await options.action.onClick({ preventDefault: jest.fn() })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const calls = (submitLabDataReport as jest.Mock).mock.calls
+      expect(calls).toHaveLength(3)
+      expect(calls[2][1]).toEqual({ destination: 'institution' })
+      expect(toast.success).toHaveBeenCalledWith('done', expect.objectContaining({ description: 'id LDR-1\nhospital GW-8' }))
+    })
+
+    it('names both destinations when both fail', async () => {
+      answer({ team: { ok: false, status: 500 }, institution: { ok: false, status: 'timeout' } })
+      await sendLabDataReportInBackground({ base, destinations: ['team', 'institution'] }, both)
+      expect((toast.error as jest.Mock).mock.calls[0][0]).toBe('team: failed\ninstitution: failed')
+    })
+
+    it('says the institution was left out when it has no Gateway', async () => {
+      answer({ team: { ok: true, reportId: 'LDR-1' } })
+      await sendLabDataReportInBackground({ base, destinations: ['team'], institutionSkipped: true }, both)
+      expect(submitLabDataReport).toHaveBeenCalledTimes(1)
+      expect(toast.success).toHaveBeenCalledWith('done', expect.objectContaining({ description: 'id LDR-1\nhospital not set up' }))
+    })
+
+    it('names the institution on its own failure, and copies its id on success', async () => {
+      answer({ institution: { ok: false, status: 'network' } })
+      await sendLabDataReportInBackground({ base, destinations: ['institution'] }, both)
+      expect((toast.error as jest.Mock).mock.calls[0][0]).toBe('institution: failed')
+      expect((submitLabDataReport as jest.Mock).mock.calls.map(([, options]) => options.destination)).toEqual(['institution'])
+
+      answer({ institution: { ok: true, reportId: 'GW-9' } })
+      const writeText = jest.fn(() => Promise.resolve())
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      try {
+        await sendLabDataReportInBackground({ base, destinations: ['institution'] }, both)
+        ;(toast.success as jest.Mock).mock.calls[0][1].action.onClick({ preventDefault: jest.fn() })
+        expect(writeText).toHaveBeenCalledWith('GW-9')
+      } finally {
+        delete (navigator as { clipboard?: unknown }).clipboard
+      }
+    })
   })
 })

@@ -120,6 +120,23 @@
 
 /* ------------------------------- header ------------------------------- */
 
+/* Only the explicit save moves here; its controller remains in the CDSS panel. */
+.saveRecord:empty { display: none; }
+.saveRecord :global(button) {
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--blue);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--blue-ink);
+  font: 500 13px/1.4 var(--sans);
+  box-shadow: none;
+}
+.saveRecord :global(button:hover:not(:disabled)) { background: var(--blue-soft); }
+.saveRecord :global(button:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.saveRecord :global(button:disabled) { cursor: wait; }
+
+
 .head {
   position: sticky;
   top: 0;

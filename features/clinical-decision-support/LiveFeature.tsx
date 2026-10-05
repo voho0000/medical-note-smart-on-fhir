@@ -84,6 +84,10 @@ import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
 import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
+import { CdssStorageActions } from './renderers/CdssStorageActions'
+import { cdssSourceRecords } from './telemetry/source-records'
+import { useCdssGateway } from './telemetry/use-cdss-gateway'
+import { recordCdssEvent } from './telemetry/cdss-gateway'
 
 const AF_PACK_ID = 'atrial-fibrillation-cdss'
 const LIPID_PACK_ID = 'hyperlipidemia-cdss'
@@ -317,6 +321,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const [urlBookMode] = useState(isVisitBookMode)
   // 決策地圖 v2 opened over the whole window from the panel; a new page load opens it in the panel.
   const [bookFullWindow, setBookFullWindow] = useState(false)
+  const [bookSaveTarget, setBookSaveTarget] = useState<HTMLDivElement | null>(null)
   const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
@@ -414,9 +419,12 @@ export default function LiveClinicalDecisionSupportFeature({
   }, [hydrateVisitAnswers, patientId, today])
 
   // The chart half of the profile: expensive, and independent of the switches.
+  // Rebuild on a new local day, but read a fresh instant on every chart refresh
+  // or patient switch so same-day records are never compared with an old clock.
   const recordProfile = useMemo(() => {
     if (!patient) return null
     return createHospitalAwareCdssPatientProfile({
+      now: new Date(),
       patient,
       conditions: clinicalData.conditions,
       encounters: clinicalData.encounters,
@@ -432,7 +440,10 @@ export default function LiveClinicalDecisionSupportFeature({
       diagnosticReports: clinicalData.diagnosticReports,
       documentReferences: clinicalData.documentReferences,
     })
+    // The local day invalidates the clock; every rebuild takes a fresh instant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    today,
     clinicalData.conditions,
     clinicalData.encounters,
     clinicalData.medications,
@@ -531,6 +542,8 @@ export default function LiveClinicalDecisionSupportFeature({
     : undefined)
     ?? applicablePacks[0]
     ?? getDefaultClinicalGuidelinePack()
+
+  useCdssGateway({ patientId, packId: selectedPack?.id ?? 'unknown', ready: answersHydrated })
 
   const result = useMemo(() => {
     if (!profile) return null
@@ -723,6 +736,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
+    if (patientId) recordCdssEvent(patientId, result.packId, { kind: 'interaction', action: 'page_reset' })
     if (!patientId) return
     if (isNhiTable) {
       useNhiLipidReviewStore.getState().clear(patientId)
@@ -767,7 +781,7 @@ export default function LiveClinicalDecisionSupportFeature({
             packs={guidelinePacks}
             applicablePackIds={applicablePackIds}
             selectedPackId={selectedPack.id}
-            onSelect={setRequestedPackId}
+            onSelect={id => { if (patientId) recordCdssEvent(patientId, id, { kind: 'interaction', action: 'disease_selected' }); setRequestedPackId(id) }}
           />
           {showLayoutSwitcher ? (
             <LayoutSwitcher
@@ -775,7 +789,7 @@ export default function LiveClinicalDecisionSupportFeature({
               layout={switcherLayout}
               packId={result.packId}
               mapAvailable={mapOffered}
-              onSelect={setLayout}
+              onSelect={next => { if (patientId) recordCdssEvent(patientId, result.packId, { kind: 'interaction', action: 'layout_selected', target: next }); setLayout(next) }}
             />
           ) : null}
           {(isVisitFlow || isNhiTable) && patientId ? (
@@ -807,6 +821,12 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
+      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget} input={{ patient,
+        packId: result.packId, profile, result,
+        physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
+          nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
+        physicianDecisions: { ...physicianDecisions },
+      }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
       <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
 
       {/*
@@ -827,6 +847,7 @@ export default function LiveClinicalDecisionSupportFeature({
         inline: true,
         onExpand: () => setBookFullWindow(true),
       } : {
+        onSaveTarget: setBookSaveTarget,
         tabs: (
           <DiseaseSwitcher
             locale={cdssLocale}

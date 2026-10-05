@@ -97,7 +97,6 @@ export function HfPrognosisModels({ locale, evidence = {}, autofill }: {
         </li>
       })}
     </ul>
-    <p className="px-0.5 text-[11px] text-muted-foreground">{en ? 'Team AI-SaMD: not connected; no predictions available.' : '團隊 AI-SaMD：尚未接入，目前沒有預測結果。'}</p>
     <Dialog open={!!model} onOpenChange={open => { if (!open) setSelected(null) }}>
       {model ? <DialogContent className="@container max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>

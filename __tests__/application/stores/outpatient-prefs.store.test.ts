@@ -82,6 +82,53 @@ describe('sanitizeOutpatientPrefs', () => {
   })
 })
 
+describe('sanitizeOutpatientPrefs — 用藥複製格式', () => {
+  it('repairs the stored med format field by field', () => {
+    const { medFormat: format } = sanitizeOutpatientPrefs({
+      medFormat: {
+        id: 'mine',
+        numbering: 'roman',
+        fields: [
+          { id: 'date', on: true, style: 'roc' },
+          { id: 'name', on: false, style: 'nope' },
+          { id: 'date', on: false },
+          { id: 'bogus', on: true },
+          { id: 'frequency', on: true, style: 'zh' },
+        ],
+        group: 'institution',
+        endedAcute: 'list',
+      },
+    })
+    expect(format).not.toBeNull()
+    expect(format!.numbering).toBe('dot')
+    expect(format!.group).toBe('institution')
+    expect(format!.endedAcute).toBe('list')
+    // Stored order first, each field once; the name is always on; missing
+    // fields join at the end, switched off.
+    expect(format!.fields.slice(0, 3)).toEqual([
+      { id: 'date', on: true, style: 'roc' },
+      { id: 'name', on: true, style: 'ingredient' },
+      { id: 'frequency', on: true, style: 'zh' },
+    ])
+    expect(format!.fields).toHaveLength(10)
+    expect(format!.fields.slice(3).every((field) => !field.on)).toBe(true)
+  })
+
+  it('drops the retired 慢箋 field and grouping from a stored format', () => {
+    const { medFormat: format } = sanitizeOutpatientPrefs({
+      medFormat: { id: 'mine', fields: [{ id: 'chronic', on: true, style: 'zh' }, { id: 'dose', on: true }], group: 'chronic' },
+    })
+    expect(format!.fields.map((field) => field.id)).not.toContain('chronic')
+    expect(format!.group).toBe('none')
+  })
+
+  it('no stored format, or junk, means the default', () => {
+    expect(sanitizeOutpatientPrefs({}).medFormat).toBeNull()
+    expect(sanitizeOutpatientPrefs({ medFormat: 'junk' }).medFormat).toBeNull()
+    expect(sanitizeOutpatientPrefs({ medFormat: { id: 'builtin:standard' } }).medFormat).toBeNull()
+  })
+})
+
 describe('useOutpatientPrefsStore', () => {
   it('keeps each visitor’s settings apart', () => {
     const { update } = useOutpatientPrefsStore.getState()

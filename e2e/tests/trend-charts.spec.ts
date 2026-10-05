@@ -116,7 +116,7 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     })
     await page.goto('/')
     await page.getByTestId('welcome-demo-card').click()
-    await expect(page.getByText('陳○明').first()).toBeAttached({ timeout: 30_000 })
+    await expect(page.getByText('陳大明').first()).toBeAttached({ timeout: 30_000 })
     await page.getByRole('button', { name: '臨床摘要' }).click()
     await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
     await page.getByRole('tab').filter({ hasText: /^全部/ }).first().click()

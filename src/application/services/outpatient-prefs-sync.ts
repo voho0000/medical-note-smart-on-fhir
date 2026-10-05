@@ -21,7 +21,6 @@ import {
   EMPTY_OUTPATIENT_PREFS,
   sanitizeOutpatientPrefs,
   useOutpatientPrefsStore,
-  type EmrCustomFormat,
   type OutpatientPrefs,
 } from '@/src/application/stores/outpatient-prefs.store'
 
@@ -45,8 +44,12 @@ export function readRemoteOutpatientPrefs(data: DocumentData | undefined): Remot
 /** The document field: the settings, their stamp, and nothing else. JSON
  *  round-trip drops any undefined, which Firestore refuses. */
 export function toRemoteOutpatientPrefs(prefs: OutpatientPrefs, updatedAt: number): DocumentData {
-  const { pinnedLabs, labMode, formats, activeFormatId, handoffMode } = sanitizeOutpatientPrefs(prefs)
-  return JSON.parse(JSON.stringify({ pinnedLabs, labMode, formats, activeFormatId, handoffMode, updatedAt }))
+  const {
+    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat,
+  } = sanitizeOutpatientPrefs(prefs)
+  return JSON.parse(JSON.stringify({
+    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat, updatedAt,
+  }))
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -64,17 +67,35 @@ export function mergeOutpatientPrefs(
   theirs: OutpatientPrefs,
   mineIsNewer: boolean,
 ): OutpatientPrefs {
-  const choice = <K extends 'pinnedLabs' | 'labMode' | 'activeFormatId' | 'handoffMode'>(key: K): OutpatientPrefs[K] => {
+  const choice = <K extends 'pinnedLabs' | 'labMode' | 'activeFormatId' | 'handoffMode' | 'medFormat'>(key: K): OutpatientPrefs[K] => {
     const mineChanged = !same(mine[key], base[key])
     const theirsChanged = !same(theirs[key], base[key])
     if (mineChanged && theirsChanged) return mineIsNewer ? mine[key] : theirs[key]
     return mineChanged ? mine[key] : theirs[key]
   }
-  const byId = (formats: EmrCustomFormat[]) => new Map(formats.map((format) => [format.id, format]))
-  const baseFormats = byId(base.formats)
-  const mineFormats = byId(mine.formats)
-  const theirFormats = byId(theirs.formats)
-  const keep = (id: string): EmrCustomFormat | undefined => {
+  return sanitizeOutpatientPrefs({
+    pinnedLabs: choice('pinnedLabs'),
+    labMode: choice('labMode'),
+    formats: mergeFormatLists(base.formats, mine.formats, theirs.formats, mineIsNewer),
+    activeFormatId: choice('activeFormatId'),
+    handoffMode: choice('handoffMode'),
+    // The one 用藥 format is a single choice: whichever side changed it.
+    medFormat: choice('medFormat'),
+  })
+}
+
+/** One list of formats, merged format by format (see mergeOutpatientPrefs). */
+function mergeFormatLists<T extends { id: string }>(
+  base: T[],
+  mine: T[],
+  theirs: T[],
+  mineIsNewer: boolean,
+): T[] {
+  const byId = (formats: T[]) => new Map(formats.map((format) => [format.id, format]))
+  const baseFormats = byId(base)
+  const mineFormats = byId(mine)
+  const theirFormats = byId(theirs)
+  const keep = (id: string): T | undefined => {
     const was = baseFormats.get(id)
     const ours = mineFormats.get(id)
     const their = theirFormats.get(id)
@@ -87,16 +108,10 @@ export function mergeOutpatientPrefs(
     return mineIsNewer ? ours : their
   }
   const ids = [
-    ...mine.formats.map((format) => format.id),
-    ...theirs.formats.map((format) => format.id).filter((id) => !mineFormats.has(id)),
+    ...mine.map((format) => format.id),
+    ...theirs.map((format) => format.id).filter((id) => !mineFormats.has(id)),
   ]
-  return sanitizeOutpatientPrefs({
-    pinnedLabs: choice('pinnedLabs'),
-    labMode: choice('labMode'),
-    formats: ids.map(keep).filter((format): format is EmrCustomFormat => !!format),
-    activeFormatId: choice('activeFormatId'),
-    handoffMode: choice('handoffMode'),
-  })
+  return ids.map(keep).filter((format): format is T => !!format)
 }
 
 function samePrefs(a: OutpatientPrefs, b: OutpatientPrefs): boolean {
