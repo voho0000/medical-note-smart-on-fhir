@@ -164,4 +164,6 @@ AF is listed alongside HF and lipid in the HMC host, including production builds
 
 ## HF calculator submission policy (2026-10-05)
 
-The HF calculator remains visible on its existing clinician routes. Unset NEXT_PUBLIC_HF_AUTH_POLICY retains the Firebase caller requirement. Explicit intranet mode removes the Firebase requirement only for HF dry-run, with network authorization enforced by the SaMD ingress/service; the owner approved all approved hospital network clients in chat. Unknown policy values disable submission with a configuration notice. No route, care pack, traditional calculator or result surface is hidden by this change.
+The HF calculator remains visible on its existing clinician routes. Unset NEXT_PUBLIC_HF_AUTH_POLICY retains the Firebase caller requirement. Explicit intranet mode removes the Firebase requirement for HF input checks and explicit formal predictions, with network authorization enforced by the SaMD ingress/service; the owner approved all approved hospital network clients in chat. Unknown policy values disable submission with a configuration notice. No route, care pack, traditional calculator or result surface is hidden by this change.
+
+2026-10-05 production activation: the owner authorized enabling HF at https://mediprisma.tw/app/. The /app build receives NEXT_PUBLIC_HF_GATEWAY_ORIGIN and NEXT_PUBLIC_HF_AUTH_POLICY from repository variables; its HF submission gate uses the approved intranet policy. The separate /app-hmc publisher and pilot branch remain unchanged.
