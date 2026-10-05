@@ -1236,8 +1236,11 @@ const referenceDateLine = (referenceDate: string): string =>
 
 const MEDICAL_ENGLISH_LANGUAGE_CONTRACT =
   'OUTPUT LANGUAGE: ENGLISH (MANDATORY), in the concise clinical English Taiwanese physicians write in charts — ' +
-  'a one-liner headline such as "94M with CKD 3b, IHD with HF, ..." and problem-list terms such as "CKD stage 3b" or "Hypothyroidism, suboptimally controlled". ' +
-  'This covers every problem field a reader sees — "label", "basis" and "metric" ("5 abnormal lab results", "HbA1c 6.6% (single)"). ' +
+  // Fictional, judgement-free examples: earlier ones copied a test patient
+  // ("94M with CKD 3b", "HbA1c 6.6%") and modelled a control judgement the
+  // evidence contract forbids (owner, 2026-10-05).
+  'a one-liner headline such as "78F with T2DM, CKD 3a, AF, s/p TKA" and problem-list terms such as "CKD stage 3a" or "Type 2 diabetes mellitus". ' +
+  'This covers every problem field a reader sees — "label", "basis" and "metric" ("3 abnormal lab results", "HbA1c 7.4% → 6.9%"). ' +
   'The records are partly Chinese; translate their meaning, never copy Chinese prose. Copy organization (hospital, clinic, pharmacy) names and medicine names exactly as they appear in the records — never translate them. ' +
   'Keep any uncertainty the records themselves state in English ("suspected", "history of", "s/p"). Keep JSON keys, enum values and source keys unchanged.'
 
@@ -1254,7 +1257,10 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
   problems:
     'PROBLEMS: Include a condition when it is documented by a visit\'s diagnosis code (weighed by the diagnosis-code rule above), a Condition, care plan, or clinical document, or supported by repeated comparable abnormal results whose abnormality is supplied. ' +
     MEDICATION_INFERENCE_RULE +
-    'Never turn a single unassessed lab value into a disease or poor-control problem; without a diagnosis code, name the finding and how long it is documented — eGFR values within weeks are "reduced eGFR, chronicity undetermined", not CKD; check-up blood pressures are "elevated BP at check-up", not hypertension. ' +
+    // A held-out patient with a recorded hypertension came out as "elevated
+    // BP at check-up" while the example below named blood pressure (owner,
+    // 2026-10-05): the recorded diagnosis comes first.
+    'A recorded diagnosis — a visit code, a Condition, a care plan or a document — names its problem. Only without one: never turn lab values or readings into a disease or a poor-control problem; name the finding and how long it is documented (e.g. "reduced eGFR, chronicity undetermined", not CKD). ' +
     'A medicine\'s intended effect is not a problem of its own: a hormone level suppressed by hormone therapy belongs to the condition being treated. ' +
     'This is the complete problem list. Merge duplicates. This list is read by a doctor about to prescribe: keep what matters for today\'s care. A long run of minor or one-off visit codes (e.g. cerumen impaction, a single otitis externa, dry eye) buries the important problems — group them into one line or leave them out, as you judge; a complex patient usually comes to about a dozen problems. Order the list by clinical weight for the doctor about to prescribe: the reason for today\'s visit first when the data shows it; then conditions that are serious or change today\'s prescribing (e.g. cancer, heart failure, CKD, the reason for an anticoagulant, diabetes, the cause of a recent admission); then other chronic conditions; minor or symptom-level problems (e.g. constipation, insomnia, a one-off acute visit) last. A problem inferred from medicines is placed by what the condition is, not by how it was found. ' +
     'Keep "basis" to a few words saying why the problem is listed: the evidence and count (e.g. "3 visits, I50.3", "2 ED visits, S72.002A; CT", "discharge summary"). Never restate the other columns in it: no values or trends (metric shows them), no medicine names (the medicines column shows them). Name every kind of evidence behind it — visit codes first, then documents, reports and lab results by count, and "medication" when medicines support it ("2 visits, E11.9; 3 lab results; medication"). ' +
@@ -1262,7 +1268,7 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
     '"metric" is a value or finding of this problem — never a medicine or "dispensed", never a test of another problem; leave it out when there is none. ' +
     // 2026-10-05 VGHBrain runs copied whole dispensing batches (M1–M7) onto
     // one row: a refill day holds medicines for several problems.
-    'Choose each medicationSources key by the ingredient and ATC subgroup printed on its SOURCE LIST line — a glaucoma row takes antiglaucoma drops (S01E), not every medicine dispensed the same day. Never copy a run of consecutive M keys or a whole dispensing day onto one problem. ',
+    'Choose each medicationSources key by the ingredient and class printed on its SOURCE LIST line — a row takes only the medicines whose class treats that condition, not every medicine dispensed the same day. Never copy a run of consecutive M keys or a whole dispensing day onto one problem. ',
 }
 
 /** The rules a small model broke most on the 2026-10-05 VGHBrain runs,
@@ -1277,14 +1283,15 @@ function localFinalChecklist(
   }
   if (moduleIds.includes('problems')) {
     items.push(
-      'problems: a condition with no diagnosis code is named as the finding ("reduced eGFR, chronicity undetermined", "elevated BP at check-up"); ' +
-      'each medicationSources key is chosen by the ATC subgroup on its line, never a whole dispensing day; "metric" is a value of this problem, never a medicine.',
+      'problems: a recorded diagnosis names its problem; without one, lab values or readings are named as the finding, not a disease; ' +
+      'a row takes only the medicines whose class treats it, never a whole dispensing day; "metric" is a value of this problem, never a medicine.',
     )
   }
   if (withSafety) {
     items.push('alerts: each says what a finding means for a medicine or what to do; never restate a problem\'s values; no alert that needs no action.')
-    // A 2026-10-05 run alerted on one antipsychotic the line did not list.
-    items.push('An anticholinergic burden alert needs two or more medicines on the ANTICHOLINERGIC MEDICINES line, or one ACB 3 / Beers strong medicine there with dementia, cognitive impairment, delirium, urinary retention, or BPH in a man, named in the alert; when the line says none, there is no such alert.')
+    // General on purpose: an anticholinergic-only reminder here made every
+    // patient's alerts lean toward that one property (owner, 2026-10-05).
+    items.push('A drug-class or interaction alert rests only on the facts the app lists for the medicines — each line\'s mechanism, and any medicine list the app adds; write none they do not support.')
   }
   return `${items.join(' ')} `
 }

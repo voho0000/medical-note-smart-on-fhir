@@ -54,21 +54,20 @@ export function currentAnticholinergicMedicines(
 
 /**
  * "ANTICHOLINERGIC MEDICINES SUPPLIED IN THE 90 DAYS BEFORE 2026-10-05:
- * oxybutynin [M1] ACB 3; imipramine [M23] ACB 3 (2 medicines)." — or "…:
- * none." when the record holds medicines but none of them is (a small model
- * alerted on one the line had not listed). Undefined when the record holds no
- * medicines at all.
+ * oxybutynin [M1] ACB 3; imipramine [M23] ACB 3 (2 medicines)." Undefined
+ * when there are none: a "none" line printed for every patient kept the topic
+ * in front of the model, and alerts leaned toward it (owner, 2026-10-05). An
+ * alert raised without the line is labelled 待核對 in the app.
  */
 export function anticholinergicMedicinesLine(
   catalog: readonly SummarySourceCatalogEntry[],
   referenceDate?: string,
 ): string | undefined {
-  if (!catalog.some((entry) => entry.resourceType.startsWith('Medication'))) return undefined
   const reference = referenceOf(catalog, referenceDate)
   if (!reference || Number.isNaN(Date.parse(reference))) return undefined
   const heading = `ANTICHOLINERGIC MEDICINES SUPPLIED IN THE ${ANTICHOLINERGIC_WINDOW_DAYS} DAYS BEFORE ${reference}:`
   const medicines = currentAnticholinergicMedicines(catalog, reference)
-  if (medicines.length === 0) return `${heading} none.`
+  if (medicines.length === 0) return undefined
   const items = medicines.map(({ ingredient, entry }) => `${ingredient} [${entry.key}] ${entry.medicine!.anticholinergic}`)
   return `${heading} ${items.join('; ')} (${medicines.length} ${medicines.length === 1 ? 'medicine' : 'medicines'}).`
 }

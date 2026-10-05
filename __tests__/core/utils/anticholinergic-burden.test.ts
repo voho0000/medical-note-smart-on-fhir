@@ -31,9 +31,8 @@ describe('anticholinergicMedicinesLine', () => {
   it('leaves out supply that ended long ago, ACB 1 medicines and non-anticholinergics', () => {
     const line = anticholinergicMedicinesLine(catalog, '2026-10-05')!
     expect(line).not.toMatch(/quetiapine|codeine|mirabegron/)
-    // Medicines on record but no anticholinergic among the recent ones: say so.
-    expect(anticholinergicMedicinesLine([catalog[3], catalog[4]], '2026-10-05'))
-      .toBe('ANTICHOLINERGIC MEDICINES SUPPLIED IN THE 90 DAYS BEFORE 2026-10-05: none.')
+    // None among the recent ones: no line at all, so the topic is not raised.
+    expect(anticholinergicMedicinesLine([catalog[3], catalog[4]], '2026-10-05')).toBeUndefined()
     expect(anticholinergicMedicinesLine([], '2026-10-05')).toBeUndefined()
   })
 
