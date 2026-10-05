@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { randomUUID } from 'node:crypto'
 import { detectHfIntranet } from '@/src/infrastructure/hf-risk/intranet-discovery'
-import { HfSamdCalculator } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
+import { HfSamdCalculator, HfSamdSession, HfSamdCard } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
 import { HfMedcloudDryRun } from '@/features/medical-calculator/prognosis/HfMedcloudDryRun'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -236,7 +236,7 @@ it('keeps the HF input surface usable on a hospital launch query', async () => {
   } finally { window.history.replaceState(null,'','/') }
 })
 
-it.each(['/', '/?site=other', '/?site=VGHTPE'])('omits the hospital SaMD calculator on %s', path => {
+it.each(['/', '/?site=other', '/?site=VGHTPE', '/?site=vghtpe&site=hmc'])('omits the hospital SaMD calculator on %s', path => {
   window.history.replaceState({}, '', path)
   render(<HfSamdCalculator locale="zh-TW" />)
   expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
@@ -247,13 +247,13 @@ it('keeps the hospital card on the vghtpe route and opens the full detail withou
   render(<HfSamdCalculator locale="zh-TW" />)
   expect(screen.getByText('北榮 SaMD')).toBeVisible()
   expect(screen.queryByRole('button', { name: '整理健保雲端模型資料' })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByRole('dialog')).toBeVisible()
   await prepare()
   fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByText('輸入檢查通過；資料來源適用性仍待驗證。')).toBeVisible()
   expect(requestHfDryRun).toHaveBeenCalledTimes(1)
   expect(requestHfPrediction).not.toHaveBeenCalled()
@@ -262,7 +262,7 @@ it('returns a scored result to the card and keeps its detailed result when reope
   window.history.replaceState({}, '', '/?site=vghtpe')
   jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
   render(<HfSamdCalculator locale="zh-TW" />)
-  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   await prepare()
   fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
@@ -270,7 +270,7 @@ it('returns a scored result to the card and keeps its detailed result when reope
   await screen.findByRole('region', { name: 'HF 模型預測結果' })
   fireEvent.click(screen.getByRole('button', { name: 'Close' }))
   expect(screen.getByText('12.34%')).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: '開啟北榮 SaMD HF 計算機' }))
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByRole('region', { name: 'HF 模型預測結果' })).toBeVisible()
   expect(requestHfPrediction).toHaveBeenCalledTimes(1)
 })
@@ -293,4 +293,27 @@ it('fails closed when intranet discovery cannot confirm access', async () => {
   await waitFor(() => expect(discovery).toHaveBeenCalled())
   expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
 
+})
+
+it('keeps scored session state across card unmounts and clears it when the patient changes', async () => {
+  window.history.replaceState({}, '', '/?site=vghtpe')
+  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
+  const session = (show: boolean) => <HfSamdSession>{value => show && value.allowed ? <HfSamdCard locale="zh-TW" state={value.state} /> : null}</HfSamdSession>
+  const view = render(session(true))
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
+  await prepare()
+  fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
+  await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
+  fireEvent.click(screen.getByRole('button', { name: '執行 HF 模型預測' }))
+  await screen.findByRole('region', { name: 'HF 模型預測結果' })
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  view.rerender(session(false))
+  expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
+  view.rerender(session(true))
+  expect(screen.getByRole('button', { name: /12.34%/ })).toBeVisible()
+  expect(requestHfPrediction).toHaveBeenCalledTimes(1)
+  importId = 'synthetic-other-import'
+  view.rerender(session(true))
+  expect(screen.queryByText('12.34%')).toBeNull()
+  expect(screen.getByRole('button', { name: /尚未計算/ })).toBeVisible()
 })

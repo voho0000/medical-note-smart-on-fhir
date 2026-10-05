@@ -15,7 +15,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
 import { CalculatorDetail } from "./components/CalculatorDetail"
-import { HfSamdCalculator } from './prognosis/HfSamdCalculator'
+import { HfSamdCard, HfSamdSession, type HfSamdSessionState } from './prognosis/HfSamdCalculator'
 import { HfPrognosisModels } from './prognosis/HfPrognosisModels'
 import { prognosisAutofillEvidence } from './prognosis/autofill-evidence'
 import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
@@ -43,6 +43,10 @@ function daysAgo(iso: string): number | null {
 }
 
 export default function MedicalCalculatorFeature() {
+  return <Suspense fallback={null}><HfSamdSession>{samd => <MedicalCalculatorContent samd={samd} />}</HfSamdSession></Suspense>
+}
+
+function MedicalCalculatorContent({ samd }: { samd: HfSamdSessionState }) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const { autofill, isLoading: patientDataLoading, error: patientDataError } = useLabAutofill()
@@ -81,6 +85,8 @@ export default function MedicalCalculatorFeature() {
   )
   const flatList = list.mode === "flat" ? list.flat : null
   const grouped = list.grouped
+
+  const showSamd = samd.allowed && audience === 'medical' && (filter === 'all' || filter === 'cardiac') && (!query.trim() || /hf|heart|心衰|北榮|samd|tvgh|預後|prognos|死亡|mortality/i.test(query))
 
   if (selected) {
     return (
@@ -156,11 +162,9 @@ export default function MedicalCalculatorFeature() {
         ))}
       </div>
 
-      {audience === 'medical' && (filter === 'all' || filter === 'cardiac') && (!query.trim() || /hf|heart|心衰|北榮|samd|tvgh/i.test(query)) && <Suspense fallback={null}>
-        <HfSamdCalculator locale={locale} />
-      </Suspense>}
+      {showSamd && <HfSamdCard locale={locale} state={samd.state} />}
 
-      {isEmpty ? (
+      {isEmpty && !showSamd ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
           {flatList !== null
             ? filter === "favorites"
