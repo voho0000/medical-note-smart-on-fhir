@@ -440,7 +440,7 @@ it('applies complete advanced diagnosis selections without an extra confirmation
   fireEvent.change(screen.getByRole('combobox', { name: '補充 ICD-10-CM 診斷碼' }), { target: { value: 'I50.9' } })
   fireEvent.click(screen.getByLabelText(/2026-10-01 · 門診 · 基準就診/))
   expect(requestHfDryRun).not.toHaveBeenCalled()
-  expect(screen.queryByRole('note')).toBeNull()
+  expect(screen.getByRole('alert')).toHaveTextContent('1–50')
   expect(screen.queryByLabelText(/我是醫師/)).toBeNull()
   fireEvent.change(screen.getByRole('spinbutton', { name: '2026-10-01 診斷順位' }), { target: { value: '2' } })
   expect(screen.getByRole('note')).toHaveTextContent('醫師確認（使用者聲明）')
@@ -478,4 +478,16 @@ it('applies outpatient diagnosis on shortcut selection without an extra confirma
   expect(requestHfDryRun).not.toHaveBeenCalled()
   expect(screen.getByRole('note')).toHaveTextContent('順位 2')
   expect(requestHfDryRun).not.toHaveBeenCalled()
+})
+
+it('explains a disabled index-diagnosis check outside collapsed details', async () => {
+  const bundle = hfMedcloudFixture()
+  const visit = bundle.entry.find((entry: any) => entry.resource.resourceType === 'Encounter').resource
+  visit.reasonCode = []
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepare()
+  expect(screen.getByRole('button', { name: '執行院內輸入檢查' })).toBeDisabled()
+  expect(screen.getByTestId('hf-model-actions')).toHaveTextContent('基準門診缺少可用診斷')
+  expect(screen.getByText('本次輸入摘要與來源缺漏').closest('details')!.open).toBe(false)
 })

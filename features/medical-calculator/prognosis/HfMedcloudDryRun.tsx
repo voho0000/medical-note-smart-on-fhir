@@ -7,7 +7,7 @@ import { HfPredictionResultView } from './HfPredictionResult'
 import type { HfSelection } from '@/src/core/hf-risk/contract'
 
 const GAP: Record<string, [string, string]> = {
-  'index-diagnosis-missing': ['門診缺少可核對的 ICD-10-CM／ICD-9-CM 診斷；一般 ICD-10 不自行換碼，可由醫師確認後補充本次診斷', 'The visit lacks a verified ICD-10-CM/ICD-9-CM diagnosis; generic ICD-10 is not relabelled. Correct the source diagnosis system and import again'],
+  'index-diagnosis-missing': ['門診缺少可核對的 ICD-10-CM／ICD-9-CM 診斷；一般 ICD-10 不自行換碼，可由醫師確認後補充本次診斷', 'The index visit lacks a verified ICD-10-CM/ICD-9-CM diagnosis; correct the source or explicitly supply HF for this exact visit'],
   'hospital-name-only': ['來源僅提供院所名稱；同名院所無法可靠區分，請核對所選院所及資料範圍', 'Source provides hospital names only; identically named institutions cannot be distinguished reliably. Verify hospital identity and record scope'],
   'patient-birthdate': ['生日未含完整年月日；不以出生年推算日期', 'Full birth date missing; no date inferred from a birth year'],
   'patient-sex': ['性別缺漏或不符合模型定義', 'Sex missing or outside the model definition'],
@@ -39,7 +39,7 @@ const MODULE: Record<string, [string, string]> = {
 }
 const ERRORS: Record<string, [string, string]> = {
   'physician-diagnosis-rank-conflict': ['診斷順位與既有資料衝突；請核對來源，不自動覆寫原診斷', 'Diagnosis rank conflicts with existing data; review the source record'],
-  'physician-diagnosis-invalid': ['請選擇診斷碼、既有就診及診斷順位，再確認診斷', 'Select a diagnosis code and existing visits before confirming'],
+  'physician-diagnosis-invalid': ['請選擇診斷碼、既有就診及有效的診斷順位', 'Select a diagnosis code, existing visits and valid diagnosis ranks'],
   'preview-fixture-required': ['本機中繼僅接受指定合成病例，這份資料未送出', 'Local relay accepts only pinned synthetic cases; this data was not sent'],
   'duplicate-reference': ['病歷包含重複資源編號，請重新匯入', 'Duplicate resource references; import the record again'],
   'index-encounter-invalid': ['所選門診資料無效，請重新整理輸入', 'Selected visit is invalid; prepare inputs again'],
@@ -67,6 +67,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
   const missingIndexDiagnosis = current?.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')
   const diagnosisVisits = current ? hfDiagnosisVisits(current.baseInput) : []
   const draft = current?.diagnosisDraft
+  const invalidDiagnosisRank = !!draft?.encounters.some(reference => !Number.isInteger(draft.ranks[reference]) || draft.ranks[reference] < 1 || draft.ranks[reference] > 50)
   const outpatientSuggestion = current ? suggestHfDiagnosis(current.baseInput, 'outpatient') : null
   const inpatientSuggestion = current ? suggestHfDiagnosis(current.baseInput, 'inpatient') : null
   const chooseDiagnosis = (next: HfPhysicianDiagnosisDraft) => supplementDiagnosis({
@@ -117,6 +118,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
         {busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
       </button>
       </div>
+      {missingIndexDiagnosis && <p className="text-xs font-medium" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in diagnosis settings, or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在診斷設定補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
       {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Prediction becomes available after input checks pass. Warnings remain relevant even when accepted.' : '請先完成輸入檢查；即使通過，仍需核對資料警告。'}</p>}
       </div>
       <details className="border-t border-border pt-2">
@@ -160,6 +162,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
               </div>)}
             </div>
           </fieldset>
+          {invalidDiagnosisRank && <p className="text-xs font-medium" role="alert">{en ? 'Enter an integer diagnosis rank from 1 to 50 for every selected visit. Incomplete supplementation is not applied.' : '每次所選就診的診斷順位須為 1–50 的整數；補充資料未完整前不會套用。'}</p>}
           <p className="text-xs text-muted-foreground">{en ? 'Rank 1 is primary; rank 2 or higher is secondary. Confirm the actual rank; the API does not recognize unranked supplemental diagnoses.' : '順位 1 為主診斷，2 以上為次診斷。請依當時就診確認順位；API 不辨識未標順位的補充碼。'}</p>
             </div>
           </details>

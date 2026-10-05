@@ -103,6 +103,26 @@ it('keeps an existing primary HF rank and avoids occupied ranks for an additiona
   dx.code.coding[0].code = 'I50.9'; past.diagnosis[0].rank = 1
   const draft = suggestHfDiagnosis(input, 'outpatient')!
   expect(draft.ranks[input.indexEncounterReference!]).toBe(4)
-  expect(draft.ranks[past.subject.reference]).toBeUndefined()
+  const pastReference = input.bundle.entry.find((e: any) => e.resource === past).fullUrl
+  expect(draft.ranks[pastReference]).toBe(1)
   expect(Object.values(draft.ranks)).toEqual([4, 1])
+})
+
+it('excludes case-type 08 records from shortcuts and manual supplementation', () => {
+  const { input } = prepared()
+  const past = input.bundle.entry.find((e: any) => e.resource.resourceType === 'Encounter' && e.resource.period.start < input.indexDate)
+  past.resource.type = [{ coding: [{ system: 'https://mediprisma.tw/CodeSystem/nhi-case-type', code: '08' }] }]
+  expect(hfDiagnosisVisits(input).some(v => v.reference === past.fullUrl)).toBe(false)
+  expect(suggestHfDiagnosis(input, 'outpatient')).toBeNull()
+  expect(() => withPhysicianHfDiagnosis(input, { code: 'I50.9', confirmed: true, encounters: [past.fullUrl], ranks: { [past.fullUrl]: 2 } })).toThrow('physician-diagnosis-invalid')
+})
+it('anchors the outpatient shortcut to the exact index encounter on same-day ties', () => {
+  const { input } = prepared()
+  const index = input.bundle.entry.find((e: any) => e.fullUrl === input.indexEncounterReference)
+  const other = [0, 1].map(i => ({ fullUrl: 'same-day-' + i, resource: { ...index.resource, id: 'same-day-' + i, diagnosis: undefined } }))
+  input.bundle.entry.unshift(...other)
+  const draft = suggestHfDiagnosis(input, 'outpatient')!
+  expect(draft.encounters[0]).toBe(input.indexEncounterReference)
+  expect(draft.encounters).toHaveLength(2)
+  expect(new Set(draft.encounters).size).toBe(2)
 })

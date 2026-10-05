@@ -15,6 +15,7 @@ const ICD10 = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw
 export function hfDiagnosisVisits(input: HfInput): { reference: string; date: string; encounterClass: string }[] {
   return input.bundle.entry.filter((entry: any) => entry.resource.resourceType === 'Encounter'
     && entry.resource.status === 'finished' && ['AMB', 'IMP', 'EMER'].includes(entry.resource.class?.code)
+    && !(entry.resource.type ?? []).some((type: any) => (type.coding ?? []).some((coding: any) => coding.code === '08' && /case-type/.test(coding.system ?? '')))
     && fhirDay(entry.resource.period?.start) === entry.resource.period.start && entry.resource.period.start <= input.indexDate)
     .map((entry: any) => ({ reference: entry.fullUrl as string, date: entry.resource.period.start as string, encounterClass: entry.resource.class.code as string }))
     .sort((a: { date: string }, b: { date: string }) => b.date.localeCompare(a.date))
@@ -62,7 +63,10 @@ export function withPhysicianHfDiagnosis(base: HfInput, draft: HfPhysicianDiagno
 /** Suggest existing dated encounters only. The caller applies the draft only after an explicit user selection; opening the calculator never applies it. */
 export function suggestHfDiagnosis(input: HfInput, choice: HfDiagnosisQuickChoice): HfPhysicianDiagnosisDraft | null {
   const needed = choice === 'outpatient' ? 2 : 1
-  const visits = hfDiagnosisVisits(input).filter(visit => visit.encounterClass === (choice === 'outpatient' ? 'AMB' : 'IMP')).slice(0, needed)
+  const eligible = hfDiagnosisVisits(input).filter(visit => visit.encounterClass === (choice === 'outpatient' ? 'AMB' : 'IMP'))
+  const index = eligible.find(visit => visit.reference === input.indexEncounterReference)
+  if (choice === 'outpatient' && !index) return null
+  const visits = (choice === 'outpatient' ? [index!, ...eligible.filter(visit => visit.reference !== index!.reference)] : eligible).slice(0, needed)
   if (visits.length !== needed) return null
   const ranks: Record<string, number> = {}
   for (const visit of visits) {
