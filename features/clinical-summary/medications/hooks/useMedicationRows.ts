@@ -99,6 +99,12 @@ export function useMedicationRows(
   medications: any[],
   audience: 'medical' | 'patient' = 'medical',
   locale: string = 'zh-TW',
+  /** Every prescription on the chart, when `medications` is only a subset
+   *  (the overview builds rows for its window alone). 慢箋 is decided per
+   *  drug across ALL its refills, so a subset must not decide it: a window
+   *  that happens to hold only the non-chronic refills would otherwise
+   *  un-mark a drug the 用藥 tab shows as 慢箋. */
+  chronicHistory?: readonly any[],
 ) {
   // Re-run when the calendar day rolls over (tab left open) so "days left" /
   // active-vs-inactive don't freeze on the mount-time snapshot.
@@ -123,7 +129,7 @@ export function useMedicationRows(
     // row of that drug as chronic. This matches the bridge's recommended
     // detection logic ("若想顯示哪些是慢性用藥…group by 藥品名").
     const chronicDrugKeys = new Set<string>()
-    for (const m of medications) {
+    for (const m of chronicHistory ?? medications) {
       if (!m) continue
       if (!isChronicPrescription(m)) continue
       const key = medicationClinicalIdentityKey(m)
@@ -402,5 +408,5 @@ export function useMedicationRows(
     // `audience` controls drug-name and ICD localisation; `locale` drives
     // category labels. Both must be in deps so flipping either updates the
     // list immediately instead of requiring a page reload.
-  }, [medications, audience, locale, nowMs])
+  }, [medications, audience, locale, nowMs, chronicHistory])
 }
