@@ -175,3 +175,29 @@ test.each([false, true])('history retry clears the failure and retains general e
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   view.unmount()
 })
+
+
+test.each([[false, false], [false, true], [true, false], [true, true]])('de-identification save rejection explains the export option (English=%s, full-window=%s)', async (english, fullWindow) => {
+  jest.clearAllMocks()
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error('cdss_patient_deidentified'))
+  const target = document.createElement('div'); document.body.append(target)
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} saveTarget={fullWindow ? target : null} />)
+  try {
+    fireEvent.click(screen.getByTestId('cdss-save-record'))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      english ? 'De-identified patient data cannot be saved as a CDSS record.' : '去識別化資料無法儲存 CDSS 紀錄。',
+      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項'), duration: 10000 },
+    ))
+    expect(toast.success).not.toHaveBeenCalled()
+  } finally { view.unmount(); target.remove() }
+})
+
+test.each([false, true])('history de-identification rejection explains how to reimport (English=%s)', async english => {
+  jest.mocked(listCdssHistory).mockReset().mockRejectedValueOnce(new Error('cdss_patient_deidentified'))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(english ? 'CDSS history cannot be retrieved for de-identified patient data.' : '去識別化資料無法查詢 CDSS 歷史紀錄。')
+  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項')
+  view.unmount()
+})

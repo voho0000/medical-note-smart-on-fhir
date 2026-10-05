@@ -1,4 +1,4 @@
-import type { PatientEntity } from '@/src/core/entities/patient.entity'
+import { isDeidentifiedPatient, type PatientEntity } from '@/src/core/entities/patient.entity'
 
 const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const MASKED_NATIONAL_ID = /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u
@@ -40,6 +40,7 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
 
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
 export async function cdssPatientIdentity(patient: PatientEntity) {
+  if (isDeidentifiedPatient(patient)) throw new Error('cdss_patient_deidentified')
   const name = normalizedName(patient)
   const birthDate = patient.birthDate?.trim() ?? ''
   const parsedBirthDate = Date.parse(birthDate)
