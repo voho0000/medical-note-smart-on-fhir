@@ -11,6 +11,8 @@ import { createContext, type ReactNode } from 'react'
  */
 export interface VisitBookChrome {
   tabs?: ReactNode
+  /** Full window: lend the visible header to the existing snapshot save button. */
+  onSaveTarget?: (target: HTMLDivElement | null) => void
   /**
    * Chosen as 決策地圖 v2 in the layout switch: the page stays inside the
    * CDSS panel, beside the patient's record, under the panel's own disease
