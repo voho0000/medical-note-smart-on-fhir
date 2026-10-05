@@ -2,6 +2,7 @@
 
 import { useMedcloudHfDryRun } from '@/src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook'
 import { summarizeHfInput } from '@/src/core/hf-risk/input-summary'
+import { HfPredictionResultView } from './HfPredictionResult'
 import type { HfSelection } from '@/src/core/hf-risk/contract'
 
 const GAP: Record<string, [string, string]> = {
@@ -19,6 +20,7 @@ const GAP: Record<string, [string, string]> = {
   'encounter-duplicate': ['完全相同的住院紀錄已去重', 'Identical inpatient episodes deduplicated'],
   'department-unmapped': ['科別尚未對照，相關就診次數可能低估', 'Department unmapped; visit counts may be underestimated'],
   'ongoing-diagnoses-omitted': ['基準日尚未結束的住院，未採用事後申報診斷', 'Later claims diagnoses from ongoing admissions excluded'],
+  'diagnosis-unmapped': ['診斷碼系統或格式無法確認，未送出', 'Unrecognized diagnosis system or code format; excluded'],
   'diagnosis-rank-missing': ['住院診斷未提供主次序，不自行推定', 'Inpatient diagnosis rank missing; no rank inferred'],
   'lab-status': ['檢驗尚未確認完成，未送出', 'Unconfirmed laboratory results excluded'],
   'lab-unmapped': ['檢驗項目無已核對的 LOINC 對照，或不在模型項目中，未送出', 'Lab not in the audited model mapping; excluded'],
@@ -33,27 +35,34 @@ const MODULE: Record<string, [string, string]> = {
   imue0070: ['住院', 'Admissions'], imue0020: ['手術', 'Surgery'],
 }
 const ERRORS: Record<string, [string, string]> = {
+  'preview-fixture-required': ['本機中繼僅接受指定合成病例，這份資料未送出', 'Local relay accepts only pinned synthetic cases; this data was not sent'],
+  'duplicate-reference': ['病歷包含重複資源編號，請重新匯入', 'Duplicate resource references; import the record again'],
+  'index-encounter-invalid': ['所選門診資料無效，請重新整理輸入', 'Selected visit is invalid; prepare inputs again'],
+  'input-invalid': ['輸入資料不符合模型契約，請核對資料', 'Inputs do not match the model contract; review the data'],
+  'input-too-large': ['整理後資料超過 2 MiB，無法送出', 'Prepared data exceeds the 2 MiB limit'],
+  'response-too-large': ['服務回應超過大小限制，已丟棄', 'Oversized service response discarded'],
   'source-not-medcloud': ['目前資料不是 medcloud2 健保雲端 Bundle', 'Current Bundle is not a medcloud2 NHI cloud import'],
   'patient-count': ['需要單一患者的原始 Bundle', 'A single-patient source Bundle is required'],
   'bundle-invalid': ['無法讀取原始病歷 Bundle', 'Cannot read the source Bundle'],
   'no-visit': ['找不到院所來源、日期與 ICD 診斷皆可辨識的門診紀錄', 'No outpatient visit with a known hospital, date and ICD diagnosis'],
   'source-changed': ['資料已切換，請重新整理輸入', 'Record changed; prepare the input again'],
-  'gateway-unauthorized': ['尚未登入或未取得 HF 輸入檢查授權', 'Sign-in or HF input validation authorization required'],
+  'gateway-unauthorized': ['尚未登入或未取得 HF 服務授權', 'Sign-in or HF service authorization required'],
   'gateway-config': ['院內 HF 檢查服務尚未設定', 'Intranet HF validation service is not configured'],
+  'invalid-prediction-response': ['預測回應不符合模型契約，已丟棄', 'Prediction response does not match the model contract; discarded'],
   'invalid-dry-run-response': ['服務回應不符合輸入檢查格式，已丟棄', 'Invalid input-validation response discarded'],
 }
 export function HfMedcloudDryRun({ locale }: { locale: string }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, result: visibleResult, message: visibleMessage, prepare, select, validate } = useMedcloudHfDryRun()
+  const { current, configured, intranet, busy, result: visibleResult, prediction, message: visibleMessage, prepare, select, validate, predict } = useMedcloudHfDryRun()
   const summary = current ? summarizeHfInput(current.input) : null
   const hasWarnings = visibleResult?.issues.some(issue => issue.severity === 'warning')
   const text = (pair: [string, string]) => pair[en ? 1 : 0]
   const button = 'min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   const control = 'min-h-11 w-full rounded-md border border-border bg-background px-2 text-sm'
-  return <section aria-label={en ? 'HF cloud record input validation' : 'HF 健保雲端模型輸入檢查'} className="@container min-w-0 space-y-3 border-t border-border px-2.5 pb-3 pt-3" data-testid="hf-medcloud-dry-run">
+  return <section aria-label={en ? 'HF cloud record model' : 'HF 健保雲端模型'} className="@container min-w-0 space-y-3 border-t border-border px-2.5 pb-3 pt-3" data-testid="hf-medcloud-dry-run">
     <div>
-      <h3 className="text-sm font-semibold">{en ? 'Team AI-SaMD · input validation' : '北榮 HF AI-SaMD・輸入檢查'}</h3>
-      <p className="mt-1 text-xs text-muted-foreground">{en ? 'Outpatient 1- and 3-month models. Input validation only; no risk estimate.' : '門診 1、3 個月模型。此階段只檢查輸入，不計算風險。'}</p>
+      <h3 className="text-sm font-semibold">{en ? 'TVGH HF AI-SaMD' : '北榮 HF AI-SaMD'}</h3>
+      <p className="mt-1 text-xs text-muted-foreground">{en ? 'Outpatient 1- and 3-month models. Check inputs first, then explicitly run prediction.' : '門診 1、3 個月模型。先檢查輸入，再手動執行預測。'}</p>
     </div>
     <button type="button" className={button} onClick={prepare} disabled={busy}>{en ? 'Prepare cloud record input' : '整理健保雲端模型資料'}</button>
     {intranet && <p className="text-xs text-muted-foreground">{en ? 'Hospital network authorization; no Firebase sign-in required. The service verifies access.' : '院內網路授權模式，不需 Firebase 登入；是否可用由院內服務驗證。'}</p>}
@@ -88,16 +97,20 @@ export function HfMedcloudDryRun({ locale }: { locale: string }) {
         return <li key={gap.code}>{text(GAP[code] ?? [code, code])}{moduleName ? ' (' + text(MODULE[moduleName] ?? [moduleName, moduleName]) + ')' : ''}{gap.count > 1 ? ' · ' + gap.count : ''}</li>
       })}</ul>
       <p className="text-xs text-muted-foreground">{en ? 'Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded.' : '執行檢查會將整理後的生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。'}</p>
-      <button type="button" className={button + ' bg-primary text-primary-foreground'} disabled={busy || !configured} onClick={validate}>
-        {busy ? (en ? 'Checking input…' : '檢查中…') : (en ? 'Run intranet input validation' : '執行院內輸入檢查')}
+      <button type="button" className={button} disabled={busy || !configured} onClick={validate}>
+        {busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Run intranet input validation' : '執行院內輸入檢查')}
       </button>
+      <button type="button" className={button + ' bg-primary text-primary-foreground'} disabled={busy || !configured || visibleResult?.verdict !== 'accepted'} onClick={predict}>
+        {busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
+      </button>
+      {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Prediction becomes available after input checks pass. Warnings remain relevant even when accepted.' : '請先完成輸入檢查；即使通過，仍需核對資料警告。'}</p>}
     </>}
     {!configured && <p className="text-xs text-muted-foreground">{text(ERRORS['gateway-config'])}</p>}
     <div role="status" aria-live="polite" className="space-y-1 text-sm">
-      {visibleMessage && <p>{text(ERRORS[visibleMessage] ?? ['無法完成檢查，請確認院內連線後重試', 'Unable to validate; check the intranet connection and retry'])}</p>}
+      {visibleMessage && <p>{visibleMessage === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(ERRORS[visibleMessage] ?? ['無法完成檢查，請確認院內連線後重試', 'Unable to validate; check the intranet connection and retry'])}</p>}
       {visibleResult && <>
-        <h4 className="pt-3 text-sm font-semibold">{en ? 'Result and explanation' : '結果與說明'}</h4>
-        <p className="text-xs text-muted-foreground">{en ? 'Input validation only. The model was not executed and no mortality probability was generated.' : '此結果僅為輸入檢查，未執行模型，不代表死亡風險或低風險判定。'}</p>
+        <h4 className="pt-3 text-sm font-semibold">{en ? 'Input-check result' : '輸入檢查結果'}</h4>
+        <p className="text-xs text-muted-foreground">{en ? 'This input-check result confirms only format and eligibility; it is not a risk estimate. Model prediction is displayed separately below.' : '下列輸入檢查結果僅確認格式與評分條件，不是風險估計；模型預測另列於下方。'}</p>
         <p className="font-medium">{visibleResult.verdict === 'accepted'
           ? (hasWarnings ? (en ? 'Input check passed with warnings; no risk calculated.' : '輸入檢查通過，但有資料警告；未計算風險。') : (en ? 'Input check passed; source applicability still requires validation.' : '輸入檢查通過；資料來源適用性仍待驗證。'))
           : (en ? 'Input check refused; review missing or incompatible data.' : '輸入檢查未通過；請核對缺漏或不相容資料。')}</p>
@@ -110,6 +123,7 @@ export function HfMedcloudDryRun({ locale }: { locale: string }) {
           {visibleResult.requestId && <p className="break-all">Request ID：{visibleResult.requestId}</p>}
         </details>
       </>}
+      {prediction && <HfPredictionResultView result={prediction} locale={locale} />}
     </div>
   </section>
 }

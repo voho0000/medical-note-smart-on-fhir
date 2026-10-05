@@ -145,3 +145,30 @@ it('synthetic preview relay is explicit, development-only and fixed to the appro
     delete process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY
   }
 })
+
+it('rejects identity-shaped department and case-type codes at the server boundary', async () => {
+  const { validateHfTransportBundle } = await import('@/src/core/hf-risk/transport-bundle')
+  for (const field of ['serviceType','type']) {
+    const prepared=input()
+    const encounter=prepared.bundle.entry.find((e: any) => e.resource.resourceType === 'Encounter').resource
+    const concept={coding:[{system:'https://fhir.vghtpe.gov.tw/ig/hf-risk/CodeSystem/' + (field==='type' ? 'nhi-case-type' : 'nhi-func-type'),code:'A123456789'}]}
+    encounter[field]=field==='type' ? [concept] : concept
+    expect(validateHfTransportBundle(prepared.bundle,prepared.indexDate)).toBe(false)
+  }
+})
+it('does not display a mismatched response Request ID', async () => {
+  const fetchFn=jest.fn(async () => new Response(JSON.stringify(outcome),{status:200,headers:{'x-request-id':randomUUID()}}))
+  const result=await requestHfDryRun(input(),{origin:'https://hf.test',authPolicy:'intranet',signal:new AbortController().signal,requestId:randomUUID(),fetch:fetchFn})
+  expect(result.requestId).toBeUndefined()
+})
+it('rejects changed clinical content before using the synthetic preview relay', async () => {
+  const previousMode=process.env.NODE_ENV
+  try {
+    Object.assign(process.env,{NODE_ENV:'development',NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY:'synthetic'})
+    const prepared=input()
+    prepared.bundle.entry.find((e: any) => e.resource.resourceType==='Patient').resource.birthDate='1961-03-02'
+    const fetchFn=jest.fn()
+    await expect(requestHfDryRun(prepared,{origin:'https://samd.mediprisma.tw',authPolicy:'intranet',signal:new AbortController().signal,fetch:fetchFn})).rejects.toThrow('preview-fixture-required')
+    expect(fetchFn).not.toHaveBeenCalled()
+  } finally { Object.assign(process.env,{NODE_ENV:previousMode}); delete process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY }
+})

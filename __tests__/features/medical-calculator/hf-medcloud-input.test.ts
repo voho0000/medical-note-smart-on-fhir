@@ -140,3 +140,20 @@ describe('HF transport boundary and dry-run answers', () => {
     expect(() => parseHfDryRunResponse(200, { ...outcome, issue: [{ severity: 'fatal' }] })).toThrow()
   })
 })
+
+it('preserves a recognized diagnosis edition and records unsupported diagnosis codes', () => {
+  const fixture=hfMedcloudFixture()
+  const visit=fixture.entry.find((e: any) => e.resource.resourceType==='Encounter').resource
+  visit.reasonCode[0].coding[0].system='https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2014-tw'
+  visit.reasonCode[0].coding.push({system:'http://hl7.org/fhir/sid/icd-10',code:'I50.9'})
+  const result=buildMedcloudHfInput(fixture,{provider:'SYNTHETIC-HOSPITAL',encounter:'Encounter/synthetic-visit',claim:'P1_CD_mortality_1m'},{today:'2026-10-05',uuid:randomUUID})
+  expect(result.bundle.entry.find((e: any) => e.resource.resourceType==='Condition').resource.code.coding[0].system).toBe('https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2014-tw')
+  expect(result.gaps).toContainEqual({code:'diagnosis-unmapped',count:1})
+})
+
+it('deduplicates one diagnosis across recognized code-system aliases and editions', () => {
+  const fixture=hfMedcloudFixture()
+  fixture.entry.find((e: any) => e.resource.resourceType==='Encounter').resource.reasonCode[0].coding.push({system:'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw',code:'I50.9'})
+  const result=build(fixture)
+  expect(result.counts.Condition).toBe(1)
+})

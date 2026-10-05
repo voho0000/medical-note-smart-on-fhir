@@ -6,7 +6,8 @@ import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-clie
 import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
 import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
-import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun } from '@/src/infrastructure/hf-risk/dry-run-client'
+import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
+import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction } from '@/src/infrastructure/hf-risk/dry-run-client'
 
 interface Context {
   importId: string
@@ -23,6 +24,7 @@ export function useMedcloudHfDryRun() {
   const activeImportId = LocalBundleService.getActiveImportId()
   const [context, setContext] = useState<Context | null>(null)
   const [result, setResult] = useState<{ importId: string; input: HfInput; value: HfDryRunResult } | null>(null)
+  const [prediction, setPrediction] = useState<{ importId: string; input: HfInput; value: HfPredictionResult } | null>(null)
   const [message, setMessage] = useState<{ importId: string | null; code: string } | null>(null)
   const [busyImportId, setBusyImportId] = useState<string | null>(null)
   const busy = busyImportId !== null && busyImportId === activeImportId
@@ -31,7 +33,8 @@ export function useMedcloudHfDryRun() {
   const localMode = shouldUseLocalBundle()
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleResult = result?.importId === activeImportId && result.input === current?.input ? result.value : null
-  const visibleMessage = message?.importId === activeImportId ? message.code : null
+  const visiblePrediction = prediction?.importId === activeImportId && prediction.input === current?.input ? prediction.value : null
+  const visibleMessage = (localMode || message?.code === 'source-not-medcloud') && message && message.importId === activeImportId ? message.code : null
   useEffect(() => () => { controller.current?.abort(); controller.current = null; unsubscribeAuth.current?.(); unsubscribeAuth.current = null }, [activeImportId, localMode])
 
   async function prepare() {
@@ -40,6 +43,7 @@ export function useMedcloudHfDryRun() {
     unsubscribeAuth.current = null
     setBusyImportId(null)
     setResult(null)
+    setPrediction(null)
     setMessage(null)
     const importId = LocalBundleService.getActiveImportId()
     try {
@@ -62,12 +66,13 @@ export function useMedcloudHfDryRun() {
     unsubscribeAuth.current = null
     setBusyImportId(null)
     setResult(null)
+    setPrediction(null)
     setMessage(null)
     try { setContext({ ...current, selection, input: buildMedcloudHfInput(current.bundle, selection) }) }
     catch { setMessage({ importId: current.importId, code: 'source-changed' }) }
   }
-  async function validate() {
-    if (!current || !configured || busy) return
+  async function submit(operation: 'dry-run' | 'predict') {
+    if (!current || !configured || busy || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
     const snapshot = current
     const abort = new AbortController()
     controller.current?.abort()
@@ -75,14 +80,20 @@ export function useMedcloudHfDryRun() {
     unsubscribeAuth.current = null
     controller.current = abort
     setBusyImportId(snapshot.importId)
-    setResult(null)
+    if (operation === 'dry-run') setResult(null)
+    setPrediction(null)
     setMessage(null)
+    const request = operation === 'dry-run' ? requestHfDryRun : requestHfPrediction
+    const storeResult = (value: HfDryRunResult | HfPredictionResult) => {
+      if (operation === 'dry-run') setResult({ importId: snapshot.importId, input: snapshot.input, value: value as HfDryRunResult })
+      else setPrediction({ importId: snapshot.importId, input: snapshot.input, value: value as HfPredictionResult })
+    }
     const stillCurrent = () => !abort.signal.aborted && shouldUseLocalBundle() && LocalBundleService.getActiveImportId() === snapshot.importId
     try {
       const authPolicy = hfAuthPolicy(policySetting)
       if (authPolicy === 'intranet') {
-        const value = await requestHfDryRun(snapshot.input, { origin, authPolicy, signal: abort.signal })
-        if (stillCurrent()) setResult({ importId: snapshot.importId, input: snapshot.input, value })
+        const value = await request(snapshot.input, { origin, authPolicy, signal: abort.signal })
+        if (stillCurrent()) storeResult(value)
         return
       }
       const auth = await captureHfCallerAuth()
@@ -93,18 +104,19 @@ export function useMedcloudHfDryRun() {
         abort.abort()
         setBusyImportId(null)
         setResult(null)
+        setPrediction(null)
         setMessage({ importId: snapshot.importId, code: 'gateway-unauthorized' })
       })
-      const value = await requestHfDryRun(snapshot.input, { origin, token, signal: abort.signal })
+      const value = await request(snapshot.input, { origin, token, signal: abort.signal })
       // Discard answers after patient/import change or sign-out.
       const remainsAuthorized = await auth.getToken()
       if (!remainsAuthorized) throw new Error('gateway-unauthorized')
-      if (stillCurrent()) setResult({ importId: snapshot.importId, input: snapshot.input, value })
+      if (stillCurrent()) storeResult(value)
     } catch (error) {
       if (stillCurrent()) setMessage({ importId: snapshot.importId, code: error instanceof Error ? error.message : 'gateway-unavailable' })
     } finally {
       if (controller.current === abort) setBusyImportId(null)
     }
   }
-  return { current, configured, intranet: policySetting === 'intranet', busy, result: visibleResult, message: visibleMessage, prepare, select, validate }
+  return { current, configured, intranet: policySetting === 'intranet', busy, result: visibleResult, prediction: visiblePrediction, message: visibleMessage, prepare, select, validate: () => submit('dry-run'), predict: () => submit('predict') }
 }

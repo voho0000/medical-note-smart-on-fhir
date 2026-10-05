@@ -9,7 +9,12 @@ const concept = (value: any, systems: string[]) => keys(value, ['coding']) && ar
 const ICD = [
   'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw',
   'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-9-cm-2001-tw',
+  'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2014-tw',
+  'http://hl7.org/fhir/sid/icd-10-cm',
+  'http://hl7.org/fhir/sid/icd-9-cm',
 ]
+const ICD9 = [ICD[1], 'http://hl7.org/fhir/sid/icd-9-cm']
+const PCS = ['https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw', 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2014-tw', 'http://www.cms.gov/Medicare/Coding/ICD10']
 /** Server-side privacy boundary. Reject arbitrary clinical Bundles, not just top-level Patient identifiers. */
 export function validateHfTransportBundle(value: unknown, indexDate: string): value is FhirRecord {
   const bundle = value as FhirRecord
@@ -40,19 +45,19 @@ export function validateHfTransportBundle(value: unknown, indexDate: string): va
           || !keys(resource.class, ['system', 'code']) || resource.class.system !== 'http://terminology.hl7.org/CodeSystem/v3-ActCode' || !['AMB', 'IMP', 'EMER'].includes(resource.class.code)
           || !keys(resource.period, ['start', 'end']) || !day(resource.period.start)
           || (resource.period.end !== undefined && (!day(resource.period.end) || resource.period.end < resource.period.start))
-          || (resource.serviceType && !concept(resource.serviceType, [HF_NAMESPACE + '/CodeSystem/nhi-func-type']))
-          || (resource.type && (!array(resource.type) || !resource.type.every((item: any) => concept(item, [HF_NAMESPACE + '/CodeSystem/nhi-case-type']))))
+          || (resource.serviceType && (!concept(resource.serviceType, [HF_NAMESPACE + '/CodeSystem/nhi-func-type']) || !resource.serviceType.coding.every((c: any) => ['AB','AD','22'].includes(c.code))))
+          || (resource.type && (!array(resource.type) || !resource.type.every((item: any) => concept(item, [HF_NAMESPACE + '/CodeSystem/nhi-case-type']) && item.coding.every((c: any) => /^\d{2}$/.test(c.code)))))
           || (resource.diagnosis && (!array(resource.diagnosis) || !resource.diagnosis.every((item: any) =>
             keys(item, ['condition', 'rank']) && ref(item.condition, 'Condition') && (item.rank === undefined || (Number.isInteger(item.rank) && item.rank > 0)))))) return false
         break
       case 'Condition':
         if (!keys(resource, [...referenceKeys, 'encounter', 'code']) || !ref(resource.encounter, 'Encounter') || !concept(resource.code, ICD)
-          || !resource.code.coding.every((code: any) => code.system === ICD[0] ? /^[A-Z][0-9][A-Z0-9](?:\.?[A-Z0-9]{1,4})?$/.test(code.code) : /^(?:\d{3}|V\d{2}|E\d{3})(?:\.?\d{1,2})?$/.test(code.code))) return false
+          || !resource.code.coding.every((code: any) => !ICD9.includes(code.system) ? /^[A-Z][0-9][A-Z0-9](?:\.?[A-Z0-9]{1,4})?$/.test(code.code) : /^(?:\d{3}|V\d{2}|E\d{3})(?:\.?\d{1,2})?$/.test(code.code))) return false
         break
       case 'Procedure':
         if (!keys(resource, [...referenceKeys, 'status', 'encounter', 'performedDateTime', 'code']) || resource.status !== 'completed'
           || !ref(resource.encounter, 'Encounter') || !day(resource.performedDateTime)
-          || !concept(resource.code, [ICD[1], 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw'])) return false
+          || !concept(resource.code, [...ICD9, ...PCS]) || !resource.code.coding.every((c: any) => PCS.includes(c.system) ? /^[0-9A-HJ-NP-Z]{7}$/.test(c.code) : /^\d{2}(?:\.?\d{1,2})?$/.test(c.code))) return false
         break
       case 'Observation':
         if (!keys(resource, [...referenceKeys, 'status', 'category', 'code', 'effectiveDateTime', 'valueQuantity'])

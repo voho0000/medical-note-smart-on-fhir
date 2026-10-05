@@ -1,113 +1,64 @@
-# HF medcloud2 input-validation integration
+# HF medcloud2 calculator integration
 
-Status: implementation for review in codex/hf-medcloud-dry-run; not deployed.
-Scope: two outpatient claims, P1_CD_mortality_1m and P1_CD_mortality_3m.
-No scoring route, risk estimate, automatic clinical upload or clinical database write is implemented.
-Visible behaviour changes: existing calculators and their gates are unchanged; the AI-SaMD placeholder gains a manual input-validation section.
+Scope: the two outpatient claims P1_CD_mortality_1m and P1_CD_mortality_3m.
+Manual input checks and a separate manual prediction action are implemented. No automatic clinical upload, result persistence or clinical database write is introduced.
+
+## Clinical meaning
+
+The upstream service is a research pilot without a medical device license. Its outcome is death during hospitalization at TVGH; outside-hospital and other-hospital deaths are not included. Applicability to medcloud2 and other institutions remains unvalidated. Results require physician interpretation and cannot be the sole basis for treatment.
+
+An accepted input check is not a risk result and does not establish complete history. Missing labs and coverage warnings remain visible. A 422 refusal says unable to assess, never low risk. Prediction shows the returned calibrated probability, risk tier, notes, index date and model horizon. Optional observed incidence is labelled a group rate, not individual probability. Model name, versions, calibration, model/manifest hashes, computation time, adapter version and matching request ID remain available with the result. Three-month model hashes can be a two-member m1/m2 ensemble.
 
 ## Browser data path
 
-The existing HF prognosis surface offers a local preparation action. It reads the original tab-scoped LocalBundleService Bundle, only when local import mode is active, and only for a single-patient medcloud2 source. SMART mode never falls back to a leftover local Bundle. User-entered demographic overlays are not used.
+The calculator reads the original tab-scoped LocalBundleService Bundle only after an explicit preparation action, only in local-import mode and for a single-patient medcloud2 source. SMART mode never falls back to a leftover local Bundle. Demographic overlays are not used.
 
-Choose a dated AMB encounter with ICD diagnosis and a resolvable Organization identifier in:
-https://cloud-wildcatch.invalid/fhir/sid/medcloud-provider
-The chosen encounter supplies indexDate and provider scope. Case type 08 is excluded when explicitly coded. Route/site labels and acquisition-platform names are not hospital evidence. All provider scopes remain unvalidated for model applicability; even a dryRun 200 does not establish clinical validity.
+Choose a dated AMB encounter with recognized ICD diagnosis and a resolvable Organization identifier in https://cloud-wildcatch.invalid/fhir/sid/medcloud-provider. The visit supplies indexDate and hospital scope. Explicit case type 08 is excluded. Route names and acquisition-platform labels do not establish hospital source.
 
 The adapter:
-- projects Patient, Encounter, Condition, Procedure and Observation into a fresh UUID namespace;
-- includes only the selected hospital's linked or performer-identified records; conflicting or unknown sources are omitted;
-- excludes future, void, foreign-patient and unsupported records;
-- normalizes explicitly coded ICD diagnoses and reports missing inpatient ranks without inventing them;
-- collapses exact inpatient duplicates and preserves separate same-day outpatient visits;
-- excludes future discharge dates and claims diagnoses from admissions ongoing at indexDate;
-- accepts only audited LOINC assays and explicit supported units, preserving comparators;
-- uses collection/effective dates, never report/Bundle timestamp as a collection date;
-- excludes NHI order codes rather than relabeling them as ICD procedures;
-- reports module capture statuses separately from unknown longitudinal coverage.
+- Uses a fresh UUID namespace and strips names, identifiers, raw source IDs and narratives.
+- Includes only selected-hospital records linked to the same patient, omitting conflicting or unknown sources, future or void records.
+- Preserves exact recognized ICD system URLs/editions, validates code syntax, deduplicates the same ICD family/code and reports unsupported diagnoses. WHO ICD-10 is not relabelled as ICD-10-CM.
+- Collapses identical inpatient episodes but retains separate outpatient visits. Excludes future discharge dates and discharge-derived diagnoses of ongoing admissions.
+- Uses only audited LOINC assays, supported units and actual collection/effective dates. Never substitutes a report date or normal/zero lab value.
+- Reports unavailable modules, unverified longitudinal coverage and missing inpatient ranks without inventing them.
+- Accepts only exact recognized ICD procedure systems and formats; NHI order codes are not relabelled.
 
-Full birth date is never synthesized from a masked birth year. Only directly recorded male/female sex and full valid date are projected when present. Missing inputs remain missing for the service's dry-run rejection checks.
+Complete birth date and recorded male/female sex are required by the model; a masked birth year is not expanded. Historical feature BNP maps ONLY to NT-proBNP LOINC 33762-6. Departments are not guessed. Service transport validation independently enforces the projected privacy contract, department AB/AD/22 and two-digit case codes.
 
-The model's historical feature name BNP maps ONLY to NT-proBNP LOINC 33762-6, not BNP assays. Department names are not guessed; only existing HF nhi-func-type coding is mapped. This intentionally exposes incomplete feature mappings rather than hiding them.
+## HTTPS SaMD contract
 
-## HTTPS Gateway contract
+Build-time public settings:
+```
+NEXT_PUBLIC_HF_GATEWAY_ORIGIN=https://samd.mediprisma.tw
+NEXT_PUBLIC_HF_AUTH_POLICY=intranet
+```
+Unset policy retains Firebase mode; no origin default, URL override, direct HTTP fallback or model token is embedded in the browser.
 
-Build-time public configuration:
-NEXT_PUBLIC_HF_GATEWAY_ORIGIN=https://<approved-intranet-host>
-No default origin, token, direct HTTP fallback or arbitrary launch-URL override.
+Both policies must target the standalone mediprisma-samd-service for prediction. Its legacy integrations/hf-gateway/dry-run-handler.ts handoff supports input checks only and is not a prediction endpoint. A Firebase deployment verifies the signed current caller and explicit operation authorization. Intranet mode, approved by the owner, omits Firebase credentials and relies on protected local HTTPS ingress attestation and approved client CIDRs. Origin/CORS, browser IP headers and site names never grant access.
 
-POST /hf/v1/dry-run?claim=P1_CD_mortality_1m&indexDate=YYYY-MM-DD&dryRun=true
-Content-Type: application/fhir+json
-Accept: application/fhir+json
-Authorization: Bearer <existing Firebase caller ID token>
-X-Request-ID: <fresh UUIDv4>
-Body: projected single-patient Bundle, maximum 2 MiB.
+The service requires explicit prediction activation; old configurations remain dry-run only. Firebase model-hf grants alone do not grant prediction. See the service's HF-PREDICTION-CONTRACT.md and configuration examples for activation and operation grants.
 
-The existing Firebase user is captured only on the explicit submit action. No sign-in prompt/account creation is triggered. Answers are dropped after import, selection, source-mode or sign-in identity changes. Raw Bundle, tokens and responses are not stored in a new log/cache. Network requests omit cookies/cache/referrer and reject redirects.
+Request body: projected application/fhir+json Bundle, maximum 2 MiB; X-Request-ID is a fresh UUIDv4.
+- POST /hf/v1/dry-run?claim=...&indexDate=YYYY-MM-DD&dryRun=true returns checked OperationOutcome with 200/422.
+- POST /hf/v1/predict?claim=...&indexDate=YYYY-MM-DD&dryRun=false returns application/json schemaVersion1 scored/refused DTO with 200/422.
 
-## Gateway module handoff
+The server owns the HF token and fixed upstream URL. It validates input, forces the operation, bounds requests/responses and concurrency, uses a deadline and never retries or forwards caller credentials. Scoring validates subject, claim, mortality outcome, time horizon, Device association, probability, risk tier and required versions, then returns only a narrow DTO. Malformed scoring is distinct from transport outage.
 
-integrations/hf-gateway/dry-run-handler.ts exports createHfDryRunHandler.
-It is a tested host integration module, not a running Gateway endpoint. It deliberately has no listener, Firebase policy, secret files, telemetry database or deployment side effects.
+The browser requires an accepted check of the same prepared input before enabling prediction. Nothing submits automatically. Import, source, patient, visit, horizon and Firebase identity changes clear old responses; stale replies are discarded. Responses are held in memory only. Requests omit cookies/cache/referrer and reject redirects. Reads are bounded while streaming. Returned request IDs appear only when correlated with the sent UUID.
 
-Copy this module AND its relative src/core/hf-risk/contract.ts, transport-bundle.ts and labs.ts dependencies into an isolated Gateway feature branch, adapting relative imports. Register it using the host's existing Fastify instance:
+CORS must allow the actual HTTPS frontend Origin, POST/OPTIONS and Authorization, Content-Type, Accept, X-Request-ID. Expose X-Request-ID and X-SaMD-Adapter-Version. The current production Origin is https://mediprisma.tw; normal HTTP localhost is not approved. Browser CORS and Local Network Access must be validated independently of server-side API tests.
 
-~~~ts
-app.post('/hf/v1/dry-run', {
-  bodyLimit: 2 * 1024 * 1024,
-  // FHIR JSON is parsed by an explicitly registered application/fhir+json parser.
-}, createHfDryRunHandler({
-  upstreamOrigin: configuredIntranetHfOrigin, // e.g. http://10.121.12.179:8088
-  upstreamToken: serverHeldHfCallerToken,
-  authorize: async request => {
-    // Strict signed Firebase verification is required.
-    // Also require a reviewed HF clinical caller allowlist/role policy.
-    // Collector anonymous-caller acceptance alone is insufficient.
-    return await authorizedHfClinicalCaller(request.headers.authorization)
-  },
-}))
-~~~
+## Local synthetic preview
 
-Mandatory host wiring before enabling the browser origin:
-1. Register application/fhir+json as JSON with a 2 MiB parser/body limit; invalid JSON returns OperationOutcome without echoed body.
-2. Restrict CORS to the reviewed MediPrisma origin, allow POST/OPTIONS and Authorization, Content-Type, Accept, X-Request-ID; expose X-Request-ID.
-3. Apply verified clinical caller authorization, host UID/IP rate limits, and intranet-only TLS/reverse-proxy/network policy. Origin checks are independent of identity authorization.
-4. Set the dedicated HF upstream Bearer token on the server. Never use the viewer's X-Demo-Key/X-Demo-Case headers.
-5. Disable access/body logging of FHIR contents and credentials. Keep only reviewed request-ID/claim/status/duration metadata if auditing is required. Do not reuse Collector event/save body storage.
-6. Register no scoring route. Client query dryRun=false, admission/discharge claims, arbitrary destinations, nested narrative/identifiers or dangling references must be rejected.
-7. Perform real-workstation HTTPS/CORS/Chrome Local Network Access tests. Public cloud execution cannot directly reach the private HF origin.
-8. Verify authenticated Device/v2 capabilities. The older OperationDefinition lists six claims while current service metadata lists eight; do not infer deployed capabilities from the Swagger example alone.
+Only in development, NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY=synthetic activates exact /__hf-local-preview/hf/v1/dry-run and /predict rewrites to loopback 127.0.0.1:3004. Before any network request, the client validates a SHA256 fingerprint of the full projected Bundle with UUIDs normalized. Only two pinned synthetic fixtures are accepted; changing birth date or clinical values is rejected. Production builds with the flag fail closed on submission.
 
-The handler enforces the two claims, strict parameter/date/resource projection checks, fresh request IDs, max eight concurrent upstream calls, 12-second deadline, no redirects, no credentials forwarding and dryRun=true. It bounds upstream reads, accepts 200/422 OperationOutcome only, rejects risk data even in embedded strings, and returns only checked issues. The browser has a 15-second deadline and never offers a scoring mode.
+The local test tool separately validates loopback peer, Origin, query, content type, request ID, body size and canonical fixture equality. Input checks use the deployed HTTPS service. Prediction uses the staged new service's full authorization/parser path and the same real HF upstream. This temporary tool is not a general clinical proxy or production Gateway, and is outside the app artifact. Production services and TLS/CORS settings are not changed by this preview.
 
-## Deployment and clinical validation boundary
+## Validation and deployment boundary
 
-The existing tvgh-mediprisma-gateway AGENTS.md restricts cross-repository changes. No existing Gateway source/config/DB/listener, DNS or production application was changed by this feature. This handoff is ready for the Gateway owner to integrate and review.
+Only synthetic fixtures are used in tests, screenshots and model calls. No credentials, real patient records or raw clinical responses belong in version control or logs.
 
-After the endpoint and its caller policy are ready, build MediPrisma with the approved HTTPS origin. Before enabling any risk display, pair native EHR and medcloud2 records at the same patient/indexDate and compare extracted model features, missingness, hospital/time coverage and rejected cases with the model team. Admission/discharge adaptation requires separate timing/procedure/rank validation; it is outside this initial outpatient dryRun stage.
+Focused frontend tests cover projection, transport, manual actions, refused/malformed results, source and identity invalidation, launch visibility and the traditional HF prognosis entry. Run relevant lint and production build with the preview flag unset. Service checks cover operation authorization, response sanitization, contract provenance, timeouts, size and concurrency.
 
-## Validation
-
-Run the focused HF input, transport, UI and existing prognosis tests, targeted lint, typecheck and production build.
-Only synthetic fixtures may be used. No genuine patient data or production credentials belong in tests, screenshots or version control.
-
-
-Verified 2026-10-04 in the isolated worktree:
-- 49 focused tests passed (input projection, Gateway/client protocol, UI/session invalidation, existing prognosis calculators).
-- Targeted ESLint and full-project TypeScript checks passed after installing the repository lockfile dependencies in this worktree.
-- Production static export passed. Existing static-export custom-header warnings remain; HTTPS/CORS policy belongs at the actual Gateway/CDN.
-- Real Chrome local preview checked at 320, 390, 430, 768, 1024 and 1440 CSS pixels. New controls are 44 px high; the input section had no horizontal overflow. Narrow desktop/tablet panels use a single-column form.
-- Browser file upload was unavailable without changing extension file-access permissions. A temporary synthetic demo served by the isolated local app was used instead; the original demo file was restored.
-- Only synthetic data was used. No authenticated live HF API submission or real-workstation Gateway acceptance test was performed.
-
-
-## Calculator integration update (2026-10-05)
-
-The calculator prepares a projected single-hospital input on an explicit action, then shows hospital, index date, resource counts, lab collection dates, missing lab items and source gaps before submission. Missing labs are never replaced with normal or zero values. A 200 with warnings is shown as accepted WITH warnings, not a clinical risk result. Results include checked-at time, validated response request ID and adapter version when present. Adapter version is not the upstream model/calibration version. Patient, source or selection changes clear stale results.
-
-The owner explicitly authorized hospital network users without Firebase UID enrollment. Build the intranet frontend with NEXT_PUBLIC_HF_AUTH_POLICY=intranet and NEXT_PUBLIC_HF_GATEWAY_ORIGIN=https://samd.mediprisma.tw. This sends no Firebase bearer token; the protected SaMD HTTPS ingress and service verify network authorization. Unset policy retains Firebase mode; unknown values disable submission. No browser setting, URL parameter or CORS rule grants network authorization.
-
-No scoring route or mortality probability is provided by this update. Only outpatient 1- and 3-month dry-run contracts are wired. The endpoint must permit the actual frontend HTTPS origin in CORS. Plain HTTP localhost is not on the deployed service's allowed origin list. Frontend rendering tests and real synthetic service API tests do not by themselves establish browser CORS/Local Network Access acceptance.
-
-For the isolated localhost:3003 preview only, NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY=synthetic activates a development-only exact rewrite to loopback 127.0.0.1:3004. The local validation tool accepts only canonical projections of the generated synthetic fixture, validates method/origin/body/claim/index/request ID, and forwards to the fixed SaMD HTTPS origin without tokens or body logging. It is not a general patient-data proxy and is not enabled in production. A production build with the preview flag fails closed on submission; leave the flag unset when building/deploying.
-
-Verification: 54 focused tests across input projection, browser transport, HF calculator UI and traditional prognosis entry passed; targeted ESLint and the final production build passed. Real Chrome at localhost:3003 used the generated synthetic fixture through the existing demo import flow (original demo SHA256 restored). Explicit submissions for both outpatient horizons returned real HF API accepted OperationOutcome with the laboratory-day warning. Switching horizon cleared the previous response. Input controls and section widths were checked at 320, 390, 430, 768, 1024 and 1440 CSS pixels; all had no horizontal overflow and controls were 44px tall. The live loopback relay rejected other Origin, dryRun=false and changed synthetic patient content with 403/400. No production publication or normal-browser direct HTTPS CORS acceptance is claimed.
+Real synthetic calls on 2026-10-05 returned scored 200 for both horizons, with laboratory-day coverage warnings. Model versions and calibration are taken from the response, not adapter version. Production app/service publication is separate; the current deployed SaMD remains dry-run until the reviewed release and explicit prediction setting are activated.

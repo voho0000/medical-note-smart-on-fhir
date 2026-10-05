@@ -1,4 +1,4 @@
-/** First integration stage: input validation only, never scoring. */
+/** Shared outpatient input and dry-run contracts; scoring uses a separate validated result DTO. */
 export const HF_DRY_RUN_CLAIMS = ['P1_CD_mortality_1m', 'P1_CD_mortality_3m'] as const
 export type HfDryRunClaim = typeof HF_DRY_RUN_CLAIMS[number]
 export const HF_NAMESPACE = 'https://fhir.vghtpe.gov.tw/ig/hf-risk'

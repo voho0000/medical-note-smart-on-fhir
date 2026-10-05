@@ -3,6 +3,9 @@ import { HF_LABS, normalizeHfLab } from './labs'
 
 const ICD10 = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw'
 const ICD9 = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-9-cm-2001-tw'
+const ICD10_SYSTEMS = [ICD10, 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2014-tw', 'http://hl7.org/fhir/sid/icd-10-cm']
+const ICD9_SYSTEMS = [ICD9, 'http://hl7.org/fhir/sid/icd-9-cm']
+const PCS_SYSTEMS = ['https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw', 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2014-tw', 'http://www.cms.gov/Medicare/Coding/ICD10']
 const VOID = ['entered-in-error', 'cancelled', 'not-done', 'refuted']
 function coding(concept: FhirRecord | undefined): FhirRecord[] {
   return Array.isArray(concept?.coding) ? concept.coding.filter((item: unknown) => !!item && typeof item === 'object') : []
@@ -35,15 +38,15 @@ function providerOf(organization: FhirRecord | undefined): string | undefined {
   const values = [...new Set(identifiers.map((item: FhirRecord) => item.value))] as string[]
   return values.length === 1 ? values[0] : undefined
 }
-function diagnoses(resource: FhirRecord, resolve: ReturnType<typeof lookup>, indexDate?: string): { code: FhirRecord; rank?: number }[] {
+function diagnoses(resource: FhirRecord, resolve: ReturnType<typeof lookup>, indexDate?: string, unmapped?: () => void): { code: FhirRecord; rank?: number }[] {
   const found: { code: FhirRecord; rank?: number }[] = []
   const add = (concept: FhirRecord | undefined, rank?: number) => {
     for (const item of coding(concept)) {
-      if (typeof item.code !== 'string' || typeof item.system !== 'string') continue
+      if (typeof item.code !== 'string' || typeof item.system !== 'string') { unmapped?.(); continue }
       const value = item.code.toUpperCase()
-      const system = /icd-?10-?cm|sid\/icd-10/.test(item.system) ? ICD10 : /icd-?9-?cm|sid\/icd-9/.test(item.system) ? ICD9 : null
-      if (!system || !(system === ICD10 ? /^[A-Z][0-9][A-Z0-9](?:\.?[A-Z0-9]{1,4})?$/.test(value) : /^(?:\d{3}|V\d{2}|E\d{3})(?:\.?\d{1,2})?$/.test(value))) continue
-      if (!found.some(existing => existing.code.system === system && existing.code.code === value)) found.push({ code: { system, code: value }, ...(rank && Number.isInteger(rank) ? { rank } : {}) })
+      const system = [...ICD10_SYSTEMS, ...ICD9_SYSTEMS].includes(item.system) ? item.system : null
+      if (!system || !(ICD10_SYSTEMS.includes(system) ? /^[A-Z][0-9][A-Z0-9](?:\.?[A-Z0-9]{1,4})?$/.test(value) : /^(?:\d{3}|V\d{2}|E\d{3})(?:\.?\d{1,2})?$/.test(value))) { unmapped?.(); continue }
+      if (!found.some(existing => ICD10_SYSTEMS.includes(existing.code.system) === ICD10_SYSTEMS.includes(system) && existing.code.code === value)) found.push({ code: { system, code: value }, ...(rank && Number.isInteger(rank) ? { rank } : {}) })
     }
   }
   for (const item of resource.diagnosis ?? []) {
@@ -124,7 +127,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
     if (start > indexDate) { gap('future-omitted'); continue }
     if (!['AMB', 'EMER', 'IMP'].includes(resource.class?.code)) { gap('encounter-class'); continue }
     const end = fhirDay(resource.period?.end)
-    const dx = diagnoses(resource, resolve, indexDate)
+    const dx = diagnoses(resource, resolve, indexDate, () => gap('diagnosis-unmapped'))
     // Only exact inpatient episode duplicates are collapsed; no same-day outpatient merging.
     const episode = JSON.stringify([start, end, dx])
     if (resource.class.code === 'IMP' && end && inpatientSeen.has(episode)) { encounterIds.set(resource, inpatientSeen.get(episode)!); gap('encounter-duplicate'); continue }
@@ -178,12 +181,12 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
       if (!date) { gap('procedure-date'); continue }
       if (date > indexDate) { gap('future-omitted'); continue }
       const code = coding(resource.code).find(item => typeof item.system === 'string' && typeof item.code === 'string'
-        && (/icd-?10-?pcs/.test(item.system) ? /^[0-9A-HJ-NP-Z]{7}$/.test(item.code.toUpperCase()) : /icd-?9/.test(item.system) && /^\d{2}(?:\.?\d{1,2})?$/.test(item.code)))
+        && (PCS_SYSTEMS.includes(item.system) ? /^[0-9A-HJ-NP-Z]{7}$/.test(item.code.toUpperCase()) : ICD9_SYSTEMS.includes(item.system) && /^\d{2}(?:\.?\d{1,2})?$/.test(item.code)))
       const encounter = resolve(resource.encounter?.reference)
       const encounterId = encounter && encounterIds.get(encounter)
       if (!code || !encounterId || encounter?.class?.code !== 'IMP' || resource.status !== 'completed') { gap('procedure-unmapped'); continue }
       add({ resourceType: 'Procedure', id: uuid(), subject, status: 'completed', encounter: { reference: 'urn:uuid:' + encounterId },
-        performedDateTime: date, code: { coding: [{ system: /icd-?10-?pcs/.test(code.system) ? 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw' : ICD9, code: code.code.toUpperCase() }] } })
+        performedDateTime: date, code: { coding: [{ system: code.system, code: code.code.toUpperCase() }] } })
     }
   }
   const counts: Record<string, number> = {}
