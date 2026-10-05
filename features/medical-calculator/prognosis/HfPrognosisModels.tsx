@@ -11,6 +11,7 @@ import type { Autofill } from '../hooks/use-lab-autofill.hook'
 import { useCalcFavorites } from '../hooks/use-calc-favorites.hook'
 import { HF_PROGNOSIS_MODELS, type PrognosisEvidence, type HfPrognosisModelId } from './models'
 import { PrognosisModelDetail } from './PrognosisModelDetail'
+import { HfMedcloudDryRun } from './HfMedcloudDryRun'
 
 /** The LVEF the evidence carries, as a number, where it reads as one. */
 function lvefOf(evidence: PrognosisEvidence): number | undefined {
@@ -97,7 +98,7 @@ export function HfPrognosisModels({ locale, evidence = {}, autofill }: {
         </li>
       })}
     </ul>
-    <p className="px-0.5 text-[11px] text-muted-foreground">{en ? 'Team AI-SaMD: not connected; no predictions available.' : '團隊 AI-SaMD：尚未接入，目前沒有預測結果。'}</p>
+    <HfMedcloudDryRun locale={locale} />
     <Dialog open={!!model} onOpenChange={open => { if (!open) setSelected(null) }}>
       {model ? <DialogContent className="@container max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
