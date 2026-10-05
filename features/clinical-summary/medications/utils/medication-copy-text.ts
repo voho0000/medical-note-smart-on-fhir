@@ -47,6 +47,8 @@ export interface MedCopySourceItem {
   /** Prescribed day, YYYY-MM-DD. */
   day?: string
   durationDays?: number
+  /** The day the supply runs to, YYYY-MM-DD, from the source's own dates. */
+  endDay?: string
   /** Negative once the supply has run out. */
   daysRemaining?: number
   isChronic: boolean
@@ -240,9 +242,9 @@ function formatDay(day: string | undefined, style: string, today: string): strin
   return y === today.slice(0, 4) ? `${m}/${d}` : `${y}/${m}/${d}`
 }
 
-/** The calendar day `offset` days from `today` (YYYY-MM-DD). 「至／已用完」
- *  dates come from the same remaining-day count the row shows, so the date
- *  and 「餘 N 天」 can never disagree. */
+/** The calendar day `offset` days from `today` (YYYY-MM-DD) — the fallback
+ *  for 「至／已用完」 dates when the source gives no end day: the remaining-day
+ *  count is rounded up, so the source's own day comes first. */
 function dayFromToday(today: string, offset: number): string {
   const [y, m, d] = today.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10)
@@ -369,7 +371,7 @@ function fieldText(entry: MedCopyEntry, field: MedCopyField, ctx: MedCopyContext
       if (item.daysRemaining !== undefined && item.daysRemaining < 0) {
         // 到哪天 stays a date after the supply ran out; the other two count.
         if (field.style === 'until') {
-          return fill(labels.endedOn, { date: formatDay(dayFromToday(ctx.today, item.daysRemaining), 'md', ctx.today) })
+          return fill(labels.endedOn, { date: formatDay(item.endDay ?? dayFromToday(ctx.today, item.daysRemaining), 'md', ctx.today) })
         }
         const ended = fill(labels.endedDays, { n: -item.daysRemaining })
         return endedOnly ? paren(ended) : ended
@@ -378,7 +380,7 @@ function fieldText(entry: MedCopyEntry, field: MedCopyField, ctx: MedCopyContext
       if (item.isInactive) return endedOnly ? paren(labels.ended) : labels.ended
       if (item.daysRemaining === undefined || endedOnly) return ''
       return field.style === 'until'
-        ? fill(labels.remainingUntil, { date: formatDay(dayFromToday(ctx.today, item.daysRemaining), 'md', ctx.today) })
+        ? fill(labels.remainingUntil, { date: formatDay(item.endDay ?? dayFromToday(ctx.today, item.daysRemaining), 'md', ctx.today) })
         : fill(labels.remainingLeft, { n: item.daysRemaining })
     }
     case 'category':

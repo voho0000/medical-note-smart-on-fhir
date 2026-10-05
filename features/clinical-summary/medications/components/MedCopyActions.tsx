@@ -82,10 +82,15 @@ export function useMedCopyActions(
   // patient's list (or a list since reloaded) is never offered.
   const receipt = stored && stored.sources === sources ? stored : null
   const fallbackText = fallback && fallback.sources === sources ? fallback.text : null
-  // The list on screen now — the clipboard answers asynchronously, and a
-  // copy that comes back after the list changed reports nothing.
-  const sourcesNow = useRef(sources)
-  useEffect(() => { sourcesNow.current = sources }, [sources])
+  // The list on screen now, or null once this surface is gone. The clipboard
+  // answers asynchronously and a toast outlives its surface: a copy that
+  // comes back after the list changed or the surface unmounted reports
+  // nothing, and a toast button from then copies nothing.
+  const sourcesNow = useRef<readonly MedCopySourceItem[] | null>(sources)
+  useEffect(() => {
+    sourcesNow.current = sources
+    return () => { sourcesNow.current = null }
+  }, [sources])
   // One toast per surface: a second copy replaces the first.
   const toastId = `med-copy:${surface}`
 
@@ -147,7 +152,10 @@ export function useMedCopyActions(
       cancel: excluded.length > 0
         ? {
           label: listed ? strings.receiptExcludeEnded : strings.receiptIncludeEnded,
-          onClick: () => void copyWithFormat({ ...format, endedAcute: listed ? 'omit' : 'list' }),
+          onClick: () => {
+            if (sourcesNow.current !== sources) return
+            void copyWithFormat({ ...format, endedAcute: listed ? 'omit' : 'list' })
+          },
         }
         : undefined,
     })

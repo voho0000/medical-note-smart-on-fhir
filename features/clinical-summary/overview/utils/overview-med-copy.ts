@@ -25,6 +25,7 @@ export function toMedCopySourceItem(item: OverviewMedItem): MedCopySourceItem {
     institution: clean(item.institution),
     day: item.day,
     durationDays: row.durationDays,
+    endDay: item.supplyEndDay,
     daysRemaining: item.daysRemaining,
     isChronic: item.isChronic,
     isInactive: item.isInactive,

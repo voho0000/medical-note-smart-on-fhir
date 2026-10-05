@@ -36,6 +36,8 @@ export interface OverviewMedItem {
   /** Still running, or finished within MEDICATION_RECENTLY_FINISHED_DAYS. */
   isCurrent: boolean
   daysRemaining?: number
+  /** The day the supply runs to (YYYY-MM-DD), from the source's dates. */
+  supplyEndDay?: string
   change?: OverviewMedChange
   row: MedicationRow
 }
@@ -114,7 +116,7 @@ function daysBetween(fromDay: string, toDay: string): number {
 function medicationWindowDays(
   medication: any,
   knownStatus?: string,
-): { startDay?: string; endDay?: string } {
+): { startDay?: string; endDay?: string; supplyEndDay?: string } {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const status = knownStatus ?? (typeof medication?.status === 'string'
     ? medication.status.toLowerCase()
@@ -124,6 +126,10 @@ function medicationWindowDays(
     ?? medication?.dispenseRequest?.validityPeriod?.start
   let end = medication?.dispenseRequest?.validityPeriod?.end
     ?? dosage?.timing?.repeat?.boundsPeriod?.end
+  // The day the supply runs to, as a calendar day: the source's own end when
+  // it has one, else the start day plus the supplied days. Never from the
+  // rounded-up remaining-day count, which can land a day late.
+  let supplyEndDay = toDayKey(end)
   if (!end && start && (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration)) {
     const days = computeDurationDays({
       expectedDuration: medication?.dispenseRequest?.expectedSupplyDuration,
@@ -134,6 +140,11 @@ function medicationWindowDays(
       // Match the medication tab's source-duration coverage calculation.
       date.setDate(date.getDate() + days)
       end = date.toISOString()
+      const startDay = toDayKey(start)
+      if (startDay) {
+        const [y, m, d] = startDay.split('-').map(Number)
+        supplyEndDay = new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+      }
     }
   }
   return {
@@ -141,6 +152,7 @@ function medicationWindowDays(
     endDay: toDayKey(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
       ? medication?.effectiveDateTime ?? medication?.authoredOn
       : undefined)),
+    supplyEndDay,
   }
 }
 
@@ -196,7 +208,7 @@ export function useOverviewMeds(
     const inactiveStatuses = MEDICATION_INACTIVE_STATUSES
     const activeById = new Map<string, MedicationRow>()
     for (const row of medicationRows) activeById.set(row.id, row)
-    const days = new Map<string, { startDay?: string; endDay?: string }>()
+    const days = new Map<string, { startDay?: string; endDay?: string; supplyEndDay?: string }>()
     const changeKeys = new Map<string, string>()
     const facts = identifiedMedications.map((medication: any) => {
       // Ids are pinned above, so this round-trips whether or not the record
@@ -214,8 +226,8 @@ export function useOverviewMeds(
       const status = typeof medication?.status === 'string'
         ? medication.status.toLowerCase()
         : ''
-      const { startDay, endDay } = medicationWindowDays(medication, status)
-      days.set(rowId, { startDay, endDay })
+      const { startDay, endDay, supplyEndDay } = medicationWindowDays(medication, status)
+      days.set(rowId, { startDay, endDay, supplyEndDay })
       const changeKey = medicationChangeIdentityKey(medication)
       changeKeys.set(rowId, changeKey)
       return {
@@ -259,7 +271,7 @@ export function useOverviewMeds(
     for (const row of candidates) {
       const key = row.drugKey || row.title
       const change = medChanges.get(medicationChangeKeyByRowId.get(row.id) ?? key)
-      const { startDay, endDay } = medicationDaysByRowId.get(row.id) ?? {}
+      const { startDay, endDay, supplyEndDay } = medicationDaysByRowId.get(row.id) ?? {}
       // A prescription belongs to this window when it was written inside it or
       // when its supply period still overlaps it (an ongoing chronic script).
       if (!overlapsOverviewWindow(startDay, endDay ?? startDay, window)) continue
@@ -284,6 +296,7 @@ export function useOverviewMeds(
         category: row.category,
         institution: row.pharmacy,
         day: startDay,
+        supplyEndDay,
         isChronic: row.isChronic,
         isInactive: row.isInactive,
         isCurrent,

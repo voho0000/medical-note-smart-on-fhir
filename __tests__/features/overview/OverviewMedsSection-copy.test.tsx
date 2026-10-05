@@ -208,6 +208,28 @@ describe('OverviewMedsSection — 複製現在用藥', () => {
     expect(screen.queryByRole('textbox', { name: '要複製的用藥內容' })).toBeNull()
   })
 
+  it('reports nothing for a copy that comes back after the card unmounted', async () => {
+    let finish: () => void = () => {}
+    writeText.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+    const { unmount } = render(<OverviewMedsSection data={DATA} fit={{ bounded: false }} />)
+    fireEvent.click(card().getByRole('button', { name: '複製' }))
+    unmount()
+    await act(async () => { finish() })
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('a toast outliving its card copies nothing', async () => {
+    const { unmount } = render(<OverviewMedsSection data={DATA} fit={{ bounded: false }} />)
+    await act(async () => {
+      fireEvent.click(card().getByRole('button', { name: '複製' }))
+    })
+    const calls = writeText.mock.calls.length
+    const stale = lastToast().cancel
+    unmount()
+    await act(async () => { stale?.onClick() })
+    expect(writeText.mock.calls.length).toBe(calls)
+  })
+
   it('reports nothing for a copy that comes back after the list changed', async () => {
     let finish: () => void = () => {}
     writeText.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
