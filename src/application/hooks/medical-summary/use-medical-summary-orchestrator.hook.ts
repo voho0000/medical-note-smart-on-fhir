@@ -1098,6 +1098,7 @@ export function useMedicalSummaryOrchestrator() {
       !hasCardErrors(presentedResult)
     ),
     resolveSafetySource,
+    safetySourceCatalog: summary.sourceCatalog,
     activeGeneration: presentedBatch && !presentedBatch.cancelled ? {
       id: presentedBatch.id,
       modelName: presentedBatch.modelName,

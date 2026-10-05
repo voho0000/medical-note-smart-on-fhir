@@ -58,6 +58,7 @@ import { MedicationSafetySection } from "./components/MedicationSafetySection"
 import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
 import { staleEvidenceDate } from "@/src/core/utils/stale-evidence.utils"
 import { keyMentionLanguage, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
+import { currentAnticholinergicMedicines, reviewAnticholinergicAlert } from "@/src/core/utils/anticholinergic-burden.utils"
 import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
 import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
 import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
@@ -210,6 +211,7 @@ export default function MedicalSummaryFeature() {
     contextAdaptation,
     hasAnyResult,
     resolveSafetySource,
+    safetySourceCatalog,
     activeGeneration,
     summaryGenerationSlotKey,
     safetyGenerationSlotKey,
@@ -423,17 +425,33 @@ export default function MedicalSummaryFeature() {
     },
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],
   )
+  // The anticholinergic medicines supplied in the 90 days before the clinical
+  // reference date (the demo's own as-of date for demo data), counted the way
+  // the prompt counted them.
+  const currentAnticholinergicCount = useMemo(() => {
+    const referenceDay = new Date(clinicalNowMs(isDemoDataActive()) + 8 * 3_600_000).toISOString().slice(0, 10)
+    return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).length
+  }, [safetySourceCatalog])
   // 待核對 beside an alert that calls a medicine anticholinergic against its
-  // listed mechanism, naming the medicine by its ingredient.
+  // listed mechanism, naming the medicine by its ingredient, or that raises an
+  // anticholinergic alert the Beers rules do not support (none supplied, or
+  // one with no related condition named). Labels, never hides.
   const alertPropertyReview = useCallback(
     (alert: SafetyAlert) => {
       const drugs = [...new Set((alert.propertyReviewKeys ?? []).map((key) => {
         const source = resolveSafetySource(key)
         return source?.medicationClass?.split(" · ")[0] || source?.display || key
       }))]
-      return drugs.length ? ms.safetyPropertyReview.replace("{drugs}", drugs.join("、")) : undefined
+      const burden = reviewAnticholinergicAlert(alert, currentAnticholinergicCount)
+      const labels = [
+        drugs.length ? ms.safetyPropertyReview.replace("{drugs}", drugs.join("、")) : undefined,
+        burden === "none-supplied" ? ms.safetyAnticholinergicNoneSupplied
+          : burden === "one-without-condition" ? ms.safetyAnticholinergicSingle
+            : undefined,
+      ].filter(Boolean)
+      return labels.length ? labels.join("；") : undefined
     },
-    [resolveSafetySource, ms.safetyPropertyReview],
+    [resolveSafetySource, currentAnticholinergicCount, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle],
   )
   // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
   // as the records they name, in the sentence's own language.

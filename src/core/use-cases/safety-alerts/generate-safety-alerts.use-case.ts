@@ -101,7 +101,7 @@ const TEMPORAL_RULE =
 // (Beers 2023 Table 5), or one strong one with a condition it worsens (Table
 // 3). The app lists them in the ANTICHOLINERGIC MEDICINES line.
 const ANTICHOLINERGIC_BURDEN_RULE =
-  'Raise anticholinergic burden only when the ANTICHOLINERGIC MEDICINES line lists two or more, or one rated ACB 3 or Beers strong for a patient aged 65 or over with dementia, cognitive impairment or delirium, or a man with BPH or urinary symptoms (except a bladder antimuscarinic); never for one medicine otherwise. ' +
+  'Raise anticholinergic burden only when the ANTICHOLINERGIC MEDICINES line lists two or more, or one rated ACB 3 or Beers strong for a patient aged 65 or over with dementia, cognitive impairment, delirium or urinary retention, or a man with BPH or urinary symptoms (except a bladder antimuscarinic); name that condition; never for one medicine otherwise. ' +
   'It is medium: advise reviewing the need or a lower-burden alternative. '
 
 const DRUG_PROPERTY_RULE =

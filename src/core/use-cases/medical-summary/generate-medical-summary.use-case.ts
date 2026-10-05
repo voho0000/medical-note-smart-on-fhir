@@ -1284,7 +1284,7 @@ function localFinalChecklist(
   if (withSafety) {
     items.push('alerts: each says what a finding means for a medicine or what to do; never restate a problem\'s values; no alert that needs no action.')
     // A 2026-10-05 run alerted on one antipsychotic the line did not list.
-    items.push('An anticholinergic burden alert needs two or more medicines on the ANTICHOLINERGIC MEDICINES line, or one ACB 3 / Beers strong medicine there with dementia, cognitive impairment, delirium, or BPH in a man; when the line says none, there is no such alert.')
+    items.push('An anticholinergic burden alert needs two or more medicines on the ANTICHOLINERGIC MEDICINES line, or one ACB 3 / Beers strong medicine there with dementia, cognitive impairment, delirium, urinary retention, or BPH in a man, named in the alert; when the line says none, there is no such alert.')
   }
   return `${items.join(' ')} `
 }

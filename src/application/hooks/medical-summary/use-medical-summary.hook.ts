@@ -210,6 +210,9 @@ export interface UseMedicalSummaryReturn {
     issue: ContextOverflowIssue | null
   }
   resolveSource: (key: string) => SummarySourceCatalogEntry | undefined
+  /** The whole source catalog, for checks that count records (the
+   *  anticholinergic medicines an alert rests on). */
+  sourceCatalog: readonly SummarySourceCatalogEntry[]
   /** True when this clinical-input scope has a presentable restored result. */
   isHydrated: boolean
   autoGenerate: boolean
@@ -1134,6 +1137,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     isCurrentSlotGenerating: slot.isRunning,
     readGenerationSlot,
     resolveSource,
+    sourceCatalog: slot.catalog,
     isHydrated: slot.isHydrated,
     autoGenerate,
     setAutoGenerate,

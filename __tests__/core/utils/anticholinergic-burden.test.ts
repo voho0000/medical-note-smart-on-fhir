@@ -1,4 +1,4 @@
-import { anticholinergicMedicinesLine } from '@/src/core/utils/anticholinergic-burden.utils'
+import { anticholinergicMedicinesLine, reviewAnticholinergicAlert } from '@/src/core/utils/anticholinergic-burden.utils'
 import { generateSafetyAlertsUseCase } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 
@@ -39,6 +39,23 @@ describe('anticholinergicMedicinesLine', () => {
 
   it('counts one medicine as one, so the rules can tell it from a burden', () => {
     expect(anticholinergicMedicinesLine([catalog[0]], '2026-10-05')).toMatch(/\(1 medicine\)\.$/)
+  })
+
+  it('marks an anticholinergic alert the Beers rules do not support, and only that', () => {
+    const alert = (title: string, detail: string) => ({ title, detail })
+    // None supplied in the window: any anticholinergic alert is to verify.
+    expect(reviewAnticholinergicAlert(alert('Polypharmacy and anticholinergic risk', 'Synthetic sedative and antipsychotic.'), 0))
+      .toBe('none-supplied')
+    // One, with no related condition named.
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden (ACB 3)', 'Synthetic antipsychotic in a patient over 65.'), 1))
+      .toBe('one-without-condition')
+    // One, with urinary retention (any sex) or dementia named: meets the rule.
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic with urinary retention', 'ACB 3 medicine in a 90-year-old with urinary retention.'), 1))
+      .toBeUndefined()
+    expect(reviewAnticholinergicAlert(alert('抗膽鹼藥物與失智', '失智病人使用 ACB 3 藥物。'), 1)).toBeUndefined()
+    // Two or more: meets the rule. Not about anticholinergics: not judged.
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden: 2 medicines', 'Two ACB 3 medicines.'), 2)).toBeUndefined()
+    expect(reviewAnticholinergicAlert(alert('Renal dosing review', 'eGFR 31 with a renally cleared medicine.'), 0)).toBeUndefined()
   })
 
   it('reaches the standalone safety prompt, with the rule that reads it', () => {

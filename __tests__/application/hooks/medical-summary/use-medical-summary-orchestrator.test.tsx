@@ -140,6 +140,7 @@ function arrange({
     isCurrentSlotGenerating: summaryCurrentSlotGenerating,
     readGenerationSlot: readSummaryGenerationSlot,
     resolveSource: jest.fn(),
+    sourceCatalog: [],
     isHydrated: summaryHydrated,
     autoGenerate: summaryAuto,
     setAutoGenerate: setSummaryAuto,
