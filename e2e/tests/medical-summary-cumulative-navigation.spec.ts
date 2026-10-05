@@ -18,7 +18,7 @@ test.describe('medical-summary cumulative-report navigation', () => {
   test('opens the focused cumulative result from every non-report tab after Reports is pre-mounted', async ({ page }) => {
     test.slow()
     await page.getByTestId('welcome-demo-card').click()
-    await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('陳大明').first()).toBeVisible({ timeout: 30_000 })
     await openFeaturePanel(page)
 
     const reportsTab = page.getByRole('tab').filter({ hasText: '報告' }).first()

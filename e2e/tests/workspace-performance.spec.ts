@@ -123,7 +123,7 @@ test.describe('clinical workspace performance contract', () => {
     // warm-switch/scroll/trend budgets below.
     expect(loadingTabSwitchMs).toBeLessThan(500)
 
-    await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('陳大明').first()).toBeVisible({ timeout: 30_000 })
 
     // Warm each lazily mounted workspace and any dev-server module compile.
     for (let index = 0; index < LEFT_TABS.length; index += 1) {

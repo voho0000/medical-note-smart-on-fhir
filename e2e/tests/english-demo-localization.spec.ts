@@ -63,7 +63,7 @@ test('English demo keeps UI and de-identified demo labels in English', async ({ 
 
   await expect(page.getByRole('button', { name: /Exit demo/ })).toBeVisible({ timeout: 90_000 })
   await openFeaturePanel(page)
-  await expect(page.getByText('○-Ming Chen', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Da-Ming Chen', { exact: true }).first()).toBeVisible()
 
   for (const tab of ['Patient Info', 'Visit History', 'Reports', 'Medications', 'Documents']) {
     const tabButton = page.getByRole('tab', { name: tab, exact: true })
