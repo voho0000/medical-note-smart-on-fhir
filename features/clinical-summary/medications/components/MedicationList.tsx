@@ -1,7 +1,7 @@
 // Improved Medication List Component with Collapsible Sections
 "use client"
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, History } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -33,6 +33,8 @@ interface MedicationListProps {
   nameMode?: MedicationNameMode
   showNameModeSwitch?: boolean
   onNameModeChange?: (mode: MedicationNameMode) => void
+  /** Actions about the 使用中 list (複製｜編輯), at the end of its header. */
+  activeActions?: ReactNode
 }
 
 export function MedicationList({
@@ -45,6 +47,7 @@ export function MedicationList({
   nameMode = 'ingredient',
   showNameModeSwitch = false,
   onNameModeChange,
+  activeActions,
 }: MedicationListProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
@@ -123,6 +126,11 @@ export function MedicationList({
 
   return (
     <div className="space-y-4">
+      {/* Nothing running, but the actions still apply — a long-term script
+          that just ran out is still 現在用藥 to the copy. */}
+      {activeMedications.length === 0 && activeActions && (
+        <div className="flex justify-end">{activeActions}</div>
+      )}
       {/* Currently in use Medications */}
       {activeMedications.length > 0 && (
         <div className="space-y-1 md:space-y-1.5">
@@ -143,47 +151,50 @@ export function MedicationList({
                 </span>
               </button>
             </h3>
-            {showNameModeSwitch && onNameModeChange && (
-              <div
-                role="group"
-                aria-label={nameDisplay.label}
-                className="inline-flex min-h-[32px] shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:min-h-8"
-              >
-                <button
-                  type="button"
-                  onClick={() => onNameModeChange('ingredient')}
-                  aria-pressed={nameMode === 'ingredient'}
-                  className={cn(
-                    'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                    nameMode === 'ingredient' && 'font-medium text-foreground',
-                  )}
+            <div className="flex shrink-0 items-center gap-2">
+              {showNameModeSwitch && onNameModeChange && (
+                <div
+                  role="group"
+                  aria-label={nameDisplay.label}
+                  className="inline-flex min-h-[32px] shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:min-h-8"
                 >
-                  {nameDisplay.ingredient}
-                </button>
-                <label
-                  htmlFor={nameModeSwitchId}
-                  className="inline-flex h-[32px] w-9 cursor-pointer items-center justify-center md:h-8"
-                >
-                  <Switch
-                    id={nameModeSwitchId}
-                    checked={nameMode === 'product'}
-                    onCheckedChange={(checked) => onNameModeChange(checked ? 'product' : 'ingredient')}
-                    aria-label={nameDisplay.label}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => onNameModeChange('product')}
-                  aria-pressed={nameMode === 'product'}
-                  className={cn(
-                    'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                    nameMode === 'product' && 'font-medium text-foreground',
-                  )}
-                >
-                  {nameDisplay.product}
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => onNameModeChange('ingredient')}
+                    aria-pressed={nameMode === 'ingredient'}
+                    className={cn(
+                      'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      nameMode === 'ingredient' && 'font-medium text-foreground',
+                    )}
+                  >
+                    {nameDisplay.ingredient}
+                  </button>
+                  <label
+                    htmlFor={nameModeSwitchId}
+                    className="inline-flex h-[32px] w-9 cursor-pointer items-center justify-center md:h-8"
+                  >
+                    <Switch
+                      id={nameModeSwitchId}
+                      checked={nameMode === 'product'}
+                      onCheckedChange={(checked) => onNameModeChange(checked ? 'product' : 'ingredient')}
+                      aria-label={nameDisplay.label}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => onNameModeChange('product')}
+                    aria-pressed={nameMode === 'product'}
+                    className={cn(
+                      'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      nameMode === 'product' && 'font-medium text-foreground',
+                    )}
+                  >
+                    {nameDisplay.product}
+                  </button>
+                </div>
+              )}
+              {activeActions}
+            </div>
           </div>
           {showActive && (
             <ul

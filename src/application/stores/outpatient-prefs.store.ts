@@ -69,6 +69,75 @@ export interface EmrCustomFormat {
   emptyLines: EmrEmptyLines
 }
 
+// ── 用藥複製格式 ───────────────────────────────────────────────────────────
+// The 「複製現在用藥」 formats. Deliberately their own list, apart from the
+// lab/exam 我的格式 above: the two are customised separately for now
+// (decided 2026-10-03), so neither editor has to understand the other's model.
+
+export type MedCopyFieldId =
+  | 'name' | 'dose' | 'prevDose' | 'frequency' | 'route' | 'institution'
+  | 'date' | 'days' | 'remaining' | 'category'
+
+/** Canonical order — also where a field missing from a stored format goes. */
+export const MED_COPY_FIELD_IDS: MedCopyFieldId[] = [
+  'name', 'dose', 'frequency', 'route', 'prevDose', 'institution',
+  'date', 'days', 'remaining', 'category',
+]
+
+/** Each field's writing styles; the first is its default. */
+export const MED_COPY_FIELD_STYLES: Record<MedCopyFieldId, readonly string[]> = {
+  name: ['ingredient', 'product', 'both'],
+  dose: ['spaced', 'compact'],
+  prevDose: ['paren', 'arrow'],
+  // split: cloud codes glued together pulled apart (QDACPO → QD AC PO).
+  frequency: ['split', 'source', 'zh'],
+  route: ['source'],
+  institution: ['full'],
+  date: ['md', 'ymd', 'roc'],
+  days: ['zh', 'd'],
+  // endedOnly: nothing while supply lasts, 「（已用完 N 天）」 once it ran out.
+  remaining: ['endedOnly', 'left', 'until'],
+  category: ['bracket', 'paren'],
+}
+
+export interface MedCopyField {
+  id: MedCopyFieldId
+  on: boolean
+  style: string
+}
+
+export type MedCopyNumbering = 'dot' | 'paren' | 'dash' | 'none'
+export type MedCopySeparator = 'space' | 'dot' | 'comma' | 'bar'
+/** `Current medication` / `Med:` / no title line. English by decision. */
+export type MedCopyTitle = 'full' | 'short' | 'none'
+// No 慢箋 field or grouping: 雲端病歷 records no 慢箋 at all, so a 慢箋 mark
+// (or a 一般處方 group) would read as a fact the source never stated.
+export type MedCopyGroup = 'none' | 'institution' | 'date' | 'category'
+export type MedCopyGroupHeader = 'bracket' | 'colon' | 'hash'
+/** Short courses that already ran out: leave them out, or list them last. */
+export type MedCopyEndedAcute = 'omit' | 'list'
+
+export interface MedCopyFormat {
+  id: string
+  name: string
+  numbering: MedCopyNumbering
+  /** Array order is the order the fields print in. */
+  fields: MedCopyField[]
+  separator: MedCopySeparator
+  title: MedCopyTitle
+  /** Date and item count after the title. */
+  titleMeta: boolean
+  group: MedCopyGroup
+  groupHeader: MedCopyGroupHeader
+  /** A value every row of a group shares (institution, date, days)
+   *  moves up to the group's header line instead of repeating. */
+  hoistShared: boolean
+  endedAcute: MedCopyEndedAcute
+}
+
+export const MED_COPY_BUILTIN_IDS = ['builtin:compact', 'builtin:standard', 'builtin:full'] as const
+export type MedCopyBuiltinId = typeof MED_COPY_BUILTIN_IDS[number]
+
 export interface OutpatientPrefs {
   /** Pinned analyte ids (`chem:CREA`) and reminder rows (`note:…`), in the
    *  clinician's order. `null` = never customised. */
@@ -79,6 +148,9 @@ export interface OutpatientPrefs {
   formats: EmrCustomFormat[]
   activeFormatId: string | null
   handoffMode: EmrHandoffMode | null
+  /** The clinician's one 用藥 copy format; `null` = the default (緊湊)
+   *  built-in. One format only, by decision (2026-10-05). */
+  medFormat: MedCopyFormat | null
 }
 
 export const EMPTY_OUTPATIENT_PREFS: OutpatientPrefs = {
@@ -87,6 +159,7 @@ export const EMPTY_OUTPATIENT_PREFS: OutpatientPrefs = {
   formats: [],
   activeFormatId: null,
   handoffMode: null,
+  medFormat: null,
 }
 
 const MAX_PINNED = 60
@@ -143,6 +216,50 @@ export function sanitizeEmrFormat(raw: unknown): EmrCustomFormat | null {
   }
 }
 
+function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(value as T) ? value as T : fallback
+}
+
+export function sanitizeMedCopyFormat(raw: unknown): MedCopyFormat | null {
+  if (!raw || typeof raw !== 'object') return null
+  const format = raw as Record<string, unknown>
+  if (!isString(format.id) || !format.id || format.id.startsWith('builtin:')) return null
+  // Known fields once each, in the stored order; any field the stored copy
+  // lacks (an older build, a newly added field) joins at the end, switched off.
+  const seen = new Set<MedCopyFieldId>()
+  const fields: MedCopyField[] = []
+  for (const entry of Array.isArray(format.fields) ? format.fields : []) {
+    if (!entry || typeof entry !== 'object') continue
+    const field = entry as Record<string, unknown>
+    const id = field.id as MedCopyFieldId
+    if (!MED_COPY_FIELD_IDS.includes(id) || seen.has(id)) continue
+    seen.add(id)
+    const styles = MED_COPY_FIELD_STYLES[id]
+    fields.push({
+      id,
+      // The drug name is the one field a line cannot do without.
+      on: id === 'name' ? true : field.on === true,
+      style: pick(field.style, styles, styles[0]),
+    })
+  }
+  for (const id of MED_COPY_FIELD_IDS) {
+    if (!seen.has(id)) fields.push({ id, on: id === 'name', style: MED_COPY_FIELD_STYLES[id][0] })
+  }
+  return {
+    id: format.id,
+    name: isString(format.name) ? format.name.slice(0, 80) : '',
+    numbering: pick(format.numbering, ['dot', 'paren', 'dash', 'none'] as const, 'dot'),
+    fields,
+    separator: pick(format.separator, ['space', 'dot', 'comma', 'bar'] as const, 'space'),
+    title: pick(format.title, ['full', 'short', 'none'] as const, 'full'),
+    titleMeta: format.titleMeta !== false,
+    group: pick(format.group, ['none', 'institution', 'date', 'category'] as const, 'none'),
+    groupHeader: pick(format.groupHeader, ['bracket', 'colon', 'hash'] as const, 'bracket'),
+    hoistShared: format.hoistShared !== false,
+    endedAcute: format.endedAcute === 'list' ? 'list' : 'omit',
+  }
+}
+
 /** Anything unrecognised — older build, hand-edited storage — falls back to
  *  the default rather than dead-ending the overview or the copy panel. */
 export function sanitizeOutpatientPrefs(raw: unknown): OutpatientPrefs {
@@ -157,12 +274,14 @@ export function sanitizeOutpatientPrefs(raw: unknown): OutpatientPrefs {
   const activeFormatId = isString(prefs.activeFormatId) && formats.some((f) => f.id === prefs.activeFormatId)
     ? prefs.activeFormatId
     : formats[0]?.id ?? null
+  const medFormat = sanitizeMedCopyFormat(prefs.medFormat)
   return {
     pinnedLabs,
     labMode: LAB_MODES.includes(prefs.labMode as OverviewLabMode) ? prefs.labMode as OverviewLabMode : null,
     formats,
     activeFormatId,
     handoffMode: prefs.handoffMode === 'custom' || prefs.handoffMode === 'builtin' ? prefs.handoffMode : null,
+    medFormat,
   }
 }
 

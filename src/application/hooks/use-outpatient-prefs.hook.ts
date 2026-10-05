@@ -13,6 +13,7 @@ import {
   useOutpatientPrefsStore,
   type EmrCustomFormat,
   type EmrHandoffMode,
+  type MedCopyFormat,
   type OutpatientPrefs,
   type OverviewLabMode,
 } from '@/src/application/stores/outpatient-prefs.store'
@@ -24,6 +25,10 @@ export interface OutpatientPrefsApi extends OutpatientPrefs {
   deleteFormat: (id: string) => void
   setActiveFormat: (id: string) => void
   setHandoffMode: (mode: EmrHandoffMode) => void
+  /** Saves the one 用藥 copy format. */
+  saveMedFormat: (format: MedCopyFormat) => void
+  /** Back to the default (緊湊) built-in. */
+  resetMedFormat: () => void
 }
 
 export function useOutpatientPrefs(): OutpatientPrefsApi {
@@ -55,6 +60,9 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
     })
   }, [key, update])
 
+  const saveMedFormat = useCallback((format: MedCopyFormat) => update(key, { medFormat: format }), [key, update])
+  const resetMedFormat = useCallback(() => update(key, { medFormat: null }), [key, update])
+
   return useMemo(() => ({
     ...prefs,
     setPinnedLabs,
@@ -63,5 +71,7 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
     deleteFormat,
     setActiveFormat,
     setHandoffMode,
-  }), [prefs, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode])
+    saveMedFormat,
+    resetMedFormat,
+  }), [prefs, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode, saveMedFormat, resetMedFormat])
 }
