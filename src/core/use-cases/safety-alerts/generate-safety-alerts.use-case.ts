@@ -13,6 +13,7 @@ import {
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
+import { anticholinergicMedicinesLine } from '@/src/core/utils/anticholinergic-burden.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 
 // Gemini Flash-Lite won the head-to-head eval (clean JSON, caught all risk
@@ -96,10 +97,18 @@ const TEMPORAL_RULE =
 // (imipramine, tolterodine), and VGHBrain the β3 agonist mirabegron — a
 // clinician reader loses trust instantly. Examples only moved the error; the
 // SOURCE LIST line now carries each medicine's mechanism and burden.
+// When an anticholinergic burden is an alert at all: two or more together
+// (Beers 2023 Table 5), or one strong one with a condition it worsens (Table
+// 3). The app lists them in the ANTICHOLINERGIC MEDICINES line.
+const ANTICHOLINERGIC_BURDEN_RULE =
+  'Raise anticholinergic burden only when the ANTICHOLINERGIC MEDICINES line lists two or more, or one rated ACB 3 or Beers strong for a patient aged 65 or over with dementia, cognitive impairment or delirium, or a man with BPH or urinary symptoms (except a bladder antimuscarinic); never for one medicine otherwise. ' +
+  'It is medium: advise reviewing the need or a lower-burden alternative. '
+
 const DRUG_PROPERTY_RULE =
   ' Drug-property accuracy: when you attribute a pharmacological property to specific drugs (anticholinergic, nephrotoxic, antithrombotic, QT-prolonging…), ' +
   'name ONLY drugs that truly have that property. Each medicine\'s SOURCE LIST line gives its mechanism and, when it has one, "anticholinergic" with its ACB score: ' +
-  'describe a drug by that mechanism, never by its ATC group, and call it anticholinergic only when its line says so. If you are not sure a drug has a property, omit that drug rather than guess.'
+  'describe a drug by that mechanism, never by its ATC group, and call it anticholinergic only when its line says so. If you are not sure a drug has a property, omit that drug rather than guess. ' +
+  ANTICHOLINERGIC_BURDEN_RULE.trim()
 
 const DUPLICATE_RULE =
   ' Duplicate-medication rule (health-record context) — apply it strictly: these are cross-facility insurance records, so ONE prescription can appear multiple times. ' +
@@ -177,21 +186,23 @@ const SYSTEM_PATIENT =
 // Safety-specific decision rules that materially change its output.
 const BATCH_SAFETY_CORE_RULES =
   'Review renal dosing, bleeding or multiple antithrombotics, critical/abnormal labs, duplicate therapy, documented allergy conflicts, and missing monitoring systematically. ' +
-  'Return each distinct risk once; an empty alerts array is valid. Put the actual triggering value, medicine, and/or date in "detail" and human-readable support in "evidence"; cite only direct SOURCE LIST keys in "sources", never in any text (no E1, M5, D2) — describe the record in words. ' +
+  'Return each distinct risk once; an empty alerts array is valid. Put the triggering value, medicine or date in "detail" and readable support in "evidence"; SOURCE LIST keys go only in "sources", never in any text (no E1, M5, D2). ' +
   'Title: under 10 words, the risk and its medicines. ' +
-  'Severity uses TIME-TO-HARM: use "high" only for a specific serious harm plausible within days to a few weeks when prompt action could avert it, and name that harm in "detail". Use "medium" for review items, chronic-stable or mildly abnormal findings, ordinary polypharmacy, dosing worth confirming, and monitoring gaps; use "low" for information. Duplicate and monitoring categories are never high. ' +
-  'Recency: do not call a lab or vital current/recent unless it is within about 3 months of the reference date (else the newest record); never combine old and recent readings as if concurrent, and use the newest value of each test. ' +
+  'Severity uses TIME-TO-HARM: "high" only for a specific serious harm plausible within days to weeks that prompt action could avert, named in "detail"; "medium" for review items, stable or mildly abnormal findings, polypharmacy, dosing to confirm and monitoring gaps; "low" for information. Duplicate and monitoring are never high. ' +
+  'Recency: call a lab or vital current only within about 3 months of the reference date; never pair old and recent readings as concurrent; use each test\'s newest value. ' +
   // 開藥注意 is read right after the problem list; a 2026-10-05 demo run
   // restated a problem's values and trend as an alert.
-  'Favour what changes today\'s prescribing over routine reminders: the problem list already shows each problem\'s values and trend, so never restate them as an alert; raise a monitoring gap only when a long-term medicine\'s safety depends on that test, not for one mildly abnormal value. ' +
+  'Favour what changes today\'s prescribing: the problem list already shows each problem\'s values and trend, so never restate them; raise a monitoring gap only when a long-term medicine\'s safety depends on that test. ' +
   'Say a medicine may have contributed to an event only when it was dispensed BEFORE that event. ' +
-  'A passed supply end does not show the medicine was stopped: give the last dispensing and supply end, never "discontinued". ' +
-  'A passed supply is not an alert of its own unless lapsing an essential long-term medicine (an anticoagulant, insulin, an antiepileptic, a transplant or cancer medicine) could cause harm. ' +
+  'A passed supply end does not mean stopped: give the last dispensing and supply end, never "discontinued"; it is no alert unless lapsing an essential long-term medicine (anticoagulant, insulin, antiepileptic, transplant or cancer medicine) could cause harm. ' +
   // A run called the β3 agonist mirabegron anticholinergic because it shares
   // an ATC group with antimuscarinics (2026-10-05); the line now says what
   // each medicine is.
   'Describe a medicine by the mechanism on its SOURCE LIST line, never by its ATC group; call it anticholinergic only when its line says "anticholinergic". ' +
-  'Duplicate therapy requires the same or same-class additive medicine prescribed by TWO DIFFERENT non-pharmacy facilities with overlapping supply. A prescribing facility plus its dispensing pharmacy, or same-facility refills, is one therapy and must not be flagged. Cite the overlapping MedicationRequest keys and name both prescribers with dates. If the overlap creates acute bleeding or another harm, use that harm category instead of duplicate. ' +
+  // AGS Beers 2023 Tables 5 and 3 (owner, 2026-10-05): one anticholinergic
+  // alone is not an alert.
+  ANTICHOLINERGIC_BURDEN_RULE +
+  'Duplicate therapy requires the same or same-class additive medicine from TWO DIFFERENT non-pharmacy facilities with overlapping supply; a prescriber plus its dispensing pharmacy, or same-facility refills, is one therapy. Cite the overlapping keys and name both prescribers with dates; if the overlap causes acute bleeding or another harm, use that category instead. ' +
   'A document supports a diagnosis it records, but claim a procedure (endoscopy, biopsy, imaging) only when its text records it. ' +
   'Keep each field self-contained (never "above", "below", "as follows"). Order alerts by severity.'
 
@@ -302,6 +313,7 @@ export class GenerateSafetyAlertsUseCase {
       input.locale === 'zh-TW'
         ? '\n\nWrite every "title", "detail", "evidence" and "recommendation" value in Traditional Chinese (繁體中文).'
         : '\n\nWrite all values in English.'
+    const anticholinergics = input.catalog?.length ? anticholinergicMedicinesLine(input.catalog) : undefined
     const catalogBlock =
       input.catalog && input.catalog.length > 0
         ? '\n\nSOURCE LIST (cite these keys in "sources"):\n' +
@@ -311,7 +323,8 @@ export class GenerateSafetyAlertsUseCase {
                 .filter(Boolean)
                 .join(' | ')}`,
             )
-            .join('\n')
+            .join('\n') +
+          (anticholinergics ? `\n\n${anticholinergics}` : '')
         : ''
     return [
       { role: 'system', content: system + lang },

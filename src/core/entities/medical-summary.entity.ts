@@ -364,6 +364,9 @@ export interface SummarySourceCatalogEntry {
    *  mechanism, whether every ingredient is known, and its anticholinergic
    *  burden ("ACB 3", "antimuscarinic", "ACB 3 (chlorpheniramine)"). */
   medicine?: { mechanism?: string; complete: boolean; anticholinergic?: string }
+  /** Medication entries only: the day the recorded supply runs out (authoredOn
+   *  plus the expected supply duration), when the record gives one. */
+  supplyEnd?: string
 }
 
 /** A cited source resolved against the catalog. `verified: false` means the

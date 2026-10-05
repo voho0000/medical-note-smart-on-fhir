@@ -91,6 +91,8 @@ import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
 import { medicationFitsProblem } from '@/src/core/utils/problem-medication-fit.utils'
 import { anticholinergicLineLabel, medicineProfile, showsAnticholinergic } from '@/src/core/utils/medicine-profile.utils'
+import { anticholinergicMedicinesLine } from '@/src/core/utils/anticholinergic-burden.utils'
+import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
 import {
   qualifyingSharedReportKeys,
   reportSource,
@@ -441,6 +443,7 @@ export function buildSourceCatalog(
         date: day(m.authoredOn),
         organization: m.requester?.display,
         ...catalogMedication(m),
+        ...(medicationExpectedEnd(m) ? { supplyEnd: medicationExpectedEnd(m) } : {}),
         getContentText: () => sourceOwnedContentText(m),
       })
     })
@@ -1280,6 +1283,8 @@ function localFinalChecklist(
   }
   if (withSafety) {
     items.push('alerts: each says what a finding means for a medicine or what to do; never restate a problem\'s values; no alert that needs no action.')
+    // A 2026-10-05 run alerted on one antipsychotic the line did not list.
+    items.push('An anticholinergic burden alert needs two or more medicines on the ANTICHOLINERGIC MEDICINES line, or one ACB 3 / Beers strong medicine there with dementia, cognitive impairment, delirium, or BPH in a man; when the line says none, there is no such alert.')
   }
   return `${items.join(' ')} `
 }
@@ -2094,9 +2099,13 @@ export class GenerateMedicalSummaryUseCase {
       : input.locale === 'zh-TW'
         ? 'OUTPUT LANGUAGE: Traditional Chinese (繁體中文). Write every human-readable generated field in Traditional Chinese. 請一律使用臺灣繁體中文，不得使用簡體字（例如寫「檢查、診斷、藥物、腎臟」，不可寫「检查、诊断、药物、肾脏」）。'
         : 'OUTPUT LANGUAGE: ENGLISH ONLY (MANDATORY). The clinical records and examples may contain Traditional Chinese; translate their meaning into natural English instead of copying Chinese text. Every human-readable generated field — including headline, text, rationale, label, trend, interpretation, name, benefit, attention, overview, group, sig, medication, summary, and basis — must contain no Chinese Han characters. Keep JSON keys, enum values, and source keys unchanged. Before returning, inspect the entire JSON and rewrite any remaining Chinese prose in English.'
-    const catalogBlock = formatSourceList(input.catalog)
+    const withSafety = outputInstruction.includes('<<<MEDIPRISMA_MODULE:safety>>>')
+    // The safety module raises an anticholinergic burden alert by how many
+    // anticholinergics are supplied together; the app counts them.
+    const anticholinergics = withSafety ? anticholinergicMedicinesLine(input.catalog, input.referenceDate) : undefined
+    const catalogBlock = formatSourceList(input.catalog) + (anticholinergics ? `\n\n${anticholinergics}` : '')
     const finalChecklist = input.harnessProfile === 'local-small'
-      ? localFinalChecklist(moduleIds, outputInstruction.includes('<<<MEDIPRISMA_MODULE:safety>>>'))
+      ? localFinalChecklist(moduleIds, withSafety)
       : ''
     const once = input.singleLanguageContract === true
     return [
