@@ -13,7 +13,7 @@ An accepted input check is not a risk result and does not establish complete his
 
 The calculator reads the original tab-scoped LocalBundleService Bundle only after an explicit preparation action, only in local-import mode and for a single-patient supported bridge source. SMART mode never falls back to a leftover local Bundle. Demographic overlays are not used.
 
-For cloud records, choose a dated AMB encounter with recognized ICD diagnosis and a resolvable Organization identifier in https://cloud-wildcatch.invalid/fhir/sid/medcloud-provider. The visit supplies indexDate and hospital scope. Explicit case type 08 is excluded. Route names and acquisition-platform labels do not establish hospital source.
+For cloud records, choose a dated AMB encounter with a resolvable Organization identifier in https://cloud-wildcatch.invalid/fhir/sid/medcloud-provider. The visit supplies indexDate and hospital scope. Explicit case type 08 is excluded. Route names and acquisition-platform labels do not establish hospital source.
 
 The adapter:
 - Uses a fresh UUID namespace and strips names, identifiers, raw source IDs and narratives.
@@ -77,3 +77,27 @@ Source code reviewed: `voho0000/NHI-FHIR-BRIDGE` extension background bundle env
 Health-bank exports only contain hospital display names. Identically named institutions cannot be reliably separated; an explicit hospital-name-only warning requires the user to verify identity and scope. Bridge normalization copies only resource fields it changes, avoiding repeated deep serialization of documents/images. Both the UI and request hook block a missing selected index diagnosis, even when another same-day visit is eligible.
 
 The SaMD hook subscribes to the existing bundle-changed and storage notifications using useSyncExternalStore. Import/clear transitions immediately hide the prior context and results and abort pending requests, even if the memoized parent never renders. Regression tests dispatch the actual notification without manually rerendering the hook.
+
+
+## Physician-supplied HF diagnosis (2026-10-06)
+
+The owner requested an explicit physician confirmation for diagnoses omitted by imported records. No model eligibility rule is bypassed. A dated cloud visit without a usable diagnosis may now be prepared; submission still requires a diagnosis on the exact selected index encounter.
+
+The physician must select ICD-10-CM I50.9 (heart failure, unspecified) and explicitly provide the actual diagnosis rank for each individually selected existing projected completed visit where HF was already established and still applicable at the index date. There is no default diagnosis, date or checked visit. The owner removed the redundant physician-identity checkbox. Selecting a diagnosis shortcut confirms and applies the displayed existing visits; complete advanced date/code/rank selections also apply immediately. Opening the calculator alone does not confirm or add a diagnosis. These explicit selections are user statements, not verification of medical licensure. Only actual projected same-patient, same-hospital visits up to the index date are eligible; ongoing admissions and future records cannot be selected. Original chart/source data is unchanged. No synthetic visit or onset date is created. Existing I50.9 is not duplicated and original known ranks are retained; shortcuts use an additional free secondary rank for unranked supplementation, while advanced selections specify a rank explicitly. A conflict with an original ranked diagnosis is rejected, without overwriting source ranks.
+
+Supplemental Conditions link to each explicitly selected Encounter. Attestation source, selected visit dates and confirmation time stay in the in-memory HfInput context and remain visible with the results. The upstream privacy contract sends minimal Conditions only, without attestation metadata or clinician identity. It does not support FHIR Provenance; the API does not receive a distinct physician-source flag. This limitation is visible here and should be addressed separately if upstream auditing requires it.
+
+Changing code, selected visits, confirmation, index visit or model horizon clears old validation and prediction. Preparing another import resets confirmation. Input validation must pass again before prediction; age, missing data and all other upstream refusals remain in force.
+
+Synthetic live tests of the deployed SaMD dry-run endpoint on 2026-10-06: one AMB I50.9 failed the HF requirement; two ranked AMB I50.9 visits or one ranked prior IMP I50.9 passed with missing-lab/history warnings. Unranked supplemental diagnoses were not recognized even with encounter end dates; a ranked secondary HF diagnosis was accepted. The actual new preparation helper was live-tested with an I10-only synthetic import: baseline 422, physician-confirmed I50.9 at two existing visits with explicitly chosen rank 2 returned 200, then prediction returned 200/scored with probability 0.001337 (0.1337%). This supports encounter-count eligibility as an inference, not an authoritative specification of all upstream rules. Do not create visits or repeat diagnoses purely to satisfy it. API acceptance does not establish clinical validity.
+
+I50.9 descriptor reference: https://www.cms.gov/files/document/r13672CP.pdf . The initial UI deliberately offers only unspecified HF; it does not guess systolic/diastolic subtype.
+
+The input summary and source gaps are initially collapsed by the owner's request; input-check and prediction buttons are above the detail section. Physician attestation provenance, returned errors and model warnings remain visible without opening the source details.
+
+
+### Simplified confirmation
+
+The UI offers two shortcuts: HF present at the two most recent outpatient encounters, or at the most recent completed admission. These use only actual projected encounters at the selected hospital on/before the index date. Selecting a shortcut immediately applies unspecified HF (I50.9) to those existing dates as an additional secondary diagnosis where an original rank is absent; the selected dates and ranks are displayed. No additional physician-identity checkbox is required. Existing HF ranks are preserved; otherwise a free secondary rank after known ranks/diagnosis count is proposed. Selection applies the diagnosis to the in-memory model request, but does not transmit it. Transmission still requires the input-check or prediction action. The API remains authoritative and no general history-only override is sent. If HF occurred at different dates, use the collapsed advanced date/rank controls. A shortcut is unavailable when the required existing encounters are absent; no encounter is invented. The newest outpatient visit remains the default index visit from preparation.
+
+Local browser validation on 2026-10-06 with the synthetic fixture and a selected HF-history shortcut still showed a connection failure. Identical OPTIONS requests with Content-Type/X-Request-ID preflight headers returned 403 for http://localhost:3003 but 204 with Access-Control-Allow-Origin for https://mediprisma.tw. The localhost failure occurs before upstream eligibility validation; this PR does not alter the SaMD service origin/access configuration.

@@ -34,7 +34,7 @@ function HfSamdNavigation({ locale, session }: { locale: string; session: HfSamd
 
 export function HfSamdPage({ locale, state, onBack }: { locale: string; state: HfSamdSessionState['state']; onBack: () => void }) {
   const en = locale === 'en'
-  return <section className="@container space-y-3" aria-label={en ? 'TVGH SaMD HF calculator' : '北榮 SaMD HF 計算機'}>
+  return <section className="@container space-y-2" aria-label={en ? 'TVGH SaMD HF calculator' : '北榮 SaMD HF 計算機'}>
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="ghost" size="sm" onClick={onBack} className="min-h-11 gap-1 px-2">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />{en ? 'Back' : '返回'}

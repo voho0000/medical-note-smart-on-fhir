@@ -1,3 +1,4 @@
+import type { HfPhysicianDiagnosis } from './physician-diagnosis'
 /** Shared outpatient input and dry-run contracts; scoring uses a separate validated result DTO. */
 export const HF_DRY_RUN_CLAIMS = ['P1_CD_mortality_1m', 'P1_CD_mortality_3m'] as const
 export type HfDryRunClaim = typeof HF_DRY_RUN_CLAIMS[number]
@@ -12,6 +13,8 @@ export interface HfInput {
   indexDate: string
   claim: HfDryRunClaim
   gaps: HfGap[]
+  physicianDiagnosis?: HfPhysicianDiagnosis
+  indexEncounterReference?: string
   counts: Record<string, number>
 }
 export interface HfDryRunResult {
