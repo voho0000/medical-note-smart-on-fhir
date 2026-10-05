@@ -37,11 +37,32 @@ const FIT_RULES: readonly FitRule[] = [
 ]
 
 // Classes with several established uses: a problem inferred from one of them
-// alone is doubtful when another listed problem is one of those uses. A model
-// listed diabetes from an SGLT2 inhibitor given for a patient's CKD
-// (2026-10-05).
+// alone is doubtful when another listed problem is one of those uses (a
+// model listed diabetes from an SGLT2 inhibitor given for CKD, 2026-10-05).
+// The table holds the common multi-indication classes, not one patient's.
+const USE = {
+  kidney: 'chronic kidney|\\bCKD\\b|kidney disease|nephropathy|proteinuria|慢性腎|腎臟病|腎病變|蛋白尿',
+  heartFailure: 'heart failure|\\bHF(r|p|mr)?EF\\b|cardiomyopathy|心衰竭|心肌病',
+  hypertension: '(?<!(pulmonary|ocular|portal|intracranial) )hypertension|\\bHTN\\b|高血壓',
+  coronary: 'angina|coronary|myocardial infarction|\\bCAD\\b|心絞痛|冠狀動脈|心肌梗塞',
+  arrhythmia: 'atrial fibrillation|atrial flutter|\\bAF\\b|tachycardia|arrhythmia|心房顫動|心律不整|心搏過速',
+  edema: 'edema|ascites|cirrhosis|水腫|腹水|肝硬化',
+  diabetes: 'diabet|糖尿病',
+  obesity: 'obesity|overweight|肥胖',
+  tremorMigraine: 'tremor|migraine|顫抖|偏頭痛',
+}
+const uses = (...names: Array<keyof typeof USE>) => new RegExp(names.map((name) => USE[name]).join('|'), 'i')
+
 const OTHER_USES: ReadonlyArray<{ atc: string; uses: RegExp }> = [
-  { atc: 'A10BK', uses: /chronic kidney|\bCKD\b|kidney disease|heart failure|\bHF(r|p|mr)?EF\b|慢性腎|腎臟病|心衰竭/i },
+  { atc: 'A10BK', uses: uses('diabetes', 'kidney', 'heartFailure') }, // SGLT2 inhibitors
+  { atc: 'A10BJ', uses: uses('diabetes', 'obesity', 'coronary') }, // GLP-1 agonists
+  { atc: 'C09', uses: uses('hypertension', 'heartFailure', 'kidney', 'coronary') }, // ACE inhibitors, ARBs, ARNI
+  { atc: 'C07', uses: uses('hypertension', 'heartFailure', 'coronary', 'arrhythmia', 'tremorMigraine') }, // beta-blockers
+  { atc: 'C08', uses: uses('hypertension', 'coronary', 'arrhythmia') }, // calcium-channel blockers
+  { atc: 'C03C', uses: uses('heartFailure', 'edema', 'kidney', 'hypertension') }, // loop diuretics
+  { atc: 'C03A', uses: uses('hypertension', 'edema', 'heartFailure') }, // thiazides
+  { atc: 'C03DA', uses: uses('heartFailure', 'hypertension', 'edema') }, // mineralocorticoid antagonists
+  { atc: 'C01AA', uses: uses('heartFailure', 'arrhythmia') }, // digitalis glycosides
 ]
 
 /**

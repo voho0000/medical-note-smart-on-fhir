@@ -44,6 +44,12 @@ describe('medicationFitsProblem', () => {
     // Metformin is not such a medicine; neither is a mix with one.
     expect(otherListedUse(['A10BA02'], ['Chronic kidney disease'])).toBeUndefined()
     expect(otherListedUse(['A10BK01', 'A10BA02'], ['Chronic kidney disease'])).toBeUndefined()
+    // Not one class: any common multi-use class, against any of its uses.
+    expect(otherListedUse(['C09CA03'], ['Heart failure with reduced ejection fraction'])).toBe('Heart failure with reduced ejection fraction')
+    expect(otherListedUse(['C07AB07'], ['Atrial fibrillation'])).toBe('Atrial fibrillation')
+    expect(otherListedUse(['C03CA01'], ['Liver cirrhosis with ascites'])).toBe('Liver cirrhosis with ascites')
+    expect(otherListedUse(['C07AB07', 'C09CA03'], ['Heart failure', 'Atrial fibrillation'])).toBe('Heart failure')
+    expect(otherListedUse(['C09CA03'], ['Pulmonary hypertension'])).toBeUndefined()
   })
 
   it('accepts a class that fits any condition a combined label names', () => {
