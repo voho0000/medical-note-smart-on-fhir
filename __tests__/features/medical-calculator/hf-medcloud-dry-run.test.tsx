@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { randomUUID } from 'node:crypto'
 import { detectHfIntranet } from '@/src/infrastructure/hf-risk/intranet-discovery'
-import { HfSamdCalculator, HfSamdSession, HfSamdCard } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
+import { HfSamdCalculator } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
 import { HfMedcloudDryRun } from '@/features/medical-calculator/prognosis/HfMedcloudDryRun'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -248,11 +249,12 @@ it('keeps the hospital card on the vghtpe route and opens the full detail withou
   expect(screen.getByText('北榮 SaMD')).toBeVisible()
   expect(screen.queryByRole('button', { name: '整理健保雲端模型資料' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
-  expect(screen.getByRole('dialog')).toBeVisible()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.getByRole('region', { name: '北榮 SaMD HF 計算機' })).toBeVisible()
   await prepare()
   fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  fireEvent.click(screen.getByRole('button', { name: '返回' }))
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByText('輸入檢查通過；資料來源適用性仍待驗證。')).toBeVisible()
   expect(requestHfDryRun).toHaveBeenCalledTimes(1)
@@ -268,7 +270,7 @@ it('returns a scored result to the card and keeps its detailed result when reope
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   fireEvent.click(screen.getByRole('button', { name: '執行 HF 模型預測' }))
   await screen.findByRole('region', { name: 'HF 模型預測結果' })
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  fireEvent.click(screen.getByRole('button', { name: '返回' }))
   expect(screen.getByText('12.34%')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByRole('region', { name: 'HF 模型預測結果' })).toBeVisible()
@@ -295,25 +297,41 @@ it('fails closed when intranet discovery cannot confirm access', async () => {
 
 })
 
-it('keeps scored session state across card unmounts and clears it when the patient changes', async () => {
+it('keeps a pending prediction running after returning to the list and switching tabs', async () => {
   window.history.replaceState({}, '', '/?site=vghtpe')
-  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
-  const session = (show: boolean) => <HfSamdSession>{value => show && value.allowed ? <HfSamdCard locale="zh-TW" state={value.state} /> : null}</HfSamdSession>
-  const view = render(session(true))
+  let finish!: (value: typeof predicted) => void
+  jest.mocked(requestHfPrediction).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  function Harness() {
+    const [tab, setTab] = useState('calculator')
+    return <>
+      <button onClick={() => setTab('other')}>其他畫面</button>
+      <button onClick={() => setTab('calculator')}>回計算機</button>
+      <div hidden={tab !== 'calculator'}><HfSamdCalculator locale="zh-TW" /></div>
+      {tab === 'other' && <p>另一個功能頁</p>}
+    </>
+  }
+  const view = render(<Harness />)
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   await prepare()
   fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   fireEvent.click(screen.getByRole('button', { name: '執行 HF 模型預測' }))
-  await screen.findByRole('region', { name: 'HF 模型預測結果' })
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  view.rerender(session(false))
-  expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
-  view.rerender(session(true))
+  await waitFor(() => expect(requestHfPrediction).toHaveBeenCalledTimes(1))
+  const signal = jest.mocked(requestHfPrediction).mock.calls[0][1].signal
+  fireEvent.click(screen.getByRole('button', { name: '返回' }))
+  expect(screen.getByRole('button', { name: /北榮 SaMD.*處理中/ })).toBeVisible()
+  expect(signal.aborted).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: '其他畫面' }))
+  expect(screen.getByText('另一個功能頁')).toBeVisible()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(signal.aborted).toBe(false)
+  await act(async () => finish(predicted))
+  fireEvent.click(screen.getByRole('button', { name: '回計算機' }))
   expect(screen.getByRole('button', { name: /12.34%/ })).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
+  expect(screen.getByRole('region', { name: 'HF 模型預測結果' })).toBeVisible()
   expect(requestHfPrediction).toHaveBeenCalledTimes(1)
   importId = 'synthetic-other-import'
-  view.rerender(session(true))
+  view.rerender(<Harness />)
   expect(screen.queryByText('12.34%')).toBeNull()
-  expect(screen.getByRole('button', { name: /尚未計算/ })).toBeVisible()
 })

@@ -15,7 +15,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
 import { CalculatorDetail } from "./components/CalculatorDetail"
-import { HfSamdCard, HfSamdSession, type HfSamdSessionState } from './prognosis/HfSamdCalculator'
+import { HfSamdCard, HfSamdPage, HfSamdSession, type HfSamdSessionState } from './prognosis/HfSamdCalculator'
 import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
 import { useCalcFavorites, useCalcRecent } from "./hooks/use-calc-favorites.hook"
 import { computeAutofilledResult, relevanceScore } from "./autofill-compute"
@@ -85,6 +85,10 @@ function MedicalCalculatorContent({ samd }: { samd: HfSamdSessionState }) {
   const grouped = list.grouped
 
   const showSamd = samd.allowed && audience === 'medical' && (filter === 'all' || filter === 'cardiac') && (!query.trim() || /hf|heart|心衰|北榮|samd|tvgh|預後|prognos|死亡|mortality/i.test(query))
+
+  if (selectedId === 'tvgh-hf-samd' && samd.allowed && audience === 'medical') {
+    return <HfSamdPage locale={locale} state={samd.state} onBack={() => setSelectedId(null)} />
+  }
 
   if (selected) {
     return (
@@ -156,7 +160,7 @@ function MedicalCalculatorContent({ samd }: { samd: HfSamdSessionState }) {
         ))}
       </div>
 
-      {showSamd && <HfSamdCard locale={locale} state={samd.state} />}
+      {showSamd && <HfSamdCard locale={locale} state={samd.state} onOpen={() => setSelectedId('tvgh-hf-samd')} />}
 
       {isEmpty && !showSamd ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
