@@ -173,7 +173,9 @@ export function MedicationList({
       {/* Nothing running, but the actions still apply — a long-term script
           that just ran out is still 現在用藥 to the copy. */}
       {activeMedications.length === 0 && (nameModeSwitch || activeActions) && (
-        <div className="flex items-center justify-end gap-2">
+        // Wraps on a narrow phone: no title shares this row, and neither
+        // control may shrink, so a second line beats clipping one off-screen.
+        <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1" data-testid="medication-list-controls">
           {nameModeSwitch}
           {activeActions}
         </div>

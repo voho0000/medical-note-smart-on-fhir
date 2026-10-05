@@ -35,9 +35,14 @@ it('offers 成分名／商品名 when every drug is in the history', () => {
       error={null}
       showNameModeSwitch
       onNameModeChange={onNameModeChange}
+      activeActions={<button type="button">複製</button>}
     />,
   )
   expect(screen.queryByRole('button', { name: /使用中/ })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '商品名' }))
   expect(onNameModeChange).toHaveBeenCalledWith('product')
+  // Beside the copy actions, in a row that may wrap rather than clip on a phone.
+  const row = screen.getByTestId('medication-list-controls')
+  expect(row).toContainElement(screen.getByRole('button', { name: '複製' }))
+  expect(row).toHaveClass('flex-wrap')
 })
