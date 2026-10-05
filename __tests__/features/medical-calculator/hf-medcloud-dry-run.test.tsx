@@ -1,7 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useMedcloudHfDryRun } from '@/src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook'
+import { useState } from 'react'
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { randomUUID } from 'node:crypto'
 import { detectHfIntranet } from '@/src/infrastructure/hf-risk/intranet-discovery'
-import { HfSamdCalculator, HfSamdSession, HfSamdCard } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
+import { HfSamdCalculator } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
 import { HfMedcloudDryRun } from '@/features/medical-calculator/prognosis/HfMedcloudDryRun'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -24,8 +26,8 @@ const getToken = jest.fn()
 let identityChanged: (() => void) | undefined
 const onIdentityChanged = jest.fn(callback => { identityChanged = callback; return jest.fn() })
 async function prepare() {
-  fireEvent.click(screen.getByRole('button', { name: '整理健保雲端模型資料' }))
-  await screen.findByRole('combobox', { name: '門診基準日／院所代碼' })
+  fireEvent.click(screen.getByRole('button', { name: '整理模型資料' }))
+  await screen.findByRole('combobox', { name: '門診基準日／院所' })
 }
 beforeEach(() => {
   jest.clearAllMocks()
@@ -116,8 +118,8 @@ it('discards a response after sign-out', async () => {
 it('does not use an old local import while a SMART chart is active', async () => {
   jest.mocked(shouldUseLocalBundle).mockReturnValue(false)
   render(<HfMedcloudDryRun locale="zh-TW" />)
-  fireEvent.click(screen.getByRole('button', { name: '整理健保雲端模型資料' }))
-  expect(await screen.findByText('目前資料不是 medcloud2 健保雲端 Bundle')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '整理模型資料' }))
+  expect(await screen.findByText('請匯入雲端、健康或北榮懷爾抓抓的單一患者病歷')).toBeVisible()
   expect(LocalBundleService.load).not.toHaveBeenCalled()
 })
 
@@ -246,13 +248,14 @@ it('keeps the hospital card on the vghtpe route and opens the full detail withou
   window.history.replaceState({}, '', '/?site=vghtpe')
   render(<HfSamdCalculator locale="zh-TW" />)
   expect(screen.getByText('北榮 SaMD')).toBeVisible()
-  expect(screen.queryByRole('button', { name: '整理健保雲端模型資料' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '整理模型資料' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
-  expect(screen.getByRole('dialog')).toBeVisible()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.getByRole('region', { name: '北榮 SaMD HF 計算機' })).toBeVisible()
   await prepare()
   fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  fireEvent.click(screen.getByRole('button', { name: '返回' }))
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByText('輸入檢查通過；資料來源適用性仍待驗證。')).toBeVisible()
   expect(requestHfDryRun).toHaveBeenCalledTimes(1)
@@ -268,7 +271,7 @@ it('returns a scored result to the card and keeps its detailed result when reope
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   fireEvent.click(screen.getByRole('button', { name: '執行 HF 模型預測' }))
   await screen.findByRole('region', { name: 'HF 模型預測結果' })
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  fireEvent.click(screen.getByRole('button', { name: '返回' }))
   expect(screen.getByText('12.34%')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   expect(screen.getByRole('region', { name: 'HF 模型預測結果' })).toBeVisible()
@@ -295,25 +298,106 @@ it('fails closed when intranet discovery cannot confirm access', async () => {
 
 })
 
-it('keeps scored session state across card unmounts and clears it when the patient changes', async () => {
+it('keeps a pending prediction running after returning to the list and switching tabs', async () => {
   window.history.replaceState({}, '', '/?site=vghtpe')
-  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
-  const session = (show: boolean) => <HfSamdSession>{value => show && value.allowed ? <HfSamdCard locale="zh-TW" state={value.state} /> : null}</HfSamdSession>
-  const view = render(session(true))
+  let finish!: (value: typeof predicted) => void
+  jest.mocked(requestHfPrediction).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  function Harness() {
+    const [tab, setTab] = useState('calculator')
+    return <>
+      <button onClick={() => setTab('other')}>其他畫面</button>
+      <button onClick={() => setTab('calculator')}>回計算機</button>
+      <div hidden={tab !== 'calculator'}><HfSamdCalculator locale="zh-TW" /></div>
+      {tab === 'other' && <p>另一個功能頁</p>}
+    </>
+  }
+  const view = render(<Harness />)
   fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
   await prepare()
   fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   fireEvent.click(screen.getByRole('button', { name: '執行 HF 模型預測' }))
-  await screen.findByRole('region', { name: 'HF 模型預測結果' })
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  view.rerender(session(false))
-  expect(screen.queryByTestId('hf-samd-calculator-card')).toBeNull()
-  view.rerender(session(true))
+  await waitFor(() => expect(requestHfPrediction).toHaveBeenCalledTimes(1))
+  const signal = jest.mocked(requestHfPrediction).mock.calls[0][1].signal
+  fireEvent.click(screen.getByRole('button', { name: '返回' }))
+  expect(screen.getByRole('button', { name: /北榮 SaMD.*處理中/ })).toBeVisible()
+  expect(signal.aborted).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: '其他畫面' }))
+  expect(screen.getByText('另一個功能頁')).toBeVisible()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(signal.aborted).toBe(false)
+  await act(async () => finish(predicted))
+  fireEvent.click(screen.getByRole('button', { name: '回計算機' }))
   expect(screen.getByRole('button', { name: /12.34%/ })).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: /北榮 SaMD.*HF 門診預後模型/ }))
+  expect(screen.getByRole('region', { name: 'HF 模型預測結果' })).toBeVisible()
   expect(requestHfPrediction).toHaveBeenCalledTimes(1)
   importId = 'synthetic-other-import'
-  view.rerender(session(true))
+  view.rerender(<Harness />)
   expect(screen.queryByText('12.34%')).toBeNull()
-  expect(screen.getByRole('button', { name: /尚未計算/ })).toBeVisible()
+})
+it('prepares a TVGH bridge import but prevents upload with unverified generic ICD-10', async () => {
+  const bundle = hfMedcloudFixture()
+  bundle.meta = { source: 'ehr-fhir-bridge/extension-local' }
+  const encounter = bundle.entry.find((e: { resource: { resourceType: string } }) => e.resource.resourceType === 'Encounter').resource
+  encounter.meta = { source: 'ehr-fhir-bridge/scraper' }
+  delete encounter.serviceProvider
+  encounter.reasonCode[0].coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepare()
+  expect(screen.getByText('病歷來源：北榮懷爾抓抓')).toBeVisible()
+  expect(screen.getByText(/門診缺少可核對的 ICD-10-CM/)).toBeVisible()
+  expect(screen.getByRole('button', { name: '執行院內輸入檢查' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+  expect(requestHfPrediction).not.toHaveBeenCalled()
+})
+it('the hook rejects a missing selected diagnosis even if another same-day visit has one', async () => {
+  const bundle = hfMedcloudFixture()
+  bundle.meta = { source: 'ehr-fhir-bridge/extension-local' }
+  const first = bundle.entry.find((e: { resource: { resourceType: string } }) => e.resource.resourceType === 'Encounter').resource
+  first.meta = { source: 'ehr-fhir-bridge/scraper' }
+  const other = JSON.parse(JSON.stringify(first))
+  other.id = 'other-same-day-visit'
+  bundle.entry.push({ fullUrl: 'Encounter/' + other.id, resource: other })
+  first.reasonCode[0].coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  expect(result.current.current?.input.gaps).toContainEqual({ code: 'index-diagnosis-missing', count: 1 })
+  await act(async () => { await result.current.validate() })
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+})
+
+it('clears cached HF results on an import event without a parent rerender', async () => {
+  jest.mocked(requestHfDryRun).mockResolvedValue(accepted)
+  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  await act(async () => { await result.current.validate() })
+  await act(async () => { await result.current.predict() })
+  expect(result.current.prediction?.verdict).toBe('scored')
+  act(() => {
+    jest.mocked(LocalBundleService.getActiveImportId).mockReturnValue('next-import')
+    window.dispatchEvent(new Event('mediprisma:local-bundle-changed'))
+  })
+  expect(result.current.current).toBeNull()
+  expect(result.current.prediction).toBeNull()
+  expect(result.current.result).toBeNull()
+})
+it('aborts pending validation on an import event without a parent rerender', async () => {
+  jest.mocked(requestHfDryRun).mockImplementation(() => new Promise(() => undefined))
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  act(() => { void result.current.validate() })
+  await waitFor(() => expect(requestHfDryRun).toHaveBeenCalled())
+  const signal = jest.mocked(requestHfDryRun).mock.calls[0][1].signal
+  act(() => {
+    jest.mocked(LocalBundleService.getActiveImportId).mockReturnValue('next-import')
+    window.dispatchEvent(new Event('mediprisma:local-bundle-changed'))
+  })
+  expect(signal.aborted).toBe(true)
+  expect(result.current.busy).toBe(false)
+  expect(result.current.current).toBeNull()
 })

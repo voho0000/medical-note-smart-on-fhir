@@ -1,4 +1,4 @@
-# HF medcloud2 calculator integration
+# HF imported-record calculator integration
 
 Scope: the two outpatient claims P1_CD_mortality_1m and P1_CD_mortality_3m.
 Manual input checks and a separate manual prediction action are implemented. No automatic clinical upload, result persistence or clinical database write is introduced.
@@ -11,9 +11,9 @@ An accepted input check is not a risk result and does not establish complete his
 
 ## Browser data path
 
-The calculator reads the original tab-scoped LocalBundleService Bundle only after an explicit preparation action, only in local-import mode and for a single-patient medcloud2 source. SMART mode never falls back to a leftover local Bundle. Demographic overlays are not used.
+The calculator reads the original tab-scoped LocalBundleService Bundle only after an explicit preparation action, only in local-import mode and for a single-patient supported bridge source. SMART mode never falls back to a leftover local Bundle. Demographic overlays are not used.
 
-Choose a dated AMB encounter with recognized ICD diagnosis and a resolvable Organization identifier in https://cloud-wildcatch.invalid/fhir/sid/medcloud-provider. The visit supplies indexDate and hospital scope. Explicit case type 08 is excluded. Route names and acquisition-platform labels do not establish hospital source.
+For cloud records, choose a dated AMB encounter with recognized ICD diagnosis and a resolvable Organization identifier in https://cloud-wildcatch.invalid/fhir/sid/medcloud-provider. The visit supplies indexDate and hospital scope. Explicit case type 08 is excluded. Route names and acquisition-platform labels do not establish hospital source.
 
 The adapter:
 - Uses a fresh UUID namespace and strips names, identifiers, raw source IDs and narratives.
@@ -62,3 +62,18 @@ Only synthetic fixtures are used in tests, screenshots and model calls. No crede
 Focused frontend tests cover projection, transport, manual actions, refused/malformed results, source and identity invalidation, launch visibility and the traditional HF prognosis entry. Run relevant lint and production build with the preview flag unset. Service checks cover operation authorization, response sanitization, contract provenance, timeouts, size and concurrency.
 
 Real synthetic calls on 2026-10-05 returned scored 200 for both horizons, with laboratory-day coverage warnings. Model versions and calibration are taken from the response, not adapter version. Production app/service publication is separate; the current deployed SaMD remains dry-run until the reviewed release and explicit prediction setting are activated.
+
+## Additional bridge sources (2026-10-05)
+
+The preparation button is now 整理模型資料. Supported source formats are medcloud2, NHI-FHIR-BRIDGE health-bank extension exports (the exact bridge-version tag), and EHR-FHIR-BRIDGE local extension exports (`ehr-fhir-bridge/extension-local`). All still use the active tab-local imported Bundle, explicit preparation/validation/prediction, and the same service authorization.
+
+Health-bank hospital display names become private internal hospital scope references in a copy. Names must match exactly except for an explicit list of TVGH name variants. Other-hospital and conflicting performer records remain excluded. These grouping keys are never presented as official provider codes or transmitted. Only the audited TVGH single-hospital scraper resources can use TVGH as a fallback when their hospital reference is absent. A route's `site` does not supply clinical provenance. Module-completeness checks for imue modules remain specific to cloud exports; general source applicability and history coverage warnings remain on all imports.
+
+A new bridge visit can be prepared even when its diagnosis cannot yet be mapped, so the missing diagnosis is visible. Input upload stays disabled when the selected index encounter lacks a recognized ICD-CM diagnosis. Current EHR-FHIR-BRIDGE mapper output uses `http://hl7.org/fhir/sid/icd-10` for some diagnoses: those are not silently relabelled as ICD-10-CM. The producer's underlying terminology must be verified and corrected before those records can score. This PR does not establish that current TVGH exports all successfully predict.
+
+The EHR deidentified Patient name marker `DEID-` accompanies an artificial Jan 1 birth date. The adapter discards that date rather than presenting it as a full birth date. Missing birth date, unmapped diagnosis, laboratory items/units and history are not filled with guessed values.
+
+Source code reviewed: `voho0000/NHI-FHIR-BRIDGE` extension background bundle envelope and mapper Encounter; `voho0000/EHR-FHIR-BRIDGE` extension build-bundle, helpers, Patient, Encounter, Condition and Observation mappers, and qemr-parser. Regression fixtures are synthetic and reflect their documented structures.
+Health-bank exports only contain hospital display names. Identically named institutions cannot be reliably separated; an explicit hospital-name-only warning requires the user to verify identity and scope. Bridge normalization copies only resource fields it changes, avoiding repeated deep serialization of documents/images. Both the UI and request hook block a missing selected index diagnosis, even when another same-day visit is eligible.
+
+The SaMD hook subscribes to the existing bundle-changed and storage notifications using useSyncExternalStore. Import/clear transitions immediately hide the prior context and results and abort pending requests, even if the memoized parent never renders. Regression tests dispatch the actual notification without manually rerendering the hook.

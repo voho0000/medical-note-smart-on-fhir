@@ -1,16 +1,31 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
+import { hfRecordSource, type HfRecordSource } from '@/src/core/hf-risk/record-source'
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
 import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction } from '@/src/infrastructure/hf-risk/dry-run-client'
 
+function subscribeToRecordChange(onChange: () => void) {
+  window.addEventListener(BUNDLE_CHANGED_EVENT, onChange)
+  window.addEventListener('storage', onChange)
+  return () => {
+    window.removeEventListener(BUNDLE_CHANGED_EVENT, onChange)
+    window.removeEventListener('storage', onChange)
+  }
+}
+function recordSnapshot() {
+  return JSON.stringify([shouldUseLocalBundle(), LocalBundleService.getActiveImportId()])
+}
+const serverRecordSnapshot = () => '[false,null]'
 interface Context {
   importId: string
+  source: HfRecordSource
   bundle: object
   visits: HfVisit[]
   selection: HfSelection
@@ -21,7 +36,8 @@ export function useMedcloudHfDryRun() {
   let configured = false
   const policySetting = process.env.NEXT_PUBLIC_HF_AUTH_POLICY
   try { configured = !!origin && !!hfGatewayUrl(origin) && !!hfAuthPolicy(policySetting) } catch { /* Render a configuration notice; no network fallback. */ }
-  const activeImportId = LocalBundleService.getActiveImportId()
+  const snapshot = useSyncExternalStore(subscribeToRecordChange, recordSnapshot, serverRecordSnapshot)
+  const [localMode, activeImportId] = JSON.parse(snapshot) as [boolean, string | null]
   const [context, setContext] = useState<Context | null>(null)
   const [result, setResult] = useState<{ importId: string; input: HfInput; value: HfDryRunResult } | null>(null)
   const [prediction, setPrediction] = useState<{ importId: string; input: HfInput; value: HfPredictionResult } | null>(null)
@@ -30,11 +46,10 @@ export function useMedcloudHfDryRun() {
   const busy = busyImportId !== null && busyImportId === activeImportId
   const controller = useRef<AbortController | null>(null)
   const unsubscribeAuth = useRef<(() => void) | null>(null)
-  const localMode = shouldUseLocalBundle()
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleResult = result?.importId === activeImportId && result.input === current?.input ? result.value : null
   const visiblePrediction = prediction?.importId === activeImportId && prediction.input === current?.input ? prediction.value : null
-  const visibleMessage = (localMode || message?.code === 'source-not-medcloud') && message && message.importId === activeImportId ? message.code : null
+  const visibleMessage = (localMode || message?.code === 'source-unsupported') && message && message.importId === activeImportId ? message.code : null
   useEffect(() => () => { controller.current?.abort(); controller.current = null; unsubscribeAuth.current?.(); unsubscribeAuth.current = null }, [activeImportId, localMode])
 
   async function prepare() {
@@ -47,13 +62,13 @@ export function useMedcloudHfDryRun() {
     setMessage(null)
     const importId = LocalBundleService.getActiveImportId()
     try {
-      if (!shouldUseLocalBundle() || !importId) throw new Error('source-not-medcloud')
+      if (!shouldUseLocalBundle() || !importId) throw new Error('source-unsupported')
       const bundle = await LocalBundleService.load()
       if (LocalBundleService.getActiveImportId() !== importId || !shouldUseLocalBundle()) throw new Error('source-changed')
       const visits = medcloudHfVisits(bundle)
       if (!visits.length) throw new Error('no-visit')
       const selection: HfSelection = { provider: visits[0].provider, encounter: visits[0].reference, claim: 'P1_CD_mortality_1m' }
-      setContext({ importId, bundle: bundle!, visits, selection, input: buildMedcloudHfInput(bundle, selection) })
+      setContext({ importId, source: hfRecordSource(bundle!), bundle: bundle!, visits, selection, input: buildMedcloudHfInput(bundle, selection) })
     } catch (error) {
       setContext(null)
       setMessage({ importId, code: error instanceof Error ? error.message : 'bundle-invalid' })
@@ -72,7 +87,7 @@ export function useMedcloudHfDryRun() {
     catch { setMessage({ importId: current.importId, code: 'source-changed' }) }
   }
   async function submit(operation: 'dry-run' | 'predict') {
-    if (!current || !configured || busy || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
+    if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing') || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
     const snapshot = current
     const abort = new AbortController()
     controller.current?.abort()

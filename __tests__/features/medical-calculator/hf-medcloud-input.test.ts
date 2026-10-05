@@ -34,7 +34,7 @@ describe('NHI cloud HF input preparation', () => {
     expect(fhirDay('2024-02-29')).toBe('2024-02-29')
     const bundle = hfMedcloudFixture()
     delete bundle.meta
-    expect(() => build(bundle)).toThrow('source-not-medcloud')
+    expect(() => build(bundle)).toThrow('source-unsupported')
     const multiple = hfMedcloudFixture()
     add(multiple, { resourceType: 'Patient', id: 'other-patient' })
     expect(() => build(multiple)).toThrow('patient-count')
