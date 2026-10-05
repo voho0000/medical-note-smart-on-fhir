@@ -4,8 +4,9 @@ import { cdssPatientIdentity } from '@/features/clinical-decision-support/teleme
 import { captureCollectorAuth } from '@/src/application/telemetry/cdss-auth'
 jest.mock('@/src/application/telemetry/cdss-auth', () => ({ captureCollectorAuth: jest.fn() }))
 const mockGetFhirToken = jest.fn()
+const mockIsCurrent = jest.fn(() => true)
 jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', () => ({
-  captureFhirFirebaseAuth: jest.fn(async () => ({ getToken: mockGetFhirToken })),
+  captureFhirFirebaseAuth: jest.fn(async () => ({ uid: 'owner-a', isCurrent: mockIsCurrent, getToken: mockGetFhirToken })),
 }))
 
 const patient = { id: 'synthetic-patient', resourceType: 'Patient' as const, name: [{ text: '測試病人' }],
@@ -26,16 +27,17 @@ beforeEach(() => {
   jest.mocked(fetch).mockReset().mockResolvedValue(response({ records: [index], hasMore: false }))
   jest.mocked(captureCollectorAuth).mockClear()
   mockGetFhirToken.mockReset().mockResolvedValue('synthetic-firebase-id-token')
+  mockIsCurrent.mockReset().mockReturnValue(true)
 })
 afterEach(() => { delete process.env.NEXT_PUBLIC_CDSS_ADMISSION })
 
-test('intranet history uses a body lookup with no Firebase prerequisite and no patient identifiers in the URL', async () => {
+test('intranet history requires the existing account token and keeps patient identifiers out of the URL', async () => {
   expect((await listCdssHistory(patient, new AbortController().signal)).records).toEqual([index])
   expect(captureCollectorAuth).not.toHaveBeenCalled()
   const [url, request] = jest.mocked(fetch).mock.calls[0]
   expect(url).toBe('http://127.0.0.1:8098/cdss/v1/history')
   expect(request).toMatchObject({ method: 'POST', credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer' })
-  expect(request?.headers).toEqual({ 'Content-Type': 'application/json' })
+  expect(request?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer synthetic-firebase-id-token' })
   expect(request?.body).not.toContain('測試病人')
 })
 
@@ -78,4 +80,13 @@ test('site changes and cancelled lookups never issue a request; oversized respon
   expect(fetch).not.toHaveBeenCalled()
   jest.mocked(fetch).mockResolvedValueOnce(response({ oversized: 'x'.repeat(5 * 1024 * 1024) }))
   await expect(listCdssHistory(patient, new AbortController().signal)).rejects.toThrow('cdss_history_unavailable')
+})
+
+
+test('account changes while receiving history suppress the old account result', async () => {
+  jest.mocked(fetch).mockImplementation(async () => {
+    mockIsCurrent.mockReturnValue(false)
+    return response({ records: [index], hasMore: false })
+  })
+  await expect(listCdssHistory(patient, new AbortController().signal)).rejects.toThrow('cdss_site_changed')
 })

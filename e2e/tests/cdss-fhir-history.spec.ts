@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { test, expect } from '../fixtures/test'
+import { signInCdssAccount, stubCdssAccount } from '../fixtures/cdss-account'
+
+test.use({ initializeFirebaseFirestore: true })
 import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
 
 // Run only with playwright.fhir.config.ts against the real local FHIR stack.
@@ -34,6 +37,7 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
       await route.fallback() // Existing anonymous/offline fixtures block all production calls.
     })
   }
+  if (process.env.FHIR_E2E_AUTH_MODE !== 'firebase') await stubCdssAccount(context)
   await importBundle(page, { bundlePath: path })
   if (process.env.FHIR_E2E_AUTH_MODE === 'firebase') {
     await page.getByRole('button', { name: '訪客', exact: true }).click()
@@ -45,6 +49,7 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
     await login.getByRole('button', { name: '登入', exact: true }).click()
     await expect(login).not.toBeVisible()
   }
+  if (process.env.FHIR_E2E_AUTH_MODE !== 'firebase') await signInCdssAccount(page)
   await page.evaluate(() => window.history.replaceState({}, '', '/?site=vghtpe'))
   await openFeaturePanel(page)
   await page.getByRole('tab', { name: '設定', exact: true }).click()
