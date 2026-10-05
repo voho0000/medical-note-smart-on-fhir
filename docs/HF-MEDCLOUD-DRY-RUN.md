@@ -105,3 +105,5 @@ Local browser validation on 2026-10-06 with the synthetic fixture and a selected
 Review hardening: case-type 08 records cannot receive supplemental HF diagnoses. The outpatient shortcut anchors to the exact index encounter even when other visits share its date. A missing index diagnosis is explained beside the disabled input-check button; an inpatient diagnosis alone does not clear it. Invalid manual ranks show an inline explanation and do not apply supplementation.
 
 Unavailable diagnosis shortcuts explain their reasons beside the controls. Same-day selected encounters display distinct visit numbers, matching advanced settings, and a note to verify them individually. Privacy explanation and general hints remain visible outside the compact sticky actions.
+
+Owner-approved display naming (2026-10-06): badge 北榮研究試用; calculator HF 門診預後模型; detail heading 北榮 HF 研究試用. English and accessible labels use TVGH research trial. No visible SaMD/AI-SaMD labels remain. Internal module identifiers, endpoint paths and model contracts are unchanged; this is a presentation change, not a regulatory status claim.

@@ -81,7 +81,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
   const control = 'min-h-11 w-full rounded-md border border-border bg-background px-2 text-sm'
   return <section aria-label={en ? 'HF record model' : 'HF 病歷模型'} className="@container min-w-0 space-y-2 border-t border-border px-2.5 pb-2 pt-2" data-testid="hf-medcloud-dry-run">
     <div className="flex items-center justify-between gap-2">
-      <h3 className="text-sm font-semibold">{en ? 'TVGH HF AI-SaMD' : '北榮 HF AI-SaMD'}</h3>
+      <h3 className="text-sm font-semibold">{en ? 'TVGH HF research trial' : '北榮 HF 研究試用'}</h3>
       <button type="button" className={button} onClick={prepare} disabled={busy}>{en ? 'Prepare model input' : '整理模型資料'}</button>
     </div>
     <details className="text-xs text-muted-foreground">
