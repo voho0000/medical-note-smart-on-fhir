@@ -185,6 +185,7 @@ export function buildPatient(
     resourceType: 'Patient',
     meta: {
       profile: [IPS_PROFILES.patient],
+      ...(patient?.meta?.source ? { source: patient.meta.source } : {}),
       ...(patient?.demographicsSource === 'user-entered-local-profile'
         ? {
             tag: [{

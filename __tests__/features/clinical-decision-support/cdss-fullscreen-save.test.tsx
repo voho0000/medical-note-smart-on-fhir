@@ -5,11 +5,12 @@ jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => m
 import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { CdssStorageActions } from '@/features/clinical-decision-support/renderers/CdssStorageActions'
 import { listCdssHistory, readCdssHistory } from '@/features/clinical-decision-support/telemetry/cdss-history'
-import { cancelCdssGatewayRequests, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
+import { abortCdssGatewayRequests, cancelCdssGatewayRequests, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 
 jest.mock('@/features/clinical-decision-support/telemetry/cdss-gateway', () => ({
   cdssGatewayStatus: () => ({ enabled: true }),
   cancelCdssGatewayRequests: jest.fn(),
+  abortCdssGatewayRequests: jest.fn(),
   saveCdssSnapshot: jest.fn(),
 }))
 
@@ -116,7 +117,7 @@ test.each([
     fireEvent.click(screen.getByTestId('cdss-save-record'))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
       english ? 'Patient identification failed. CDSS record was not saved.' : '病人識別失敗，CDSS 紀錄未儲存。',
-      { description: expect.stringContaining(english ? 'partially masked national ID' : '部分遮蔽的身分證字號'), duration: 10000 },
+      { description: expect.stringContaining(english ? 'national ID (full or partially masked)' : '身分證字號（完整或部分遮蔽）'), duration: 10000 },
     ))
     const description = jest.mocked(toast.error).mock.calls[0][1]?.description
     expect(description).toEqual(expect.stringContaining(english ? 'full name without masking characters' : '完整姓名'))
@@ -155,7 +156,7 @@ test.each([
   if (detail) fireEvent.click(await screen.findByRole('button', { name: /synthetic/ }))
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent(english ? 'Patient identification failed. CDSS history cannot be retrieved.' : '病人識別失敗，無法取得 CDSS 歷史紀錄。')
-  expect(alert).toHaveTextContent(english ? 'partially masked national ID' : '部分遮蔽的身分證字號')
+  expect(alert).toHaveTextContent(english ? 'national ID (full or partially masked)' : '身分證字號（完整或部分遮蔽）')
   expect(alert).not.toHaveTextContent('cdss_identity_unavailable')
   view.unmount()
 })
@@ -186,7 +187,7 @@ test.each([[false, false], [false, true], [true, false], [true, true]])('de-iden
     fireEvent.click(screen.getByTestId('cdss-save-record'))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
       english ? 'De-identified patient data cannot be saved as a CDSS record.' : '去識別化資料無法儲存 CDSS 紀錄。',
-      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項'), duration: 10000 },
+      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消資料匯出工具的「去識別化」選項'), duration: 10000 },
     ))
     expect(toast.success).not.toHaveBeenCalled()
   } finally { view.unmount(); target.remove() }
@@ -198,7 +199,7 @@ test.each([false, true])('history de-identification rejection explains how to re
   fireEvent.click(screen.getByTestId('cdss-history-records'))
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent(english ? 'CDSS history cannot be retrieved for de-identified patient data.' : '去識別化資料無法查詢 CDSS 歷史紀錄。')
-  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項')
+  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消資料匯出工具的「去識別化」選項')
   view.unmount()
 })
 
@@ -243,5 +244,18 @@ test('switching the same patient to de-identified cancels a pending history look
   await act(async () => complete({ records: [], hasMore: false }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(screen.queryByText('尚無儲存紀錄。')).not.toBeInTheDocument()
+  view.unmount()
+})
+
+test('correcting demographics clears old views without dropping pending clinical events', async () => {
+  jest.clearAllMocks()
+  jest.mocked(listCdssHistory).mockResolvedValue({ records: [], hasMore: false })
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  await screen.findByRole('dialog')
+  view.rerender(<CdssStorageActions input={{ ...input, patient: { ...input.patient, name: [{ text: '陳大明' }], birthDate: '1970-01-15' } }} sourceRecords={() => []} />)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(abortCdssGatewayRequests).toHaveBeenCalledTimes(1)
+  expect(cancelCdssGatewayRequests).not.toHaveBeenCalled()
   view.unmount()
 })

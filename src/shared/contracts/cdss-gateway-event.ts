@@ -38,20 +38,23 @@ export const cdssSourceSchema = z.object({
 
 /** One clinician-triggered save of the current CDSS inputs and assessment. */
 export const cdssGatewaySaveSchema = z.object({
-  schema_version: z.literal(2),
+  schema_version: z.literal(3),
   save_id: z.string().uuid(),
   saved_at: z.string().datetime({ offset: true }),
   site: z.literal('vghtpe'),
   patient_session_id: z.string().uuid(),
-  patient_key_version: z.literal(1),
+  patient_key_version: z.union([z.literal(1), z.literal(2)]),
   patient_key_sha256: z.string().regex(/^[a-f0-9]{64}$/),
   patient_identity: z.object({
     name_masked: z.string().min(2).max(120).refine((value) => value.includes('○')),
     birth_year: z.string().regex(/^\d{4}$/),
-    identifier_masked: z.string().regex(/^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u)
-      .refine((value) => /[X*＊○〇●Ｏ◯]/u.test(value.slice(1))),
+    identifier_masked: z.string().min(1).max(40),
     identifier_system: z.string().min(1).max(200),
-  }).strict(),
+  }).strict().refine(identity => identity.identifier_system === 'https://vghtpe.gov.tw/IdentifierSystem/patient-mrn'
+    ? /^MRN-X{4,10}\d{2}$/.test(identity.identifier_masked)
+    : /national[-_]?id/i.test(identity.identifier_system)
+      && /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u.test(identity.identifier_masked)
+      && /[X*＊○〇●Ｏ◯]/u.test(identity.identifier_masked.slice(1))),
   pack_id: key,
   app_version: z.string().regex(/^\d+\.\d+\.\d+$/),
   build_revision: z.string().regex(/^(?:[a-f0-9]{7,40}|unknown)$/),
@@ -61,7 +64,7 @@ export const cdssGatewaySaveSchema = z.object({
   physician_decisions: z.record(z.string(), jsonValue),
   source_records: z.array(cdssSourceSchema).max(2000),
   events: z.array(z.discriminatedUnion('kind', [cdssInteractionSchema, cdssAssessmentSchema])).max(500),
-}).strict()
+}).strict().refine(save => save.patient_identity.identifier_system !== 'https://vghtpe.gov.tw/IdentifierSystem/patient-mrn' || save.patient_key_version === 2)
 
 export type CdssGatewaySave = z.infer<typeof cdssGatewaySaveSchema>
 export type CdssGatewayEvent = CdssGatewaySave['events'][number]

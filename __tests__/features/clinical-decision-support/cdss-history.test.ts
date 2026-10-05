@@ -99,3 +99,22 @@ test('de-identified source patients never request history list or detail', async
     .rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test.each([
+  { ...patient, meta: { source: 'nhi-fhir-bridge/scraper' }, identifier: [{ system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', value: 'A123456789' }] },
+  { ...patient, id: '00001234', meta: { source: 'ehr-fhir-bridge/scraper' }, identifier: [{ system: 'urn:oid:his.patient.mrn', value: '00001234' }] },
+])('bridge history lists and reads v3 through the same hashed identity', async bridge => {
+  const identity = await cdssPatientIdentity(bridge)
+  await listCdssHistory(bridge, new AbortController().signal)
+  const save = { ...identity, schema_version: 3, save_id: saveId, saved_at: index.receivedAt, site: 'vghtpe',
+    patient_session_id: saveId, pack_id: 'synthetic', app_version: '0.0.0', build_revision: 'unknown',
+    profile: { facts: { synthetic: true } }, result: { packId: 'synthetic', packVersion: '1' },
+    physician_inputs: {}, physician_decisions: {}, source_records: [], events: [] }
+  jest.mocked(fetch).mockResolvedValueOnce(response({ ...index, savedAt: index.receivedAt, save }))
+  expect((await readCdssHistory(bridge, saveId, new AbortController().signal)).save).toEqual(save)
+  for (const [, request] of jest.mocked(fetch).mock.calls) {
+    const body = JSON.parse(request!.body as string)
+    expect(body.patient_key_sha256).toBe(identity.patient_key_sha256)
+    expect(request!.body).not.toContain(bridge.identifier[0].value)
+  }
+})

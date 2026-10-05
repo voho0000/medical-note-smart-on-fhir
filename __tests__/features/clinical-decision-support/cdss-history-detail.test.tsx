@@ -55,7 +55,7 @@ test.each([
 })
 
 test.each([
-  ['unknown version', { schema_version: 3 }],
+  ['unknown version', { schema_version: 999 }],
   ['malformed UUID', { patient_session_id: 'not-a-uuid' }],
   ['invalid timestamp', { saved_at: '2026-02-30T12:34+0800' }],
   ['invalid event date', { events: [{ kind: 'assessment', pack_id: 'synthetic', occurred_at: index.receivedAt,
@@ -69,9 +69,10 @@ test.each([
 })
 
 test('historical compatibility does not loosen the current writer', async () => {
-  expect(cdssGatewaySaveSchema.safeParse((await detail()).save).success).toBe(true)
+  expect(cdssGatewaySaveSchema.safeParse((await detail({ schema_version: 3 })).save).success).toBe(true)
+  expect(cdssGatewaySaveSchema.safeParse((await detail()).save).success).toBe(false)
   for (const patch of [{ patient_session_id: 'ABCDEFAB-1234-0000-0000-ABCDEFABCDEF' }, { saved_at: '2026-10-03T12:34+0800' }]) {
-    expect(cdssGatewaySaveSchema.safeParse((await detail(patch)).save).success).toBe(false)
+    expect(cdssGatewaySaveSchema.safeParse((await detail({ ...patch, schema_version: 3 })).save).success).toBe(false)
   }
 })
 
