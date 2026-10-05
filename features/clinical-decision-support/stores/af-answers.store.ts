@@ -24,7 +24,7 @@ export function afAnswersStorageKey(patientId: string): string {
 }
 
 /** Only true and false survive a read; anything else is 「沒答」. */
-function toAfAnswers(parsed: unknown): AfAnswers {
+export function toAfAnswers(parsed: unknown): AfAnswers {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY
   const answers: Record<string, boolean> = {}
   for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -111,4 +111,12 @@ export function useAfAnswers(patientId?: string): AfAnswers {
 /** Whether this chart's stored AF answers have been read back yet. */
 export function useAfAnswersHydrated(patientId?: string): boolean {
   return useAfAnswersStore((state) => !patientId || state.hydratedPatientId === patientId)
+}
+
+export function restoreAfAnswers(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const answers = toAfAnswers(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  useAfAnswersStore.setState({ patientId, answers, hydratedPatientId: patientId })
+  try { writeStored(patientId, answers) } catch { /* The encrypted cache is best effort. */ }
 }

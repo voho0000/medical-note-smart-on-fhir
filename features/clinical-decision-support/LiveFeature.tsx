@@ -818,7 +818,7 @@ export default function LiveClinicalDecisionSupportFeature({
       <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget} input={{ patient,
         packId: result.packId, profile, result,
         physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
-          nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
+          nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers, visitAnswerRecord },
         physicianDecisions: { ...physicianDecisions },
       }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
       <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />

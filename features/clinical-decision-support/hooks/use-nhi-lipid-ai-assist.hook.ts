@@ -132,6 +132,7 @@ export function useNhiLipidAiAssist(input: {
     clinicalInput.inputSignature,
     clinicalInput.sourceScopeSignature,
     input.patientId,
+    review.lastCompleted,
   ])
 
   const run = useCallback(async () => {

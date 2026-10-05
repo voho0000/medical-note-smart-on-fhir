@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
+import { latestCdssSave } from '../telemetry/latest-cdss-save'
+import { assessmentFingerprint, savedAssessmentFingerprint, restoreSavedAssessment } from '../stores/saved-assessment'
 import { toast } from 'sonner'
 import { isDeidentifiedPatient } from '@/src/core/entities/patient.entity'
 import { useAuth } from '@/src/application/providers/auth.provider'
@@ -88,9 +90,27 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const [history, setHistory] = useState<CdssHistoryList | null>(null)
   const [selected, setSelected] = useState<CdssHistoryRecord | null>(null)
   const controller = useRef<AbortController | null>(null)
+  const [baseline, setBaseline] = useState<string | null | undefined>(undefined)
+  const [checkRevision, setCheckRevision] = useState(0)
+  const patientScope = JSON.stringify([input.patient.id, input.patient.name, input.patient.birthDate, input.patient.identifier, isDeidentifiedPatient(input.patient), ownerUid, fhirOAuthEnabled() ? authorized : true])
+  const patientRef = useRef(input.patient)
+  useEffect(() => { patientRef.current = input.patient }, [input.patient])
+  const canRead = Boolean(enabled && ownerUid && (!fhirOAuthEnabled() || authorized) && !isDeidentifiedPatient(input.patient))
+  const [restoreSignal, setRestoreSignal] = useState<AbortSignal | null>(null)
+  const [historySignal, setHistorySignal] = useState<AbortSignal | null>(null)
+  useEffect(() => () => controller.current?.abort(), [patientScope])
+  const [restoreScope, setRestoreScope] = useState('')
+  const [baselineScope, setBaselineScope] = useState('')
+  const [historyScope, setHistoryScope] = useState('')
+  const [baselineFailed, setBaselineFailed] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [restoreRecord, setRestoreRecord] = useState<CdssHistoryRecord | null>(null)
+  const latestController = useRef<AbortController | null>(null)
+  const fingerprint = assessmentFingerprint(input.physicianInputs, input.physicianDecisions, input.patient)
+  const dirty = baselineScope === patientScope && baseline !== undefined && fingerprint !== (baseline ?? '{}')
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => {
-    mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
+    mounted.current = false; latestController.current?.abort(); controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
   } }, [])
   const deidentifiedHelp = english
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
@@ -98,11 +118,53 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const identityHelp = english
     ? 'Check that the patient data includes a full name without masking characters, a valid date of birth, and a partially masked national ID. Then reimport the data and try again.'
     : '請確認病人資料包含完整姓名（不可含 ○ 等遮蔽字元）、有效出生日期，以及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
+  useEffect(() => {
+    const request = new AbortController()
+    latestController.current = request
+    const patient = patientRef.current
+    void (async () => {
+      await Promise.resolve()
+      if (request.signal.aborted) return
+      if (!canRead || !ownerUid) { setChecking(false); setRestoreRecord(null); return }
+      setChecking(true)
+      setRestoreRecord(null)
+      try {
+        const saved = await latestCdssSave(patient, request.signal, ownerUid)
+        if (!request.signal.aborted) {
+          setBaselineScope(patientScope)
+          setBaseline(saved ? savedAssessmentFingerprint(saved, patient) : null)
+          setBaselineFailed(false)
+        }
+      } catch {
+        if (!request.signal.aborted) setBaselineFailed(true)
+      } finally { if (!request.signal.aborted) setChecking(false) }
+    })()
+    return () => { request.abort(); latestController.current?.abort() }
+  }, [canRead, ownerUid, checkRevision, patientScope])
+  const prepareRestore = async () => {
+    if (!ownerUid || saving || checking || !enabled) return
+    if (isDeidentifiedPatient(input.patient)) { toast.error(english ? 'De-identified patient data cannot be restored.' : '去識別化資料無法還原 CDSS 紀錄。', { description: deidentifiedHelp, duration: 10000 }); return }
+    latestController.current?.abort()
+    const request = new AbortController()
+    latestController.current = request
+    setChecking(true)
+    try {
+      const saved = await latestCdssSave(input.patient, request.signal, ownerUid)
+      if (!saved) throw new Error('cdss_no_saved_record')
+      if (!request.signal.aborted) { setRestoreScope(patientScope); setRestoreSignal(request.signal); setRestoreRecord(saved) }
+    } catch (failure) {
+      if (!request.signal.aborted) toast.error(failure instanceof Error && failure.message === 'cdss_no_saved_record'
+        ? english ? 'No saved record for this patient.' : '此病人尚無可還原的儲存紀錄。'
+        : english ? 'Saved record unavailable. Your draft is unchanged.' : '無法取得儲存紀錄，目前草稿未變更。')
+    } finally { if (!request.signal.aborted) setChecking(false) }
+  }
   const run = async (saveId?: string) => {
     if (!ownerUid) return
     controller.current?.abort()
     const request = new AbortController()
     controller.current = request
+    setHistorySignal(request.signal)
+    setHistoryScope(patientScope)
     setLoading(true); setError(null); setSelected(null)
     if (!saveId) setHistory(null)
     try {
@@ -120,12 +182,16 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   }
   const save = async () => {
     if (!ownerUid || saving) return
+    latestController.current?.abort()
+    setChecking(false)
+    const savedFingerprint = fingerprint
     setSaving(true)
     try {
       await saveCdssSnapshot({ ...input, ownerUid, sourceRecords: sourceRecords() })
-      if (mounted.current) toast.success(english ? 'CDSS record saved.' : 'CDSS 紀錄已儲存。')
+      if (mounted.current) { setBaseline(savedFingerprint); setBaselineScope(patientScope); setBaselineFailed(false); toast.success(english ? 'CDSS record saved.' : 'CDSS 紀錄已儲存。') }
     } catch (failure) {
       if (mounted.current) {
+        setCheckRevision(value => value + 1)
         if (isDeidentifiedFailure(failure)) {
           toast.error(english ? 'De-identified patient data cannot be saved as a CDSS record.' : '去識別化資料無法儲存 CDSS 紀錄。',
             { description: deidentifiedHelp, duration: 10000 })
@@ -143,9 +209,16 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const label = english ? 'Saved CDSS records' : 'CDSS 歷史紀錄'
   const result = object(selected?.save.result)
   const recommendations = Array.isArray(result.recommendations) ? result.recommendations : []
-  const saveButton = <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={!ownerUid || saving || (fhirOAuthEnabled() && !authorized)} aria-busy={saving} data-testid="cdss-save-record">
-      {!ownerUid ? english ? 'Sign in to save' : '請先登入後儲存' : saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
-    </Button>
+  const status = !canRead ? english ? 'Saved state not checked' : '尚未確認儲存狀態' : checking ? english ? 'Checking saved state…' : '確認儲存狀態中…'
+    : baselineFailed ? english ? 'Saved state could not be checked' : '無法確認最後儲存狀態'
+    : baselineScope !== patientScope || baseline === undefined ? english ? 'Saved state not checked' : '尚未確認儲存狀態'
+    : dirty ? english ? 'Unsaved changes' : '有未儲存變更'
+    : baseline === null ? english ? 'No saved record' : '尚無儲存紀錄'
+    : english ? 'Matches last saved state' : '與最後儲存狀態一致'
+  const saveButton = <CdssSaveControls english={english} signedIn={Boolean(ownerUid)} saving={saving} status={status}
+    saveDisabled={!ownerUid || saving || (fhirOAuthEnabled() && !authorized)}
+    restoreDisabled={saving || checking || (fhirOAuthEnabled() && !authorized)}
+    onSave={() => void save()} onRestore={() => void prepareRestore()} />
   return <div className="flex flex-wrap gap-2">
     {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || authorizing}
       data-testid="cdss-fhir-authorize" onClick={() => {
@@ -157,7 +230,29 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
     {saveTarget ? createPortal(saveButton, saveTarget) : saveButton}
     <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)}
       onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
-    <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) controller.current?.abort() }}>
+    <Dialog open={Boolean(canRead && restoreRecord && restoreScope === patientScope && restoreSignal && !restoreSignal.aborted)} onOpenChange={value => { if (!value) setRestoreRecord(null) }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{english ? 'Restore last saved state' : '還原最後儲存狀態'}</DialogTitle>
+          <DialogDescription>{english ? 'Replace the patient-wide answers and clinician decisions shared by all care packs with this latest snapshot. Unsaved changes will be discarded; original clinical dates are retained. AI answers require re-review when their source data has changed.'
+            : '將以此病人最後紀錄取代所有指引共用的答案與醫師決策，捨棄未儲存變更；原始量測與評估日期會保留，舊日問診不會當作今日答案，AI 答案來源已變時需重新判讀。'}</DialogDescription>
+        </DialogHeader>
+        {restoreRecord && <p>{english ? 'Saved at: ' : '儲存時間：'}{new Date(storedTimestampForDisplay(restoreRecord.savedAt)).toLocaleString(english ? 'en' : 'zh-TW')}</p>}
+        <p>{english ? 'Saved care pack: ' : '儲存的指引：'}{text(object(restoreRecord?.save.result).title) || restoreRecord?.packId}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setRestoreRecord(null)}>{english ? 'Cancel' : '取消'}</Button>
+          <Button type="button" className="min-h-[44px]" disabled={saving} onClick={() => {
+            if (!canRead || !ownerUid || !restoreRecord || restoreScope !== patientScope || !restoreSignal || restoreSignal.aborted || !mounted.current) return
+            restoreSavedAssessment(input.patient.id, restoreRecord)
+            setBaselineScope(patientScope)
+            setBaseline(savedAssessmentFingerprint(restoreRecord, input.patient))
+            setBaselineFailed(false)
+            setRestoreRecord(null)
+            toast.success(english ? 'Saved answers restored. Assessment recalculated; stale AI answers require re-review.' : '已還原儲存答案並重新評估；AI 答案來源已變時需重新判讀。')
+          }}>{english ? 'Confirm restore' : '確認還原'}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={open && historyScope === patientScope && Boolean(historySignal && !historySignal.aborted)} onOpenChange={value => { setOpen(value); if (!value) controller.current?.abort() }}>
       <DialogContent className="sm:max-w-3xl" showCloseButton={false}>
         <DialogHeader><DialogTitle>{label}</DialogTitle>
           <DialogDescription>{english ? 'Your saved snapshots for this patient. Viewing leaves the current assessment unchanged.' : '您為此病人儲存的快照；調閱時保留目前的評估。'}</DialogDescription>
@@ -190,5 +285,23 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
         <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => { setOpen(false); controller.current?.abort() }}>{english ? 'Close' : '關閉'}</Button>
       </DialogContent>
     </Dialog>
+  </div>
+}
+
+/** Shared controls travel together into the full-window header. */
+export function CdssSaveControls({ english, signedIn, saving, status, saveDisabled, restoreDisabled, onSave, onRestore }: {
+  english: boolean; signedIn: boolean; saving: boolean; status: string; saveDisabled: boolean; restoreDisabled: boolean;
+  onSave: () => void; onRestore: () => void;
+}) {
+  return <div className="flex flex-wrap items-center gap-2">
+    <Button type="button" variant="outline" className="min-h-[44px] whitespace-normal shadow-none" onClick={onSave}
+      disabled={saveDisabled} aria-busy={saving} data-testid="cdss-save-record">
+      {!signedIn ? english ? 'Sign in to save' : '請先登入後儲存' : saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
+    </Button>
+    {signedIn && <>
+      <span role="status" className="text-sm text-muted-foreground" data-testid="cdss-save-status">{status}</span>
+      <Button type="button" variant="outline" className="min-h-[44px] whitespace-normal shadow-none" disabled={restoreDisabled}
+        onClick={onRestore} data-testid="cdss-restore-record">{english ? 'Restore last saved state' : '還原最後儲存狀態'}</Button>
+    </>}
   </div>
 }

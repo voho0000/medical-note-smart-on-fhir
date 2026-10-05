@@ -96,7 +96,7 @@ export function hfpefInputsStorageKey(patientId: string): string {
  * hands back nothing, and a hand-edited value can be anything. Every path
  * degrades to 「沒填」, which is a first visit's reading.
  */
-function toHfpefInputs(parsed: unknown): HfpefInputs {
+export function toHfpefInputs(parsed: unknown): HfpefInputs {
   try {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_HFPEF_INPUTS
     const record = (parsed as Record<string, unknown>).entries
@@ -221,4 +221,16 @@ export function useHfpefInputsHydrated(patientId: string | undefined): boolean {
 /** A record built from one statement, for a caller with no store. */
 export function buildHfpefInputs(patch: HfpefInputsPatch, now: Date = new Date()): HfpefInputs {
   return mergeHfpefInputs(EMPTY_HFPEF_INPUTS, patch, now)
+}
+
+/** Replace a confirmed saved snapshot, retaining its original clinical dates. */
+export function restoreHfpefInputs(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const restored = toHfpefInputs(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  useHfpefInputsStore.setState(state => ({
+    byPatientId: { ...state.byPatientId, [patientId]: restored },
+    hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+  }))
+  try { writeStored(patientId, restored) } catch { /* The encrypted cache is best effort. */ }
 }

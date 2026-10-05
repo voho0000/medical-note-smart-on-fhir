@@ -389,7 +389,7 @@ function toAnsweredField<T extends string>(
  * Every path therefore degrades to 「沒問」, which is the same reading a first
  * visit gives.
  */
-function toClinicVitals(parsed: unknown): ClinicVitals {
+export function toClinicVitals(parsed: unknown): ClinicVitals {
   try {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_CLINIC_VITALS
     const record = parsed as Record<string, unknown>
@@ -593,4 +593,16 @@ export function buildClinicVitals(
   now: Date = new Date(),
 ): ClinicVitals {
   return mergeClinicVitals(EMPTY_CLINIC_VITALS, patch, now)
+}
+
+/** Replace a confirmed saved snapshot, retaining its original clinical dates. */
+export function restoreClinicVitals(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const restored = toClinicVitals(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  useClinicVitalsStore.setState(state => ({
+    byPatientId: { ...state.byPatientId, [patientId]: restored },
+    hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+  }))
+  try { writeStoredVitals(patientId, restored) } catch { /* The encrypted cache is best effort. */ }
 }
