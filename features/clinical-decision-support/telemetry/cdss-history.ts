@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { isCollectorSite } from '@/src/application/telemetry/collector'
-import { fhirAccessToken } from './fhir-auth'
+import { captureFhirRequestAuth } from './fhir-auth'
 import { parseStoredCdssSaveV2, storedTimestampV2, storedUuidV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
 import { cdssPatientIdentity } from './patient-identity'
 import { cdssEndpoint } from './cdss-gateway'
@@ -17,13 +17,14 @@ const record = index.extend({ savedAt: storedTimestampV2, save: z.unknown().tran
 export type CdssHistoryList = z.infer<typeof list>
 export type CdssHistoryRecord = z.infer<typeof record>
 
-async function request(patient: PatientEntity, path: string, saveId: string | undefined, signal: AbortSignal) {
+async function request(patient: PatientEntity, path: string, saveId: string | undefined, signal: AbortSignal, ownerUid?: string) {
   const url = cdssEndpoint(path)
   if (!url || !isCollectorSite()) throw new Error('cdss_history_unavailable')
+  const auth = await captureFhirRequestAuth(ownerUid)
   const identity = await cdssPatientIdentity(patient)
   const key = { site: 'vghtpe' as const, patient_key_version: 1 as const, patient_key_sha256: identity.patient_key_sha256 }
-  const token = await fhirAccessToken()
-  if (signal.aborted || !isCollectorSite()) throw new Error('cdss_site_changed')
+  const token = await auth.getToken()
+  if (signal.aborted || !isCollectorSite() || !auth.isCurrent()) throw new Error('cdss_site_changed')
   const response = await fetch(url, { method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ ...key, ...(saveId ? { save_id: saveId } : {}) }),
@@ -47,14 +48,15 @@ async function request(patient: PatientEntity, path: string, saveId: string | un
   const body = new Uint8Array(bytes)
   let offset = 0
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.length }
+  if (signal.aborted || !isCollectorSite() || !auth.isCurrent()) throw new Error('cdss_site_changed')
   return { data: JSON.parse(new TextDecoder().decode(body)), key }
 }
 
-export async function listCdssHistory(patient: PatientEntity, signal: AbortSignal): Promise<CdssHistoryList> {
-  return list.parse((await request(patient, '/cdss/v1/history', undefined, signal)).data)
+export async function listCdssHistory(patient: PatientEntity, signal: AbortSignal, ownerUid?: string): Promise<CdssHistoryList> {
+  return list.parse((await request(patient, '/cdss/v1/history', undefined, signal, ownerUid)).data)
 }
-export async function readCdssHistory(patient: PatientEntity, saveId: string, signal: AbortSignal): Promise<CdssHistoryRecord> {
-  const { data, key } = await request(patient, '/cdss/v1/history/read', saveId, signal)
+export async function readCdssHistory(patient: PatientEntity, saveId: string, signal: AbortSignal, ownerUid?: string): Promise<CdssHistoryRecord> {
+  const { data, key } = await request(patient, '/cdss/v1/history/read', saveId, signal, ownerUid)
   const parsed = record.parse(data)
   if (parsed.saveId !== saveId || parsed.save.save_id !== saveId || parsed.save.site !== key.site ||
       parsed.save.patient_key_version !== key.patient_key_version || parsed.save.patient_key_sha256 !== key.patient_key_sha256 ||

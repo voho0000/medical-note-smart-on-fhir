@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useAuth } from '@/src/application/providers/auth.provider'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { storedTimestampForDisplay } from '@/src/shared/contracts/cdss-stored-save-v2'
@@ -58,14 +59,23 @@ function SavedRecommendation({ value, english }: { value: unknown; english: bool
   </section>
 }
 
-export function CdssStorageActions({ input, sourceRecords, english = false, saveTarget }: {
+type StorageProps = {
   /** Keep the save controller mounted when its button moves into the full-window header. */
   saveTarget?: HTMLElement | null
   input: Omit<Parameters<typeof saveCdssSnapshot>[0], 'sourceRecords'>
   sourceRecords: () => Parameters<typeof saveCdssSnapshot>[0]['sourceRecords']; english?: boolean
-}) {
+}
+
+export function CdssStorageActions(props: StorageProps) {
+  // Provider loading also includes Firestore profile writes; a known account can already authorize FHIR.
+  const { user } = useAuth()
+  const ownerUid = user?.uid
+  return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid])} {...props} ownerUid={ownerUid} />
+}
+
+function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid }: StorageProps & { ownerUid?: string }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
-  const authorized = useSyncExternalStore(subscribeFhirAuth, fhirAuthStatus, () => false)
+  const authorized = useSyncExternalStore(subscribeFhirAuth, () => fhirAuthStatus(ownerUid), () => false)
   const [authorizing, setAuthorizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
@@ -76,9 +86,10 @@ export function CdssStorageActions({ input, sourceRecords, english = false, save
   const controller = useRef<AbortController | null>(null)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => {
-    mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests()
+    mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
   } }, [])
   const run = async (saveId?: string) => {
+    if (!ownerUid) return
     controller.current?.abort()
     const request = new AbortController()
     controller.current = request
@@ -86,20 +97,20 @@ export function CdssStorageActions({ input, sourceRecords, english = false, save
     if (!saveId) setHistory(null)
     try {
       if (saveId) {
-        const result = await readCdssHistory(input.patient, saveId, request.signal)
+        const result = await readCdssHistory(input.patient, saveId, request.signal, ownerUid)
         if (!request.signal.aborted) setSelected(result)
       } else {
-        const result = await listCdssHistory(input.patient, request.signal)
+        const result = await listCdssHistory(input.patient, request.signal, ownerUid)
         if (!request.signal.aborted) setHistory(result)
       }
     } catch { if (!request.signal.aborted) setError(true) }
     finally { if (!request.signal.aborted) setLoading(false) }
   }
   const save = async () => {
-    if (saving) return
+    if (!ownerUid || saving) return
     setSaving(true)
     try {
-      await saveCdssSnapshot({ ...input, sourceRecords: sourceRecords() })
+      await saveCdssSnapshot({ ...input, ownerUid, sourceRecords: sourceRecords() })
       if (mounted.current) toast.success(english ? 'CDSS record saved.' : 'CDSS 紀錄已儲存。')
     } catch { if (mounted.current) toast.error(english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。') }
     finally { if (mounted.current) setSaving(false) }
@@ -108,24 +119,24 @@ export function CdssStorageActions({ input, sourceRecords, english = false, save
   const label = english ? 'Saved CDSS records' : 'CDSS 歷史紀錄'
   const result = object(selected?.save.result)
   const recommendations = Array.isArray(result.recommendations) ? result.recommendations : []
-  const saveButton = <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={saving} aria-busy={saving} data-testid="cdss-save-record">
-      {saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
+  const saveButton = <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={!ownerUid || saving || (fhirOAuthEnabled() && !authorized)} aria-busy={saving} data-testid="cdss-save-record">
+      {!ownerUid ? english ? 'Sign in to save' : '請先登入後儲存' : saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
     </Button>
   return <div className="flex flex-wrap gap-2">
-    {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={authorizing}
+    {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || authorizing}
       data-testid="cdss-fhir-authorize" onClick={() => {
         if (authorized) { disconnectFhir(); return }
         setAuthorizing(true)
-        void authorizeFhir().catch(() => { if (mounted.current) toast.error(english ? 'FHIR authorization failed. Please try again.' : 'FHIR 授權未完成，請重試。') })
+        void authorizeFhir(ownerUid).catch(() => { if (mounted.current) toast.error(english ? 'FHIR authorization failed. Please try again.' : 'FHIR 授權未完成，請重試。') })
           .finally(() => { if (mounted.current) setAuthorizing(false) })
       }}>{authorizing ? english ? 'Authorizing…' : '授權中…' : authorized ? english ? 'Disconnect FHIR' : '斷開 FHIR 授權' : english ? 'Authorize FHIR' : '登入 FHIR 授權'}</Button>}
     {saveTarget ? createPortal(saveButton, saveTarget) : saveButton}
-    <Button type="button" variant="outline" className="min-h-[44px] shadow-none"
+    <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)}
       onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
     <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) controller.current?.abort() }}>
       <DialogContent className="sm:max-w-3xl" showCloseButton={false}>
         <DialogHeader><DialogTitle>{label}</DialogTitle>
-          <DialogDescription>{english ? 'Saved snapshots for this patient. Viewing leaves the current assessment unchanged.' : '此病人的已儲存快照；調閱時保留目前的評估。'}</DialogDescription>
+          <DialogDescription>{english ? 'Your saved snapshots for this patient. Viewing leaves the current assessment unchanged.' : '您為此病人儲存的快照；調閱時保留目前的評估。'}</DialogDescription>
         </DialogHeader>
         {loading && <p role="status">{english ? 'Loading…' : '載入中…'}</p>}
         {error && <div role="alert"><p>{english ? 'Records unavailable. Please try again.' : '目前無法取得紀錄，請稍後重試。'}</p>

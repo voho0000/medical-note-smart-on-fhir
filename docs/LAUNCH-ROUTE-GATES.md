@@ -1,6 +1,6 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
-2026-10-05 owner decision: FHIR CDSS admission uses `intranet` for the hospital pilot. On site=vghtpe, existing save/history controls can send requests without Firebase sign-in; the independent API checks the hospital source subnet. This adds no login popup and does not change the existing CDSS tab, Beta, audience or hospital-launch visibility rules. Firebase/OAuth remain optional admission modes. Deployment target: `https://fhir.mediprisma.tw`.
+2026-10-05 latest owner decision: CDSS save/history must be bound to the signed-in user. On `?site=vghtpe`, Firebase/intranet admission requires a nonanonymous App account; intranet retains the hospital subnet check. Only the original saver may list/read a record. The earlier same-day network-only decision is superseded. Deployment target: `https://fhir.mediprisma.tw`.
 
 Every place the app behaves differently because of *how it was opened* is
 listed here. A gate is one of two kinds, and the kind decides how strict the
@@ -31,6 +31,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 
 | Where | Kind | Behaviour on the route | Owner decision |
 |---|---|---|---|
+| `features/clinical-decision-support/renderers/CdssStorageActions.tsx` | 不顯示（停用操作） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: guests, anonymous accounts and sessions without an established account UID cannot save or open CDSS history. Signed-in accounts retain these actions, limited to their own server-owned records; logout/account change closes and clears history. Existing site/Beta/role gates still apply. | Explicit owner request in chat, 2026-10-05: 綁定登入 user 才能儲存，僅原儲存者可讀取。 |
 | `features/clinical-summary/document-summary/DocumentSummaryCard.tsx` | 不顯示 | All routes: remove the unshipped standalone 歷史 B/C 肝篩檢 section from 文件, restoring the original document-only layout. Source-authored Composition chapters and the existing reports flow remain available. | Owner explicitly requested removal in chat, 2026-09-11 |
 | `app/page.tsx` (tour launcher) | 不打斷 | Guided-tour offer never opens | e5374e97, 2026-08-20 |
 | `app/_components/FirstRunOnboardingDialog.tsx` | 不打斷 | First-run onboarding never opens on either `/app/` or `/app-hmc/` when `medcloud2=auto`; the vghtpe hospital hand-off is covered on both paths | e5374e97; `/app-hmc/` confirmed by owner, 2026-09-09 |

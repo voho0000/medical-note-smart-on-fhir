@@ -1,6 +1,8 @@
 # CDSS 獨立 FHIR 儲存與院內准入
 
-2026-10-05 使用者改為院內網段准入。正式目標為 `NEXT_PUBLIC_CDSS_ADMISSION=intranet`、`NEXT_PUBLIC_CDSS_API_ORIGIN=https://fhir.mediprisma.tw`；儲存及歷史調閱不要求 Firebase 登入、不取 ID token。API 以 nginx 覆寫的來源 IP 判斷 `10.97.0.0/16`、`10.100.0.0/16`，網段外拒收；HTTPS、Origin、限速及 CDSS 契約檢查保留。這不提供醫師或個別使用者身分。下方 Firebase 模式仍可選，但不是目前院內試行設定。VM API 與正式 App 仍待新版部署及驗收。
+2026-10-05 最新使用者決定：CDSS 儲存與調閱綁定登入帳號，僅原儲存者可讀取。未登入、匿名與尚未確定帳號 UID 時，面板及全螢幕的儲存／歷史操作停用；儲存按鈕提示「請先登入後儲存」。`intranet` 保留院內 CIDR 限制，另要求 App 現有非匿名 Firebase token；不再只憑網段允許儲存與調閱。API 私有設定需補相同 `FHIR_FIREBASE_PROJECT_ID` 與核准 UID 名單。正式 VM／App 設定尚未變更。
+
+後端以已驗證 issuer＋UID 衍生擁有者 security label，列出與調閱皆核對；patient hash、儲存 UUID、email 或 request body 不能代替擁有者授權。登出／切換帳號會取消待處理請求並清除已顯示的歷史；重試 UUID 亦按帳號隔離。沒有 owner label 的舊紀錄不會自動歸屬或出現在登入者歷史；恢復前須由維運以可信來源明確對應原儲存者。需先更新 FHIR 後端，才能提供伺服器端隔離。
 
 2026-10-04 依使用者釐清：Gateway 只做 log／回報資料。App 直接呼叫獨立 FHIR API，沒有 Gateway／Collector FHIR fallback。原工作區衝突保留；未發布 App、未改 pilot/hmc 或 HMC 發布鏈。
 
@@ -23,7 +25,7 @@ NEXT_PUBLIC_CDSS_ADMISSION=firebase
 
 目前使用者指定只開放已登入 Firebase 的 CDSS 協作者。App 取現有非匿名帳號的 getIdToken()，沒有第二次登入或額外授權按鈕；Firebase SDK 沿用既有 token 更新，FHIR 不另外存 token。登出／帳號切換／取 token 失敗停止傳送；一般登入者是否為協作者，由獨立 API 驗證 Google 簽章、相同 Firebase project 與明確 UID 白名單決定。Beta switch、email 或自稱角色不是權限。NEXT_PUBLIC_COLLECTOR_ORIGIN只用於log／回報，不能當FHIR URL。
 
-FHIR 私有 env 設 FHIR_API_AUTH_MODE=firebase、FHIR_FIREBASE_PROJECT_ID 與 App 相同、FHIR_FIREBASE_ALLOWED_UIDS 為協作者 UID 名單。此名單不放 NEXT_PUBLIC，也不從 Gateway 執行時讀取；尚未設定正式名單或 Firebase claims。Firebase 模式限 CDSS 三個路由，不能 bootstrap 或 raw /fhir。名單變更後重啟 API；移除 UID 即撤除本服務權限。公開憑證驗證不查 Firebase session revoked/disabled，僅在 Firebase 撤销而保留 UID 時，既有 token 可能有效到原期限（最長一小時）。
+FHIR 私有 env 設 FHIR_API_AUTH_MODE=firebase（院內使用 intranet 亦需以下 Firebase 設定）、FHIR_FIREBASE_PROJECT_ID 與 App 相同、FHIR_FIREBASE_ALLOWED_UIDS 為協作者 UID 名單。此名單不放 NEXT_PUBLIC，也不從 Gateway 執行時讀取；尚未設定正式名單或 Firebase claims。Firebase 模式限 CDSS 三個路由，不能 bootstrap 或 raw /fhir。名單變更後重啟 API；移除 UID 即撤除本服務權限。公開憑證驗證不查 Firebase session revoked/disabled，僅在 Firebase 撤销而保留 UID 時，既有 token 可能有效到原期限（最長一小時）。
 
 intranet-pilot 已限 localhost 合成測試；API拒絕院內網段／公開 origin／trusted proxy 的免登入配置。正式醫師與病人對應仍不是本階段前置條件，Firebase 身分也不自動當作 Practitioner。
 
@@ -43,7 +45,7 @@ API需要RS256、opaque sub、正確issuer/audience、300秒以下期限、clien
 
 ## 本機重現
 
-先啟動FHIR repo的本機HAPI/PG、獨立intranet API28098。OAuth測試另啟動私有Keycloak28080與API8098；Collector origin刻意設定為無法使用的127.0.0.1:1，確認臨床流獨立。
+先啟動FHIR repo的本機HAPI/PG、獨立 localhost `intranet-pilot` API28098（僅合成測試；App 也模擬非匿名登入）。OAuth測試另啟動私有Keycloak28080與API8098；Collector origin刻意設定為無法使用的127.0.0.1:1，確認臨床流獨立。
 
 ```powershell
 node node_modules/@playwright/test/cli.js test --config playwright.fhir.config.ts

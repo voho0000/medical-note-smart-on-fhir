@@ -5,12 +5,12 @@ import { captureFhirFirebaseAuth } from './fhir-firebase-auth'
 
 const scopes = ['mediprisma.fhir.read', 'mediprisma.fhir.write']
 const listeners = new Set<() => void>()
-let access: { token: string; until: number } | null = null
+let access: { token: string; until: number; uid: string } | null = null
 let expiry: ReturnType<typeof setTimeout> | null = null
 let login: AbortController | null = null
 const notify = () => { for (const listener of listeners) listener() }
 export const subscribeFhirAuth = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
-export const fhirAuthStatus = () => access !== null && access.until > Date.now()
+export const fhirAuthStatus = (uid?: string) => access !== null && access.until > Date.now() && (uid === undefined || access.uid === uid)
 export const fhirOAuthEnabled = () => process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'oauth2'
 
 export function disconnectFhir(): void {
@@ -19,16 +19,25 @@ export function disconnectFhir(): void {
   expiry = null; notify()
 }
 
-export async function fhirAccessToken(): Promise<string | null> {
-  if (process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'firebase') {
-    const session = await captureFhirFirebaseAuth()
-    const token = await session?.getToken()
-    if (!token) throw new Error('cdss_auth_unavailable')
+export async function captureFhirRequestAuth(expectedUid?: string) {
+  if (!['firebase', 'intranet', 'intranet-pilot', 'oauth2'].includes(process.env.NEXT_PUBLIC_CDSS_ADMISSION ?? '')) throw new Error('cdss_auth_unavailable')
+  const session = await captureFhirFirebaseAuth(expectedUid)
+  if (!session) throw new Error('cdss_auth_unavailable')
+  const grant = access
+  const oauth = fhirOAuthEnabled()
+  if (oauth && (!grant || grant.uid !== session.uid || !fhirAuthStatus())) throw new Error('cdss_auth_unavailable')
+  const isCurrent = () => session.isCurrent() && (!oauth || (access === grant && fhirAuthStatus()))
+  return { uid: session.uid, isCurrent, getToken: async () => {
+    if (!isCurrent()) throw new Error('cdss_auth_unavailable')
+    // The unauthenticated listener is reserved for local synthetic testing.
+    const token = oauth ? grant!.token : process.env.NEXT_PUBLIC_CDSS_ADMISSION === 'intranet-pilot' ? null : await session.getToken()
+    if (!isCurrent() || (!token && process.env.NEXT_PUBLIC_CDSS_ADMISSION !== 'intranet-pilot')) throw new Error('cdss_auth_unavailable')
     return token
-  }
-  if (['intranet', 'intranet-pilot'].includes(process.env.NEXT_PUBLIC_CDSS_ADMISSION || '')) return null
-  if (!fhirOAuthEnabled() || !fhirAuthStatus()) throw new Error('cdss_auth_unavailable')
-  return access!.token
+  } }
+}
+
+export async function fhirAccessToken(): Promise<string | null> {
+  return (await captureFhirRequestAuth()).getToken()
 }
 
 function secureUrl(value: string): URL {
@@ -40,7 +49,7 @@ function secureUrl(value: string): URL {
 }
 
 /** Popup keeps the current patient and assessment in place. No persistent token/verifier storage. */
-export async function authorizeFhir(): Promise<void> {
+export async function authorizeFhir(expectedUid?: string): Promise<void> {
   if (!fhirOAuthEnabled() || login) throw new Error('cdss_auth_unavailable')
   disconnectFhir()
   const controller = new AbortController(); login = controller
@@ -48,6 +57,8 @@ export async function authorizeFhir(): Promise<void> {
   if (!popup) { login = null; throw new Error('cdss_auth_popup_unavailable') }
   const timer = setTimeout(() => controller.abort(), 180_000)
   try {
+    const account = await captureFhirFirebaseAuth(expectedUid)
+    if (!account) throw new Error('cdss_auth_unavailable')
     const oauth = await import('oauth4webapi')
     const issuer = secureUrl(process.env.NEXT_PUBLIC_FHIR_OAUTH_ISSUER || '')
     const clientId = process.env.NEXT_PUBLIC_FHIR_OAUTH_CLIENT_ID || ''
@@ -95,7 +106,8 @@ export async function authorizeFhir(): Promise<void> {
         !/^[A-Za-z0-9._~-]{1,16384}$/.test(result.access_token) || !Number.isInteger(result.expires_in) ||
         result.expires_in! < 60 || result.expires_in! > 300 ||
         (result.scope !== undefined && scopes.some(scope => !result.scope!.split(' ').includes(scope)))) throw new Error('cdss_auth_unavailable')
-    access = { token: result.access_token, until: started + (result.expires_in! - 30) * 1000 }
+    if (!account.isCurrent()) throw new Error('cdss_auth_unavailable')
+    access = { token: result.access_token, until: started + (result.expires_in! - 30) * 1000, uid: account.uid }
     if (!fhirAuthStatus()) throw new Error('cdss_auth_unavailable')
     expiry = setTimeout(disconnectFhir, Math.max(0, access.until - Date.now())); notify()
   } catch { if (login === controller) { access = null; notify() }; throw new Error('cdss_auth_unavailable') }

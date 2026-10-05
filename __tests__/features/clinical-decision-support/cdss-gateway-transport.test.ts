@@ -4,11 +4,12 @@ import { cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdss
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
 
 const mockGetToken = jest.fn()
+const mockIsCurrent = jest.fn(() => true)
 jest.mock('@/src/application/telemetry/cdss-auth', () => ({
   captureCollectorAuth: jest.fn(async () => ({ getToken: mockGetToken })),
 }))
 jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', () => ({
-  captureFhirFirebaseAuth: jest.fn(async () => ({ getToken: mockGetToken })),
+  captureFhirFirebaseAuth: jest.fn(async () => ({ uid: 'owner-a', isCurrent: mockIsCurrent, getToken: mockGetToken })),
 }))
 
 const input = {
@@ -32,6 +33,7 @@ beforeEach(() => {
   Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: webcrypto.subtle })
   cancelCdssGatewayRequests()
   mockGetToken.mockReset().mockResolvedValue('synthetic-firebase-token')
+  mockIsCurrent.mockReset().mockReturnValue(true)
   jest.mocked(fetch).mockReset().mockImplementation(async (_url, init) => {
     const body = JSON.parse(init?.body as string)
     return { status: 201, json: async () => ({ status: 'stored', save_id: body.save_id }) } as Response
@@ -44,7 +46,7 @@ beforeEach(() => {
 
 afterEach(() => { cancelCdssGatewayRequests(); delete process.env.NEXT_PUBLIC_CDSS_ADMISSION; delete process.env.NEXT_PUBLIC_CDSS_API_ORIGIN })
 
-test('explicit intranet pilot saves without a Firebase identity or an invented clinician', async () => {
+test('local synthetic pilot still requires an App account without inventing a clinician', async () => {
   process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet-pilot'
   try {
     await saveCdssSnapshot(input)
@@ -79,8 +81,8 @@ test('records clicks locally and sends all used data only on explicit save', asy
     credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store',
   }))
   const request = jest.mocked(fetch).mock.calls[0][1]!
-  expect(request.headers).toEqual({ 'Content-Type': 'application/json' })
-  expect(mockGetToken).not.toHaveBeenCalled()
+  expect(request.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer synthetic-firebase-token' })
+  expect(mockGetToken).toHaveBeenCalledTimes(1)
   const body = JSON.parse(request.body as string)
   expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
   expect(body.profile.facts.ldl.numericValue).toBe(92)
@@ -203,4 +205,13 @@ test('does not transmit when complete identity inputs are missing', async () => 
     identifier: [{ system: 'https://example.org/national-id', value: 'X123456789' }],
   } })).rejects.toThrow('cdss_identity_unavailable')
   expect(fetch).not.toHaveBeenCalled()
+})
+
+
+test('account switch during a save never confirms the old account response', async () => {
+  jest.mocked(fetch).mockImplementation(async (_url, init) => {
+    mockIsCurrent.mockReturnValue(false)
+    return { status: 201, json: async () => ({ status: 'stored', save_id: JSON.parse(init!.body as string).save_id }) } as Response
+  })
+  await expect(saveCdssSnapshot({ ...input, ownerUid: 'owner-a' })).rejects.toThrow('cdss_site_changed')
 })

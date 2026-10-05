@@ -1,3 +1,6 @@
+jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', () => ({ captureFhirFirebaseAuth: async () => ({ uid: 'owner-a', isCurrent: () => true, getToken: async () => 'synthetic-token' }) }))
+const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
+jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
 import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { webcrypto } from 'node:crypto'
@@ -115,4 +118,34 @@ test.each([false, true])('saved detail presents the full stored recommendation a
   expect(jest.mocked(fetch).mock.calls.map(([url]) => String(url))).toEqual([
     'http://127.0.0.1:8098/cdss/v1/history', 'http://127.0.0.1:8098/cdss/v1/history/read',
   ])
+})
+
+
+test('switching accounts clears open history and aborts an in-flight detail read', async () => {
+  mockAccount.user = { uid: 'owner-a' }
+  const stored = await detail()
+  let detailSignal: AbortSignal | undefined
+  let finish!: (value: Response) => void
+  jest.mocked(fetch).mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/read')) {
+      detailSignal = init?.signal as AbortSignal
+      return new Promise<Response>(resolve => { finish = resolve })
+    }
+    return response({ records: [index], hasMore: false })
+  })
+  const input: Parameters<typeof CdssStorageActions>[0]['input'] = { patient, packId: 'synthetic',
+    profile: { id: patient.id, facts: {} }, result: { packId: 'synthetic', packVersion: '1', title: 'Current', summary: '',
+      recommendations: [], notEvaluated: [], disclaimer: '' }, physicianInputs: {}, physicianDecisions: {} }
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  fireEvent.click(await screen.findByRole('button', { name: /synthetic/ }))
+  await waitFor(() => expect(detailSignal).toBeDefined())
+  mockAccount.user = { uid: 'owner-b' }
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  expect(detailSignal?.aborted).toBe(true)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  finish(response(stored))
+  await waitFor(() => expect(screen.queryByText('SAVED_NEXT_ACTION')).not.toBeInTheDocument())
+  expect(screen.getByTestId('cdss-history-records')).toBeEnabled()
+  view.unmount(); mockAccount.user = { uid: 'owner-a' }
 })

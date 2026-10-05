@@ -1,18 +1,22 @@
 'use client'
 
-/** Use the existing real account without a second login or a Collector request. */
-export async function captureFhirFirebaseAuth(): Promise<{ getToken: () => Promise<string | null> } | null> {
+export type FhirFirebaseSession = { uid: string; isCurrent: () => boolean; getToken: () => Promise<string | null> }
+
+/** Bind to the existing real account before preparing patient data or obtaining a token. */
+export async function captureFhirFirebaseAuth(expectedUid?: string): Promise<FhirFirebaseSession | null> {
   try {
     const { auth } = await import('@/src/shared/config/firebase.config')
     if (!auth) return null
-    await auth.authStateReady()
     const user = auth.currentUser
-    if (!user || user.isAnonymous) return null
-    return { getToken: async () => {
+    if (!user || user.isAnonymous || (expectedUid !== undefined && user.uid !== expectedUid)) return null
+    const isCurrent = () => auth.currentUser === user && !user.isAnonymous
+    await auth.authStateReady()
+    if (!isCurrent()) return null
+    return { uid: user.uid, isCurrent, getToken: async () => {
       try {
-        if (auth.currentUser !== user) return null
+        if (!isCurrent()) return null
         const token = await user.getIdToken()
-        return auth.currentUser === user && !user.isAnonymous && token ? token : null
+        return isCurrent() && token ? token : null
       } catch { return null }
     } }
   } catch { return null }
