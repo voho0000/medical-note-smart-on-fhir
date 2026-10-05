@@ -97,6 +97,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   // A capture-complete flag does not establish feature/time/facility coverage.
   gap('source-validation-pending')
   gap('history-coverage-unverified')
+  if (source === 'health-bank') gap('hospital-name-only')
   const tags = Array.isArray(original.meta?.tag) ? original.meta.tag : []
   for (const moduleName of source === 'medcloud' ? ['imue0008', 'imue0060', 'imue0070', 'imue0020'] : []) {
     const statuses = tags.filter((tag: FhirRecord) => /\/module-completeness$/.test(tag.system ?? '') && typeof tag.code === 'string' && tag.code.startsWith(moduleName + '-')).map((tag: FhirRecord) => tag.code.slice(moduleName.length + 1))

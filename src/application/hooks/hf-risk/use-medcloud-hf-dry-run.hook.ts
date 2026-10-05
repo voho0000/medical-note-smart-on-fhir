@@ -74,7 +74,7 @@ export function useMedcloudHfDryRun() {
     catch { setMessage({ importId: current.importId, code: 'source-changed' }) }
   }
   async function submit(operation: 'dry-run' | 'predict') {
-    if (!current || !configured || busy || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
+    if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing') || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
     const snapshot = current
     const abort = new AbortController()
     controller.current?.abort()

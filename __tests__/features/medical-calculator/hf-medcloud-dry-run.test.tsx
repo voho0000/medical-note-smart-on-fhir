@@ -1,5 +1,6 @@
+import { useMedcloudHfDryRun } from '@/src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook'
 import { useState } from 'react'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { randomUUID } from 'node:crypto'
 import { detectHfIntranet } from '@/src/infrastructure/hf-risk/intranet-discovery'
 import { HfSamdCalculator } from '@/features/medical-calculator/prognosis/HfSamdCalculator'
@@ -351,4 +352,20 @@ it('prepares a TVGH bridge import but prevents upload with unverified generic IC
   expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
   expect(requestHfDryRun).not.toHaveBeenCalled()
   expect(requestHfPrediction).not.toHaveBeenCalled()
+})
+it('the hook rejects a missing selected diagnosis even if another same-day visit has one', async () => {
+  const bundle = hfMedcloudFixture()
+  bundle.meta = { source: 'ehr-fhir-bridge/extension-local' }
+  const first = bundle.entry.find((e: { resource: { resourceType: string } }) => e.resource.resourceType === 'Encounter').resource
+  first.meta = { source: 'ehr-fhir-bridge/scraper' }
+  const other = JSON.parse(JSON.stringify(first))
+  other.id = 'other-same-day-visit'
+  bundle.entry.push({ fullUrl: 'Encounter/' + other.id, resource: other })
+  first.reasonCode[0].coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  expect(result.current.current?.input.gaps).toContainEqual({ code: 'index-diagnosis-missing', count: 1 })
+  await act(async () => { await result.current.validate() })
+  expect(requestHfDryRun).not.toHaveBeenCalled()
 })

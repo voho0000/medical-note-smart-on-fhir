@@ -12,7 +12,7 @@ export function hfRecordSource(bundle: FhirRecord): HfRecordSource {
 export function normalizeHfRecordSource(input: FhirRecord): { bundle: FhirRecord; source: HfRecordSource } {
   const source = hfRecordSource(input)
   if (source === 'medcloud') return { bundle: input, source }
-  const bundle = JSON.parse(JSON.stringify(input)) as FhirRecord
+  const bundle: FhirRecord = { ...input, entry: input.entry.filter((entry: FhirRecord) => entry?.resource && typeof entry.resource === 'object').map((entry: FhirRecord) => ({ ...entry, resource: { ...entry.resource } })) }
   const organizations = new Map<string, FhirRecord>()
   const existingIds = new Set(bundle.entry.map((entry: FhirRecord) => entry.resource?.id))
   const knownTvgh = new Set(['臺北榮民總醫院', '台北榮民總醫院', '臺北榮總', '台北榮總', '北榮'])
@@ -49,7 +49,7 @@ export function normalizeHfRecordSource(input: FhirRecord): { bundle: FhirRecord
     }
     // EHR de-identification replaces the actual birth day with Jan 1.
     if (source === 'tvgh-ehr' && resource.resourceType === 'Patient'
-      && (resource.name ?? []).some((name: FhirRecord) => /^DEID-/.test(name.text ?? ''))) delete resource.birthDate
+      && (resource.name ?? []).some((name: FhirRecord) => [name.text, name.family, ...(Array.isArray(name.given) ? name.given : [])].some(value => typeof value === 'string' && /^DEID-/.test(value)))) delete resource.birthDate
   }
   bundle.entry.push(...[...organizations.values()].map(resource => ({ resource })))
   return { bundle, source }

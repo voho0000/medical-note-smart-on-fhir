@@ -7,6 +7,7 @@ import type { HfSelection } from '@/src/core/hf-risk/contract'
 
 const GAP: Record<string, [string, string]> = {
   'index-diagnosis-missing': ['門診缺少可核對的 ICD-10-CM／ICD-9-CM 診斷；一般 ICD-10 不自行換碼，請修正來源診斷系統後重新匯入', 'The visit lacks a verified ICD-10-CM/ICD-9-CM diagnosis; generic ICD-10 is not relabelled. Correct the source diagnosis system and import again'],
+  'hospital-name-only': ['來源僅提供院所名稱；同名院所無法可靠區分，請核對所選院所及資料範圍', 'Source provides hospital names only; identically named institutions cannot be distinguished reliably. Verify hospital identity and record scope'],
   'patient-birthdate': ['生日未含完整年月日；不以出生年推算日期', 'Full birth date missing; no date inferred from a birth year'],
   'patient-sex': ['性別缺漏或不符合模型定義', 'Sex missing or outside the model definition'],
   'source-validation-pending': ['這份病歷來源的模型適用性尚未驗證', 'Model applicability to this record source has not been validated'],
@@ -45,7 +46,7 @@ const ERRORS: Record<string, [string, string]> = {
   'source-unsupported': ['請匯入雲端、健康或北榮懷爾抓抓的單一患者病歷', 'Import a single-patient cloud, health-bank or TVGH EHR bridge record'],
   'patient-count': ['需要單一患者的原始 Bundle', 'A single-patient source Bundle is required'],
   'bundle-invalid': ['無法讀取原始病歷 Bundle', 'Cannot read the source Bundle'],
-  'no-visit': ['找不到院所來源、日期與 ICD 診斷皆可辨識的門診紀錄', 'No outpatient visit with a known hospital, date and ICD diagnosis'],
+  'no-visit': ['找不到院所來源與日期皆可辨識的門診紀錄；雲端來源另需可核對的 ICD 診斷', 'No outpatient visit with a known hospital and date; cloud records also require a recognized ICD diagnosis'],
   'source-changed': ['資料已切換，請重新整理輸入', 'Record changed; prepare the input again'],
   'gateway-unauthorized': ['尚未登入或未取得 HF 服務授權', 'Sign-in or HF service authorization required'],
   'gateway-config': ['院內 HF 檢查服務尚未設定', 'Intranet HF validation service is not configured'],
@@ -80,7 +81,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
           <select className={control} value={current.selection.encounter} disabled={busy} onChange={event => {
             const visit = current.visits.find(visit => visit.reference === event.target.value)
             if (visit) select({ ...current.selection, encounter: visit.reference, provider: visit.provider })
-          }}>{current.visits.map((visit, index) => <option key={visit.reference} value={visit.reference}>{visit.date} · {visit.providerName ?? visit.provider} · {index + 1}</option>)}</select>
+          }}>{current.visits.map((visit, index) => <option key={visit.reference} value={visit.reference}>{visit.date} · {visit.providerName ?? visit.provider}{current.source === 'medcloud' ? ` · ${visit.provider}` : ''} · {index + 1}</option>)}</select>
         </label>
         <label className="min-w-0 space-y-1 text-sm">{en ? 'Model time horizon' : '模型期間'}
           <select className={control} value={current.selection.claim} disabled={busy} onChange={event => select({ ...current.selection, claim: event.target.value as HfSelection['claim'] })}>

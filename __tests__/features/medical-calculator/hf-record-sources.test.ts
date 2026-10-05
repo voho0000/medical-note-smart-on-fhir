@@ -65,3 +65,15 @@ it('does not use the artificial Jan 1 birth date in a deidentified TVGH export',
   expect(input.bundle.entry[0].resource.birthDate).toBeUndefined()
   expect(input.gaps).toContainEqual({ code: 'patient-birthdate', count: 1 })
 })
+it.each([{ family: 'DEID-synthetic' }, { given: ['DEID-synthetic'] }])('recognizes deidentified EHR markers outside name.text: %j', name => {
+  const bundle = bridgeFixture('tvgh-ehr')
+  bundle.entry.find((e: FhirRecord) => e.resource.resourceType === 'Patient').resource.name = [name]
+  expect(build(bundle).bundle.entry[0].resource.birthDate).toBeUndefined()
+})
+it('ignores malformed entries without mutating a bridge import', () => {
+  const bundle = bridgeFixture('health-bank')
+  bundle.entry.push(null, { resource: null })
+  expect(build(bundle).counts.Observation).toBe(1)
+  expect(bundle.entry.at(-2)).toBeNull()
+  expect(build(bundle).gaps).toContainEqual({ code: 'hospital-name-only', count: 1 })
+})
