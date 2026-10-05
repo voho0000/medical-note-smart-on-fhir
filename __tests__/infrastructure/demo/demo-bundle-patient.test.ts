@@ -68,3 +68,14 @@ it('normalizes lowercase middle-three masking without changing the CDSS key', as
   lowercasePatient.identifier![0].value = 'A123xxx789'
   expect(await cdssPatientIdentity(lowercasePatient)).toEqual(await cdssPatientIdentity(patient!))
 })
+
+
+it.each(['F111xxx111', 'F111XXX111', 'F111***222', 'F111****22'])('accepts cloud-style masking: %s', async identifier => {
+  Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: webcrypto.subtle })
+  const patient = demoBundle.entry.map((entry: { resource: unknown }) => entry.resource).find(isPatientEntity)
+  const maskedPatient = JSON.parse(JSON.stringify(patient)) as PatientEntity
+  maskedPatient.identifier![0].value = identifier
+  const identity = await cdssPatientIdentity(maskedPatient)
+  expect(identity.patient_key_sha256).toMatch(/^[a-f0-9]{64}$/)
+  expect(identity.patient_identity.identifier_masked).toBe(identifier.toUpperCase())
+})
