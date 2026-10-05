@@ -117,7 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // uid of the active Firebase session (real OR anonymous) — drives the usage
   // listener. `user.uid` can't be used because it's null for anonymous.
   const [activeUid, setActiveUid] = useState<string | null>(null)
-  const [loading, setLoading] = useState(() => Boolean(auth))
+  // Firebase initializes only in the browser. Use the same pending state on
+  // the server and first client render so auth-dependent text can hydrate.
+  const [loading, setLoading] = useState(true)
   const [dailyUsage, setDailyUsage] = useState(0)
   const [perplexityUsage, setPerplexityUsage] = useState(0)
   const [whisperUsage, setWhisperUsage] = useState(0)
@@ -160,7 +162,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Firebase Auth state listener
   useEffect(() => {
     const firebaseAuth = auth
-    if (!firebaseAuth) return
+    if (!firebaseAuth) {
+      // No configured Auth still needs to finish initialization after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false)
+      return
+    }
 
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       if (firebaseUser && reportedUidRef.current !== firebaseUser.uid) {
