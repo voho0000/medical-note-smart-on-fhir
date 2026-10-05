@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
 import {
   GUEST_BETA_FEATURES_KEY,
@@ -66,6 +66,7 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
     result,
     layout,
     nhiPageResetKey,
+    visitModel,
   }: {
     result: {
       title: string
@@ -73,8 +74,9 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
     }
     layout?: string
     nhiPageResetKey?: number
+    visitModel?: unknown
   }) => (
-    <div data-testid="mock-cdss-result" data-layout={layout} data-nhi-reset-key={nhiPageResetKey}>
+    <div data-testid="mock-cdss-result" data-layout={layout} data-nhi-reset-key={nhiPageResetKey} data-visit-model={JSON.stringify(visitModel)}>
       <span>{result.title}</span>
       <span>{result.knowledgePacks?.map((source) => source.id).join(',')}</span>
     </div>
@@ -239,6 +241,39 @@ describe('Live personalized-guidance pathway list', () => {
     useCdssLayoutStore.setState({ layout: 'board' })
     render(<LiveClinicalDecisionSupportFeature />)
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
+  })
+
+
+  it('re-evaluates an unchanged chart after midnight so current-day symptom answers are accepted', () => {
+    jest.useFakeTimers()
+    const beforeMidnight = new Date(2026, 9, 5, 23, 59, 58)
+    const afterMidnight = new Date(2026, 9, 6, 0, 0, 5)
+    jest.setSystemTime(beforeMidnight)
+    const patientId = 'switch-patient'
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { [patientId]: true } })
+    useCdssLayoutStore.setState({ layout: 'map' })
+    usePhenotypeAnswerStore.setState({ byPatientId: { [patientId]: { choice: 'reduced', lvef: 35, answeredOn: '2026-10-05' } }, hydratedPatientIds: { [patientId]: true } })
+    const view = render(<LiveClinicalDecisionSupportFeature />)
+    const findSign = (value: unknown): Record<string, unknown> | undefined => {
+      if (!value || typeof value !== 'object') return undefined
+      const row = value as Record<string, unknown>
+      if (row.id === 'orthopnea-pnd' && Array.isArray(row.terms)) return row
+      return Object.values(row).map(findSign).find(Boolean)
+    }
+    const sign = () => findSign(JSON.parse(screen.getByTestId('mock-cdss-result').getAttribute('data-visit-model') ?? 'null'))
+    try {
+      expect(sign()).toBeDefined()
+      expect(sign()?.answer).toBeUndefined()
+      act(() => {
+        jest.setSystemTime(afterMidnight)
+        window.dispatchEvent(new Event('focus'))
+        useClinicVitalsStore.getState().setVitals(patientId, { signAnswers: { orthopnea: 'present' } })
+      })
+      expect(sign()?.answer).toBe(true)
+    } finally {
+      view.unmount()
+      jest.useRealTimers()
+    }
   })
 
   it('replaces the duplicate lipid visit flow with the dedicated NHI Table 1 view', () => {

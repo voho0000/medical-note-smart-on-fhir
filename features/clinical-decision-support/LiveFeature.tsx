@@ -76,7 +76,7 @@ import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitM
 import { intolerantPillars } from './renderers/visit/visit-decisions'
 import type { VisitAnswerProvenance } from './renderers/visit/VisitAsks'
 import { useAfAnswers, useAfAnswersHydrated, useAfAnswersStore } from './stores/af-answers.store'
-import { useLocalDay } from './hooks/use-local-day.hook'
+import { useLocalDay, useTodayNow } from './hooks/use-local-day.hook'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
@@ -355,6 +355,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const visitAnswerRecord = useVisitAnswerRecord(patientId)
   // Today's answers only, and 「today」 turns at midnight on an open page too.
   const today = useLocalDay()
+  const evaluationNow = useTodayNow()
   const visitAnswers = useMemo(() => visitAnswersOf(visitAnswerRecord, today), [today, visitAnswerRecord])
   // Where each of today's answers was given, named as the disease switcher
   // names that page.
@@ -422,6 +423,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const recordProfile = useMemo(() => {
     if (!patient) return null
     return createHospitalAwareCdssPatientProfile({
+      now: evaluationNow,
       patient,
       conditions: clinicalData.conditions,
       encounters: clinicalData.encounters,
@@ -438,6 +440,7 @@ export default function LiveClinicalDecisionSupportFeature({
       documentReferences: clinicalData.documentReferences,
     })
   }, [
+    evaluationNow,
     clinicalData.conditions,
     clinicalData.encounters,
     clinicalData.medications,
