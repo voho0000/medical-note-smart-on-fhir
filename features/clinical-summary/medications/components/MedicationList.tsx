@@ -124,12 +124,61 @@ export function MedicationList({
     product: '商品名',
   }
 
+  // 成分名／商品名 applies to the history too, so it shows even when nothing
+  // is running (then beside the actions, above the history).
+  const nameModeSwitch = showNameModeSwitch && onNameModeChange ? (
+    <div
+      role="group"
+      aria-label={nameDisplay.label}
+      className="inline-flex min-h-[32px] shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:min-h-8"
+    >
+      <button
+        type="button"
+        onClick={() => onNameModeChange('ingredient')}
+        aria-pressed={nameMode === 'ingredient'}
+        className={cn(
+          'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+          nameMode === 'ingredient' && 'font-medium text-foreground',
+        )}
+      >
+        {nameDisplay.ingredient}
+      </button>
+      <label
+        htmlFor={nameModeSwitchId}
+        className="inline-flex h-[32px] w-9 cursor-pointer items-center justify-center md:h-8"
+      >
+        <Switch
+          id={nameModeSwitchId}
+          checked={nameMode === 'product'}
+          onCheckedChange={(checked) => onNameModeChange(checked ? 'product' : 'ingredient')}
+          aria-label={nameDisplay.label}
+        />
+      </label>
+      <button
+        type="button"
+        onClick={() => onNameModeChange('product')}
+        aria-pressed={nameMode === 'product'}
+        className={cn(
+          'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+          nameMode === 'product' && 'font-medium text-foreground',
+        )}
+      >
+        {nameDisplay.product}
+      </button>
+    </div>
+  ) : null
+
   return (
     <div className="space-y-4">
       {/* Nothing running, but the actions still apply — a long-term script
           that just ran out is still 現在用藥 to the copy. */}
-      {activeMedications.length === 0 && activeActions && (
-        <div className="flex justify-end">{activeActions}</div>
+      {activeMedications.length === 0 && (nameModeSwitch || activeActions) && (
+        // Wraps on a narrow phone: no title shares this row, and neither
+        // control may shrink, so a second line beats clipping one off-screen.
+        <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1" data-testid="medication-list-controls">
+          {nameModeSwitch}
+          {activeActions}
+        </div>
       )}
       {/* Currently in use Medications */}
       {activeMedications.length > 0 && (
@@ -152,47 +201,7 @@ export function MedicationList({
               </button>
             </h3>
             <div className="flex shrink-0 items-center gap-2">
-              {showNameModeSwitch && onNameModeChange && (
-                <div
-                  role="group"
-                  aria-label={nameDisplay.label}
-                  className="inline-flex min-h-[32px] shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:min-h-8"
-                >
-                  <button
-                    type="button"
-                    onClick={() => onNameModeChange('ingredient')}
-                    aria-pressed={nameMode === 'ingredient'}
-                    className={cn(
-                      'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                      nameMode === 'ingredient' && 'font-medium text-foreground',
-                    )}
-                  >
-                    {nameDisplay.ingredient}
-                  </button>
-                  <label
-                    htmlFor={nameModeSwitchId}
-                    className="inline-flex h-[32px] w-9 cursor-pointer items-center justify-center md:h-8"
-                  >
-                    <Switch
-                      id={nameModeSwitchId}
-                      checked={nameMode === 'product'}
-                      onCheckedChange={(checked) => onNameModeChange(checked ? 'product' : 'ingredient')}
-                      aria-label={nameDisplay.label}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => onNameModeChange('product')}
-                    aria-pressed={nameMode === 'product'}
-                    className={cn(
-                      'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                      nameMode === 'product' && 'font-medium text-foreground',
-                    )}
-                  >
-                    {nameDisplay.product}
-                  </button>
-                </div>
-              )}
+              {nameModeSwitch}
               {activeActions}
             </div>
           </div>
