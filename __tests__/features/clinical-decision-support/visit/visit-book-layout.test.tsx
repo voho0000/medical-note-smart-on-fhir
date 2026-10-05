@@ -653,7 +653,7 @@ describe.each([
  * it can be reached from the keyboard or read out.
  */
 describe('the handbook page over the whole window', () => {
-  function PanelBook() {
+  function PanelBook({ onSaveTarget }: { onSaveTarget?: VisitBookChrome['onSaveTarget'] } = {}) {
     const [full, setFull] = useState(false)
     return (
       <>
@@ -661,11 +661,23 @@ describe('the handbook page over the whole window', () => {
         <BookPage
           id="p9-hfpef-af-dose"
           page="hf"
-          chrome={full ? { onCollapse: () => setFull(false) } : { inline: true, onExpand: () => setFull(true) }}
+          chrome={full ? { onSaveTarget, onCollapse: () => setFull(false) } : { inline: true, onExpand: () => setFull(true) }}
         />
       </>
     )
   }
+
+  it('lends only the full-window header to the save controller and releases it on collapse', () => {
+    const target = jest.fn()
+    render(<PanelBook onSaveTarget={target} />)
+    expect(screen.queryByTestId('cdss-book-save-target')).toBeNull()
+    fireEvent.click(screen.getByTestId('cdss-book-expand'))
+    const header = screen.getByTestId('cdss-book-save-target')
+    expect(target).toHaveBeenLastCalledWith(header)
+    expect(header.closest('[inert]')).toBeNull()
+    fireEvent.click(screen.getByTestId('cdss-book-collapse'))
+    expect(target.mock.calls.at(-1)?.[0]).toBeNull()
+  })
 
   it('opened from the panel keeps focus on its one button, takes the panel out of reach, and Esc brings it back', () => {
     render(<PanelBook />)

@@ -321,6 +321,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const [urlBookMode] = useState(isVisitBookMode)
   // 決策地圖 v2 opened over the whole window from the panel; a new page load opens it in the panel.
   const [bookFullWindow, setBookFullWindow] = useState(false)
+  const [bookSaveTarget, setBookSaveTarget] = useState<HTMLDivElement | null>(null)
   const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
@@ -814,7 +815,7 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
-      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} input={{ patient,
+      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget} input={{ patient,
         packId: result.packId, profile, result,
         physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
           nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
@@ -840,6 +841,7 @@ export default function LiveClinicalDecisionSupportFeature({
         inline: true,
         onExpand: () => setBookFullWindow(true),
       } : {
+        onSaveTarget: setBookSaveTarget,
         tabs: (
           <DiseaseSwitcher
             locale={cdssLocale}

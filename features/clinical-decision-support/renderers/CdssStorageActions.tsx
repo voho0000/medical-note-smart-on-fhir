@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -57,7 +58,9 @@ function SavedRecommendation({ value, english }: { value: unknown; english: bool
   </section>
 }
 
-export function CdssStorageActions({ input, sourceRecords, english = false }: {
+export function CdssStorageActions({ input, sourceRecords, english = false, saveTarget }: {
+  /** Keep the save controller mounted when its button moves into the full-window header. */
+  saveTarget?: HTMLElement | null
   input: Omit<Parameters<typeof saveCdssSnapshot>[0], 'sourceRecords'>
   sourceRecords: () => Parameters<typeof saveCdssSnapshot>[0]['sourceRecords']; english?: boolean
 }) {
@@ -105,6 +108,9 @@ export function CdssStorageActions({ input, sourceRecords, english = false }: {
   const label = english ? 'Saved CDSS records' : 'CDSS 歷史紀錄'
   const result = object(selected?.save.result)
   const recommendations = Array.isArray(result.recommendations) ? result.recommendations : []
+  const saveButton = <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={saving} aria-busy={saving} data-testid="cdss-save-record">
+      {saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
+    </Button>
   return <div className="flex flex-wrap gap-2">
     {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={authorizing}
       data-testid="cdss-fhir-authorize" onClick={() => {
@@ -113,9 +119,7 @@ export function CdssStorageActions({ input, sourceRecords, english = false }: {
         void authorizeFhir().catch(() => { if (mounted.current) toast.error(english ? 'FHIR authorization failed. Please try again.' : 'FHIR 授權未完成，請重試。') })
           .finally(() => { if (mounted.current) setAuthorizing(false) })
       }}>{authorizing ? english ? 'Authorizing…' : '授權中…' : authorized ? english ? 'Disconnect FHIR' : '斷開 FHIR 授權' : english ? 'Authorize FHIR' : '登入 FHIR 授權'}</Button>}
-    <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={saving} aria-busy={saving} data-testid="cdss-save-record">
-      {saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
-    </Button>
+    {saveTarget ? createPortal(saveButton, saveTarget) : saveButton}
     <Button type="button" variant="outline" className="min-h-[44px] shadow-none"
       onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
     <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) controller.current?.abort() }}>
