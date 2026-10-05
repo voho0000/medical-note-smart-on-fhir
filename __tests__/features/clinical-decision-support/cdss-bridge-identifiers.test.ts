@@ -111,8 +111,8 @@ test('normalized source metadata cannot clear a deidentified source', () => {
   expect(patient.deidentified).toBe(true)
 })
 
-test('fullwidth O masked cloud name is rejected before normalization', async () => {
-  const source = { ...nhi, meta: { source: 'cloud-source' }, name: [{ use: 'official', text: '王Ｏ明' }],
+test.each(['王Ｏ明', '王O明', '王ｏ明'])('masked cloud name %s is rejected', async name => {
+  const source = { ...nhi, meta: { source: 'cloud-source' }, name: [{ use: 'official', text: name }],
     identifier: [{ ...nhi.identifier[0], value: 'A123***789' }] }
   await expect(cdssPatientIdentity(PatientMapper.toDomain(source)!)).rejects.toThrow('cdss_identity_unavailable')
 })
@@ -125,4 +125,9 @@ test('legacy cloud v1 fixed synthetic digest remains stable', async () => {
 test('complete NHI v2 fixed synthetic digest remains stable', async () => {
   const source = { ...nhi, meta: { source: 'cloud-source' }, identifier: [{ ...nhi.identifier[0], value: 'A123456789' }] }
   expect((await cdssPatientIdentity(PatientMapper.toDomain(source)!)).patient_key_sha256).toBe('1d144f5864f97f556d122ad46c4bc25370bf4892573f905a0a87b2663750c846')
+})
+
+test('ASCII O in an ordinary Western name remains supported', async () => {
+  const source = { ...nhi, name: [{ use: 'official', text: 'John Olson' }] }
+  await expect(cdssPatientIdentity(PatientMapper.toDomain(source)!)).resolves.toMatchObject({ patient_key_version: 2 })
 })

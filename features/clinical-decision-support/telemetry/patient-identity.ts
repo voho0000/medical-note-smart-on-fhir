@@ -10,7 +10,7 @@ function normalizedName(patient: PatientEntity): string {
   const names = (patient.name ?? [])
     .map((name) => name.text?.normalize('NFKC').trim().replace(/\s+/gu, ' '))
     .filter((name): name is string => Boolean(name))
-  if (names.length !== 1 || Array.from(names[0]).length < 2 || MASK.test(names[0]) || /^(?:Unknown(?: Patient)?|DEID-.*)$/i.test(names[0])) {
+  if (names.length !== 1 || Array.from(names[0]).length < 2 || MASK.test(names[0]) || /(?:\p{Script=Han}[Oo]|[Oo]\p{Script=Han})/u.test(names[0]) || /^(?:Unknown(?: Patient)?|DEID-.*)$/i.test(names[0])) {
     throw new Error('cdss_identity_unavailable')
   }
   return names[0]
