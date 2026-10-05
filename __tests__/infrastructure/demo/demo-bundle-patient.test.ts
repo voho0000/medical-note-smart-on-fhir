@@ -35,7 +35,7 @@ it('provides a stable CDSS key while sending only masked Demo identifiers', asyn
   expect(identity.patient_identity).toEqual({
     name_masked: '陳○明',
     birth_year: '1932',
-    identifier_masked: 'A123XXXXXX',
+    identifier_masked: 'A123XXX789',
     identifier_system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id',
   })
   expect(JSON.stringify(identity)).not.toContain('陳大明')
@@ -52,9 +52,19 @@ it('keeps embedded discharge-summary patient banners consistent with the Demo id
       if (attachment.contentType !== 'text/html' || !attachment.data) continue
       const html = Buffer.from(attachment.data, 'base64').toString('utf8')
       expect(html).toContain('陳大明')
-      expect(html).toContain('A123XXXXXX')
+      expect(html).toContain('A123XXX789')
       expect(html).not.toContain('陳○明')
       expect(html).not.toContain('A123456789')
     }
   }
+})
+
+
+it('normalizes lowercase middle-three masking without changing the CDSS key', async () => {
+  Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: webcrypto.subtle })
+  const patient = demoBundle.entry.map((entry: { resource: unknown }) => entry.resource).find(isPatientEntity)
+  expect(patient).toBeDefined()
+  const lowercasePatient = JSON.parse(JSON.stringify(patient)) as PatientEntity
+  lowercasePatient.identifier![0].value = 'A123xxx789'
+  expect(await cdssPatientIdentity(lowercasePatient)).toEqual(await cdssPatientIdentity(patient!))
 })

@@ -11,6 +11,8 @@ import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '
 import { listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
 import { authorizeFhir, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
 
+const isIdentityFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_identity_unavailable'
+
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
 const text = (value: unknown) => typeof value === 'string' ? value : ''
@@ -80,7 +82,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<'identity' | 'unavailable' | null>(null)
   const [history, setHistory] = useState<CdssHistoryList | null>(null)
   const [selected, setSelected] = useState<CdssHistoryRecord | null>(null)
   const controller = useRef<AbortController | null>(null)
@@ -88,12 +90,15 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   useEffect(() => { mounted.current = true; return () => {
     mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
   } }, [])
+  const identityHelp = english
+    ? 'Check that the patient data includes a full name without masking characters, a valid date of birth, and a partially masked national ID. Then reimport the data and try again.'
+    : '請確認病人資料包含完整姓名（不可含 ○ 等遮蔽字元）、有效出生日期，以及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
   const run = async (saveId?: string) => {
     if (!ownerUid) return
     controller.current?.abort()
     const request = new AbortController()
     controller.current = request
-    setLoading(true); setError(false); setSelected(null)
+    setLoading(true); setError(null); setSelected(null)
     if (!saveId) setHistory(null)
     try {
       if (saveId) {
@@ -103,7 +108,9 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
         const result = await listCdssHistory(input.patient, request.signal, ownerUid)
         if (!request.signal.aborted) setHistory(result)
       }
-    } catch { if (!request.signal.aborted) setError(true) }
+    } catch (failure) {
+      if (!request.signal.aborted) setError(isIdentityFailure(failure) ? 'identity' : 'unavailable')
+    }
     finally { if (!request.signal.aborted) setLoading(false) }
   }
   const save = async () => {
@@ -112,7 +119,16 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
     try {
       await saveCdssSnapshot({ ...input, ownerUid, sourceRecords: sourceRecords() })
       if (mounted.current) toast.success(english ? 'CDSS record saved.' : 'CDSS 紀錄已儲存。')
-    } catch { if (mounted.current) toast.error(english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。') }
+    } catch (failure) {
+      if (mounted.current) {
+        if (isIdentityFailure(failure)) {
+          toast.error(english ? 'Patient identification failed. CDSS record was not saved.' : '病人識別失敗，CDSS 紀錄未儲存。',
+            { description: identityHelp, duration: 10000 })
+        } else {
+          toast.error(english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。')
+        }
+      }
+    }
     finally { if (mounted.current) setSaving(false) }
   }
   if (!enabled) return null
@@ -139,7 +155,10 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
           <DialogDescription>{english ? 'Your saved snapshots for this patient. Viewing leaves the current assessment unchanged.' : '您為此病人儲存的快照；調閱時保留目前的評估。'}</DialogDescription>
         </DialogHeader>
         {loading && <p role="status">{english ? 'Loading…' : '載入中…'}</p>}
-        {error && <div role="alert"><p>{english ? 'Records unavailable. Please try again.' : '目前無法取得紀錄，請稍後重試。'}</p>
+        {error && <div role="alert"><p>{error === 'identity'
+          ? english ? 'Patient identification failed. CDSS history cannot be retrieved.' : '病人識別失敗，無法取得 CDSS 歷史紀錄。'
+          : english ? 'Records unavailable. Please try again.' : '目前無法取得紀錄，請稍後重試。'}</p>
+          {error === 'identity' && <p className="mt-2 break-words">{identityHelp}</p>}
           <Button type="button" variant="outline" className="mt-2 min-h-[44px]" onClick={() => void run()}>{english ? 'Retry' : '重試'}</Button></div>}
         {!loading && !error && !selected && history && <div className="space-y-2">
           {history.records.length === 0 && <p>{english ? 'No saved records.' : '尚無儲存紀錄。'}</p>}
