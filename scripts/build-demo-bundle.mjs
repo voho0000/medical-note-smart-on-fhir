@@ -62,7 +62,7 @@ const FAKE = {
   patientGiven: '大明',
   patientFamilyLatin: 'Chen',
   patientGivenLatin: 'Da-Ming',
-  nationalId: 'A123XXXXXX',
+  nationalId: 'A123XXX789',
   mrn: 'M00000001',
   birthDay: '15',
 }
