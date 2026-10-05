@@ -47,3 +47,14 @@ it.each([['invalid','invalid-prediction-response'],['transient','gateway-unavail
   const fetchFn=jest.fn(async () => new Response(JSON.stringify({resourceType:'OperationOutcome',issue:[{severity:'error',code}]}),{status:502}))
   await expect(requestHfPrediction(input(),{origin:'https://hf.test',authPolicy:'intranet',signal:new AbortController().signal,fetch:fetchFn})).rejects.toThrow(message)
 })
+
+it('accepts the maximum service DTO bounds and rejects count/length overflow', () => {
+  const observedIncidence = { rate:0.1, ciLow:0.08, ciHigh:0.12, tierShare:0.3, patients:120, basis:'b'.repeat(500) }
+  const value = { ...score(), notes:Array.from({length:50}, () => 'n'.repeat(1000)), observedIncidence }
+  expect(parseHfPredictionResult(200,value,input())).toEqual(value)
+  expect(() => parseHfPredictionResult(200,{...value,notes:[...value.notes,'overflow']},input())).toThrow()
+  expect(() => parseHfPredictionResult(200,{...value,observedIncidence:{...observedIncidence,basis:'b'.repeat(501)}},input())).toThrow()
+  const refused = {schemaVersion:1,verdict:'refused',claim:input().claim,indexDate:input().indexDate,issues:Array.from({length:50}, () => ({severity:'error',code:'c'.repeat(80),text:'t'.repeat(500)}))}
+  expect(parseHfPredictionResult(422,refused,input())).toEqual(refused)
+  expect(() => parseHfPredictionResult(422,{...refused,issues:[...refused.issues,refused.issues[0]]},input())).toThrow()
+})
