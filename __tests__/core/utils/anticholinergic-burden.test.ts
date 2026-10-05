@@ -1,4 +1,8 @@
-import { anticholinergicMedicinesLine, reviewAnticholinergicAlert } from '@/src/core/utils/anticholinergic-burden.utils'
+import {
+  anticholinergicMedicinesLine,
+  medicationClassOnLine,
+  reviewAnticholinergicAlert,
+} from '@/src/core/utils/anticholinergic-burden.utils'
 import { generateSafetyAlertsUseCase } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 
@@ -62,5 +66,21 @@ describe('anticholinergicMedicinesLine', () => {
     // Without a reference date the newest record (2026-09-20) stands in.
     expect(user.content).toContain('ANTICHOLINERGIC MEDICINES SUPPLIED IN THE 90 DAYS BEFORE 2026-09-20: oxybutynin [M1] ACB 3; imipramine [M3] ACB 3')
     expect(system.content).toMatch(/Raise anticholinergic burden only when the ANTICHOLINERGIC MEDICINES line lists two or more/)
+    // A medicine whose supply ran out long ago keeps its class but not the label.
+    expect(user.content).toMatch(/\[M1\][^\n]*oxybutynin · X00X SYNTHETIC · anticholinergic ACB 3/)
+    expect(user.content).toMatch(/\[M4\][^\n]*quetiapine · X00X SYNTHETIC(?! · anticholinergic)/)
+  })
+})
+
+describe('medicationClassOnLine', () => {
+  it('labels a medicine anticholinergic only while its supply reaches the last 90 days', () => {
+    expect(medicationClassOnLine(catalog[0], '2026-10-05')).toBe('oxybutynin · X00X SYNTHETIC · anticholinergic ACB 3')
+    // Supply that ended months before: the class, without the label.
+    expect(medicationClassOnLine(catalog[3], '2026-10-05')).toBe('quetiapine · X00X SYNTHETIC')
+    // The same fill, seen from a reference date its supply still reached.
+    expect(medicationClassOnLine(catalog[3], '2026-04-01')).toBe('quetiapine · X00X SYNTHETIC · anticholinergic ACB 3')
+    // ACB 1 ("possible") is never printed; nor is anything without a reference date.
+    expect(medicationClassOnLine(catalog[4], '2026-10-05')).toBe('codeine · X00X SYNTHETIC')
+    expect(medicationClassOnLine(catalog[0], undefined)).toBe('oxybutynin · X00X SYNTHETIC')
   })
 })

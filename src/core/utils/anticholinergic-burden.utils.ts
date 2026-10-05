@@ -7,7 +7,7 @@
 // them is labelled 待核對, never removed.
 
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
-import { showsAnticholinergic } from './medicine-profile.utils'
+import { anticholinergicLineLabel, showsAnticholinergic } from './medicine-profile.utils'
 
 /** "Supplied together": a fill whose supply reached into the 90 days before
  *  the reference date. */
@@ -23,8 +23,33 @@ export interface CurrentAnticholinergic {
 }
 
 /** The reference date the counts use: the given one, else the newest record. */
-const referenceOf = (catalog: readonly SummarySourceCatalogEntry[], referenceDate?: string) =>
+export const anticholinergicReferenceDate = (catalog: readonly SummarySourceCatalogEntry[], referenceDate?: string) =>
   referenceDate ?? catalog.map((entry) => entry.date ?? '').filter(Boolean).sort().at(-1)
+
+/** Whether a fill was dispensed by the reference date and its supply reached
+ *  the 90 days before it. */
+function suppliedInWindow(entry: SummarySourceCatalogEntry, reference: string | undefined): boolean {
+  const referenceMs = reference ? Date.parse(reference) : Number.NaN
+  if (!reference || Number.isNaN(referenceMs) || !entry.date || entry.date > reference) return false
+  const from = isoDay(referenceMs - ANTICHOLINERGIC_WINDOW_DAYS * 86_400_000)
+  return (entry.supplyEnd ?? entry.date) >= from
+}
+
+/**
+ * The class a SOURCE LIST line prints beside a medicine: its medicationClass,
+ * plus "anticholinergic ACB 3" only for a fill supplied in the 90 days before
+ * the reference date. A stopped medicine keeps its mechanism but not the
+ * label: printed on a fill that had run out months before, the label led a
+ * small model to raise an anticholinergic alert for a medicine the patient
+ * was no longer taking (2026-10-05).
+ */
+export function medicationClassOnLine(entry: SummarySourceCatalogEntry, reference: string | undefined): string | undefined {
+  const label = entry.medicine?.anticholinergic
+  const anticholinergic = showsAnticholinergic(label) && suppliedInWindow(entry, reference)
+    ? anticholinergicLineLabel(label!)
+    : ''
+  return [entry.medicationClass ?? '', anticholinergic].filter(Boolean).join(' · ') || undefined
+}
 
 /**
  * The anticholinergic medicines (ACB 2–3, Beers strong, or an antimuscarinic
@@ -36,18 +61,14 @@ export function currentAnticholinergicMedicines(
   catalog: readonly SummarySourceCatalogEntry[],
   referenceDate?: string,
 ): CurrentAnticholinergic[] {
-  const reference = referenceOf(catalog, referenceDate)
-  const referenceMs = reference ? Date.parse(reference) : Number.NaN
-  if (!reference || Number.isNaN(referenceMs)) return []
-  const from = isoDay(referenceMs - ANTICHOLINERGIC_WINDOW_DAYS * 86_400_000)
+  const reference = anticholinergicReferenceDate(catalog, referenceDate)
   const newest = new Map<string, SummarySourceCatalogEntry>()
   for (const entry of catalog) {
     if (!entry.resourceType.startsWith('Medication') || !showsAnticholinergic(entry.medicine?.anticholinergic)) continue
-    if (!entry.date || entry.date > reference) continue
-    if ((entry.supplyEnd ?? entry.date) < from) continue
+    if (!suppliedInWindow(entry, reference)) continue
     const ingredient = entry.medicationClass?.split(' · ')[0]?.trim() || entry.display
     const current = newest.get(ingredient)
-    if (!current || entry.date > (current.date ?? '')) newest.set(ingredient, entry)
+    if (!current || (entry.date ?? '') > (current.date ?? '')) newest.set(ingredient, entry)
   }
   return [...newest].map(([ingredient, entry]) => ({ ingredient, entry }))
 }
@@ -63,7 +84,7 @@ export function anticholinergicMedicinesLine(
   catalog: readonly SummarySourceCatalogEntry[],
   referenceDate?: string,
 ): string | undefined {
-  const reference = referenceOf(catalog, referenceDate)
+  const reference = anticholinergicReferenceDate(catalog, referenceDate)
   if (!reference || Number.isNaN(Date.parse(reference))) return undefined
   const heading = `ANTICHOLINERGIC MEDICINES SUPPLIED IN THE ${ANTICHOLINERGIC_WINDOW_DAYS} DAYS BEFORE ${reference}:`
   const medicines = currentAnticholinergicMedicines(catalog, reference)

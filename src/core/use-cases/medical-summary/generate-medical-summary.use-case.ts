@@ -90,8 +90,12 @@ import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
 import { medicationFitsProblem } from '@/src/core/utils/problem-medication-fit.utils'
-import { anticholinergicLineLabel, medicineProfile, showsAnticholinergic } from '@/src/core/utils/medicine-profile.utils'
-import { anticholinergicMedicinesLine } from '@/src/core/utils/anticholinergic-burden.utils'
+import { medicineProfile } from '@/src/core/utils/medicine-profile.utils'
+import {
+  anticholinergicMedicinesLine,
+  anticholinergicReferenceDate,
+  medicationClassOnLine,
+} from '@/src/core/utils/anticholinergic-burden.utils'
 import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
 import {
   qualifyingSharedReportKeys,
@@ -314,13 +318,14 @@ function sourceOwnedContentText(value: unknown): string {
   return leaves.join('\n␞\n')
 }
 
-/** "oxybutynin · G04B UROLOGICALS · Cholinergic Muscarinic Antagonist ·
- *  anticholinergic ACB 3": the drug master's ingredient (or the ATC
- *  substance), its four-character ATC subgroup (what the medicine treats), its
- *  mechanism, and its anticholinergic burden when it has one. The mechanism is
+/** "oxybutynin · G04B UROLOGICALS · Cholinergic Muscarinic Antagonist": the
+ *  drug master's ingredient (or the ATC substance), its four-character ATC
+ *  subgroup (what the medicine treats) and its mechanism. The mechanism is
  *  what the medicine IS — an ATC subgroup can hold several (G04B holds
- *  oxybutynin and the β3 agonist mirabegron). Absent when the record resolves
- *  to no terminology. */
+ *  oxybutynin and the β3 agonist mirabegron). The anticholinergic burden stays
+ *  on `medicine`; the SOURCE LIST prints it only for a current fill
+ *  (medicationClassOnLine). Absent when the record resolves to no
+ *  terminology. */
 function catalogMedication(m: MedicationEntity): Pick<SummarySourceCatalogEntry, 'medicationClass' | 'medicine'> {
   const t = m.drugTerminology
   const a = m.atcClassification
@@ -329,17 +334,14 @@ function catalogMedication(m: MedicationEntity): Pick<SummarySourceCatalogEntry,
   const groupName = t?.atcLevel3NameEn ?? a?.atcLevel3NameEn ?? t?.atcLevel2NameEn ?? a?.atcLevel2NameEn
   const group = groupCode ? [groupCode, groupName].filter(Boolean).join(' ') : ''
   const medicine = medicineProfile({ atcCode: t?.atcCode ?? a?.atcCode, ingredientText: t?.ingredientText })
-  const anticholinergic = medicine.anticholinergic && showsAnticholinergic(medicine.anticholinergic)
-    ? anticholinergicLineLabel(medicine.anticholinergic)
-    : ''
-  const label = [substance, group, medicine.mechanism ?? '', anticholinergic].filter(Boolean).join(' · ')
+  const label = [substance, group, medicine.mechanism ?? ''].filter(Boolean).join(' · ')
   return {
     ...(label ? { medicationClass: label } : {}),
     ...(medicine.mechanism ? { medicine } : {}),
   }
 }
 
-const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = []): string => {
+const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = [], medicationClass = c.medicationClass): string => {
   const date = c.date && c.endDate && c.endDate !== c.date
     ? `${c.date} to ${c.endDate}`
     : c.date ?? '?'
@@ -348,7 +350,7 @@ const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = []): str
     : c.supportsNormalityAssessment === false
       ? 'normality/reference not supplied'
       : ''
-  const parts = [c.resourceType, date, c.organization ?? '', c.display, c.medicationClass ?? '', assessment, ...extra]
+  const parts = [c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, ...extra]
   return `[${c.key}] ${parts.filter(Boolean).join(' | ')}`
 }
 
@@ -358,9 +360,11 @@ const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = []): str
  * class, not by dispensing day. Listed by day, one refill day (眼藥水 and
  * Aricept from one pharmacy) was a run of consecutive keys, and a small model
  * copied whole runs onto one problem (2026-10-05). Keys are unchanged; only
- * the listing is regrouped.
+ * the listing is regrouped. A medicine is labelled anticholinergic only when
+ * its newest fill was supplied in the 90 days before the reference date.
  */
-export function formatSourceList(catalog: readonly SummarySourceCatalogEntry[]): string {
+export function formatSourceList(catalog: readonly SummarySourceCatalogEntry[], referenceDate?: string): string {
+  const reference = anticholinergicReferenceDate(catalog, referenceDate)
   const isMedication = (c: SummarySourceCatalogEntry) => c.resourceType.startsWith('Medication')
   const groups = new Map<string, SummarySourceCatalogEntry[]>()
   for (const entry of catalog.filter(isMedication)) {
@@ -374,6 +378,7 @@ export function formatSourceList(catalog: readonly SummarySourceCatalogEntry[]):
     .map(([latest, ...earlier]) => sourceListLine(
       latest,
       earlier.length > 0 ? [`earlier fills: ${earlier.map((entry) => entry.key).join(', ')}`] : [],
+      medicationClassOnLine(latest, reference),
     ))
   const lines: string[] = []
   let medicationsWritten = false
@@ -2110,7 +2115,7 @@ export class GenerateMedicalSummaryUseCase {
     // The safety module raises an anticholinergic burden alert by how many
     // anticholinergics are supplied together; the app counts them.
     const anticholinergics = withSafety ? anticholinergicMedicinesLine(input.catalog, input.referenceDate) : undefined
-    const catalogBlock = formatSourceList(input.catalog) + (anticholinergics ? `\n\n${anticholinergics}` : '')
+    const catalogBlock = formatSourceList(input.catalog, input.referenceDate) +(anticholinergics ? `\n\n${anticholinergics}` : '')
     const finalChecklist = input.harnessProfile === 'local-small'
       ? localFinalChecklist(moduleIds, withSafety)
       : ''

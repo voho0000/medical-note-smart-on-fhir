@@ -13,7 +13,11 @@ import {
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
-import { anticholinergicMedicinesLine } from '@/src/core/utils/anticholinergic-burden.utils'
+import {
+  anticholinergicMedicinesLine,
+  anticholinergicReferenceDate,
+  medicationClassOnLine,
+} from '@/src/core/utils/anticholinergic-burden.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 
 // Gemini Flash-Lite won the head-to-head eval (clean JSON, caught all risk
@@ -314,12 +318,13 @@ export class GenerateSafetyAlertsUseCase {
         ? '\n\nWrite every "title", "detail", "evidence" and "recommendation" value in Traditional Chinese (繁體中文).'
         : '\n\nWrite all values in English.'
     const anticholinergics = input.catalog?.length ? anticholinergicMedicinesLine(input.catalog) : undefined
+    const reference = input.catalog?.length ? anticholinergicReferenceDate(input.catalog) : undefined
     const catalogBlock =
       input.catalog && input.catalog.length > 0
         ? '\n\nSOURCE LIST (cite these keys in "sources"):\n' +
           input.catalog
             .map((c) =>
-              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display, c.medicationClass ?? '']
+              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display, medicationClassOnLine(c, reference) ?? '']
                 .filter(Boolean)
                 .join(' | ')}`,
             )

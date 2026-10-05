@@ -355,10 +355,11 @@ export interface SummarySourceCatalogEntry {
   /** Only set for Encounter entries whose class is recognisable. */
   encounterClass?: EncounterClass
   /** Medication entries only: the ingredient, the ATC pharmacological
-   *  subgroup, the mechanism and any anticholinergic burden ("oxybutynin ·
-   *  G04B UROLOGICALS · Cholinergic Muscarinic Antagonist · anticholinergic
-   *  ACB 3"), printed beside the key so a medicine is chosen and described by
-   *  what it is, not by the dispensing batch it sits in. */
+   *  subgroup and the mechanism ("oxybutynin · G04B UROLOGICALS · Cholinergic
+   *  Muscarinic Antagonist"), printed beside the key so a medicine is chosen
+   *  and described by what it is, not by the dispensing batch it sits in. The
+   *  SOURCE LIST adds "anticholinergic ACB 3" for a fill supplied in the last
+   *  90 days. */
   medicationClass?: string
   /** Medication entries only, when a listed source knows the medicine: its
    *  mechanism, whether every ingredient is known, and its anticholinergic

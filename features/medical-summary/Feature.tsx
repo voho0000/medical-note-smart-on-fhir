@@ -429,9 +429,9 @@ export default function MedicalSummaryFeature() {
   // The anticholinergic medicines supplied in the 90 days before the clinical
   // reference date (the demo's own as-of date for demo data), counted the way
   // the prompt counted them.
-  const currentAnticholinergicCount = useMemo(() => {
+  const currentAnticholinergics = useMemo(() => {
     const referenceDay = new Date(clinicalNowMs(isDemoDataActive()) + 8 * 3_600_000).toISOString().slice(0, 10)
-    return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).length
+    return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).map(({ ingredient }) => ingredient)
   }, [safetySourceCatalog])
   // 待核對 beside an alert that calls a medicine anticholinergic against its
   // listed mechanism, naming the medicine by its ingredient, or that raises an
@@ -443,16 +443,25 @@ export default function MedicalSummaryFeature() {
         const source = resolveSafetySource(key)
         return source?.medicationClass?.split(" · ")[0] || source?.display || key
       }))]
-      const burden = reviewAnticholinergicAlert(alert, currentAnticholinergicCount)
+      const burden = reviewAnticholinergicAlert(alert, currentAnticholinergics.length)
+      // The medicines the alert cites, by ingredient: named when none of
+      // them was supplied in the window.
+      const cited = [...new Set((alert.sources ?? [])
+        .map((key) => resolveSafetySource(key))
+        .filter((source) => source?.resourceType.startsWith("Medication"))
+        .map((source) => source?.medicationClass?.split(" · ")[0] || source?.display || ""))]
+        .filter(Boolean)
       const labels = [
         drugs.length ? ms.safetyPropertyReview.replace("{drugs}", drugs.join("、")) : undefined,
-        burden === "none-supplied" ? ms.safetyAnticholinergicNoneSupplied
-          : burden === "one-without-condition" ? ms.safetyAnticholinergicSingle
+        burden === "none-supplied"
+          ? ms.safetyAnticholinergicNoneSupplied.replace("{drugs}", cited.length ? cited.join("、") : ms.safetyAnticholinergicUnnamed)
+          : burden === "one-without-condition"
+            ? ms.safetyAnticholinergicSingle.replace("{drug}", currentAnticholinergics[0] ?? "")
             : undefined,
       ].filter(Boolean)
       return labels.length ? labels.join("；") : undefined
     },
-    [resolveSafetySource, currentAnticholinergicCount, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle],
+    [resolveSafetySource, currentAnticholinergics, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
   )
   // 待核對 under a clinician headline that does not match the problem list —
   // problems the list does not hold, medicines, lab values. Judged only once

@@ -103,6 +103,14 @@ describe('SOURCE LIST medicine lines', () => {
     expect(text).toMatch(/mirabegron · G04B UROLOGICALS · beta3-Adrenergic Agonist(?! · anticholinergic)/)
     expect(text).toMatch(/oxybutynin · G04B UROLOGICALS · Cholinergic Muscarinic Antagonist · anticholinergic ACB 3/)
   })
+
+  it('prints the anticholinergic label only for a medicine supplied in the 90 days before the reference date', () => {
+    const catalog = buildSourceCatalog({ medications: [medication('m2', 'G04BD04', 'oxybutynin')] }, 'en')
+    expect(catalog[0].medicationClass).toBe('oxybutynin · G04B UROLOGICALS · Cholinergic Muscarinic Antagonist')
+    expect(formatSourceList(catalog, '2026-12-01')).toMatch(/Cholinergic Muscarinic Antagonist · anticholinergic ACB 3/)
+    // Filled in September, nothing since: by February the label is gone, the mechanism stays.
+    expect(formatSourceList(catalog, '2027-02-01')).toMatch(/oxybutynin · G04B UROLOGICALS · Cholinergic Muscarinic Antagonist(?! · anticholinergic)/)
+  })
 })
 
 it('was built from the vendored drug master snapshot (regenerate it when the snapshot moves)', () => {
