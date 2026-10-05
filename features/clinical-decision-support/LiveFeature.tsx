@@ -419,9 +419,12 @@ export default function LiveClinicalDecisionSupportFeature({
   }, [hydrateVisitAnswers, patientId, today])
 
   // The chart half of the profile: expensive, and independent of the switches.
+  // Rebuild on a new local day, but read a fresh instant on every chart refresh
+  // or patient switch so same-day records are never compared with an old clock.
   const recordProfile = useMemo(() => {
     if (!patient) return null
     return createHospitalAwareCdssPatientProfile({
+      now: new Date(),
       patient,
       conditions: clinicalData.conditions,
       encounters: clinicalData.encounters,
@@ -437,7 +440,10 @@ export default function LiveClinicalDecisionSupportFeature({
       diagnosticReports: clinicalData.diagnosticReports,
       documentReferences: clinicalData.documentReferences,
     })
+    // The local day invalidates the clock; every rebuild takes a fresh instant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    today,
     clinicalData.conditions,
     clinicalData.encounters,
     clinicalData.medications,
