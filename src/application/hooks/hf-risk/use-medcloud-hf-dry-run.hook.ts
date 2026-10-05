@@ -6,7 +6,7 @@ import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-clie
 import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
 import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
-import { hfGatewayUrl, requestHfDryRun } from '@/src/infrastructure/hf-risk/dry-run-client'
+import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun } from '@/src/infrastructure/hf-risk/dry-run-client'
 
 interface Context {
   importId: string
@@ -18,7 +18,8 @@ interface Context {
 export function useMedcloudHfDryRun() {
   const origin = process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN ?? ''
   let configured = false
-  try { configured = !!origin && !!hfGatewayUrl(origin) } catch { /* Render a configuration notice; no network fallback. */ }
+  const policySetting = process.env.NEXT_PUBLIC_HF_AUTH_POLICY
+  try { configured = !!origin && !!hfGatewayUrl(origin) && !!hfAuthPolicy(policySetting) } catch { /* Render a configuration notice; no network fallback. */ }
   const activeImportId = LocalBundleService.getActiveImportId()
   const [context, setContext] = useState<Context | null>(null)
   const [result, setResult] = useState<{ importId: string; input: HfInput; value: HfDryRunResult } | null>(null)
@@ -78,6 +79,12 @@ export function useMedcloudHfDryRun() {
     setMessage(null)
     const stillCurrent = () => !abort.signal.aborted && shouldUseLocalBundle() && LocalBundleService.getActiveImportId() === snapshot.importId
     try {
+      const authPolicy = hfAuthPolicy(policySetting)
+      if (authPolicy === 'intranet') {
+        const value = await requestHfDryRun(snapshot.input, { origin, authPolicy, signal: abort.signal })
+        if (stillCurrent()) setResult({ importId: snapshot.importId, input: snapshot.input, value })
+        return
+      }
       const auth = await captureHfCallerAuth()
       const token = await auth?.getToken()
       if (!stillCurrent()) return
@@ -99,5 +106,5 @@ export function useMedcloudHfDryRun() {
       if (controller.current === abort) setBusyImportId(null)
     }
   }
-  return { current, configured, busy, result: visibleResult, message: visibleMessage, prepare, select, validate }
+  return { current, configured, intranet: policySetting === 'intranet', busy, result: visibleResult, message: visibleMessage, prepare, select, validate }
 }

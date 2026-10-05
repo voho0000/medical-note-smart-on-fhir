@@ -36,7 +36,7 @@ beforeEach(() => {
   jest.mocked(captureHfCallerAuth).mockResolvedValue({ getToken, onIdentityChanged })
   jest.mocked(requestHfDryRun).mockResolvedValue(accepted)
 })
-afterEach(() => { delete process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN })
+afterEach(() => { delete process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN; delete process.env.NEXT_PUBLIC_HF_AUTH_POLICY })
 
 it('prepares data locally with no automatic network requests and explains the transmitted inputs', async () => {
   const bundle = hfMedcloudFixture()
@@ -135,4 +135,28 @@ it('clears a completed local validation when the active source becomes SMART', a
   view.rerender(<HfMedcloudDryRun locale="zh-TW" />)
   expect(screen.queryByText(/輸入檢查通過/)).toBeNull()
   expect(screen.queryByRole('combobox')).toBeNull()
+})
+
+it('explicit intranet policy submits without Firebase and shows warnings on an accepted response', async () => {
+  process.env.NEXT_PUBLIC_HF_AUTH_POLICY = 'intranet'
+  jest.mocked(captureHfCallerAuth).mockResolvedValue(null)
+  jest.mocked(requestHfDryRun).mockResolvedValue({ verdict: 'accepted', issues: [{ severity: 'warning', code: 'business-rule', text: 'Synthetic missing hemoglobin' }] })
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepare()
+  expect(screen.getByText('本次輸入摘要')).toBeVisible()
+  expect(screen.getByText(/未提供的模型檢驗項目/)).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '執行院內輸入檢查' }))
+  expect(await screen.findByText('輸入檢查通過，但有資料警告；未計算風險。')).toBeVisible()
+  expect(captureHfCallerAuth).not.toHaveBeenCalled()
+  expect(requestHfDryRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ authPolicy: 'intranet' }))
+  expect(screen.getByText(/Synthetic missing hemoglobin/)).toBeVisible()
+  fireEvent.change(screen.getByRole('combobox', { name: '模型期間' }), { target: { value: 'P1_CD_mortality_3m' } })
+  expect(screen.queryByText('輸入檢查通過，但有資料警告；未計算風險。')).toBeNull()
+})
+it('invalid authorization policy fails closed', async () => {
+  process.env.NEXT_PUBLIC_HF_AUTH_POLICY = 'arbitrary'
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepare()
+  expect(screen.getByRole('button', { name: '執行院內輸入檢查' })).toBeDisabled()
+  expect(requestHfDryRun).not.toHaveBeenCalled()
 })

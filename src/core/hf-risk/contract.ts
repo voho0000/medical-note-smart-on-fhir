@@ -15,6 +15,9 @@ export interface HfInput {
   counts: Record<string, number>
 }
 export interface HfDryRunResult {
+  checkedAt?: string
+  requestId?: string
+  adapterVersion?: string
   verdict: 'accepted' | 'refused'
   issues: { severity: string; code: string; text: string }[]
 }

@@ -109,3 +109,39 @@ describe('HF browser transport', () => {
     }
   })
 })
+
+it('intranet transport omits bearer tokens and preserves service provenance', async () => {
+  const requestId = randomUUID()
+  const fetchFn = jest.fn(async () => new Response(JSON.stringify(outcome), { status: 200, headers: { 'x-request-id': requestId, 'x-samd-adapter-version': '0.1.0' } }))
+  const result = await requestHfDryRun(input(), { origin: 'https://hf.test', authPolicy: 'intranet', token: 'MUST-NOT-SEND', signal: new AbortController().signal, requestId, fetch: fetchFn })
+  const [, options] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
+  expect(options.headers).not.toHaveProperty('Authorization')
+  expect(JSON.stringify(options)).not.toContain('MUST-NOT-SEND')
+  expect(result).toMatchObject({ verdict: 'accepted', requestId, adapterVersion: '0.1.0' })
+  expect(result.checkedAt).toBeDefined()
+})
+it('default Firebase transport rejects a missing token before any request', async () => {
+  const fetchFn = jest.fn()
+  await expect(requestHfDryRun(input(), { origin: 'https://hf.test', signal: new AbortController().signal, fetch: fetchFn })).rejects.toThrow('input-invalid')
+  expect(fetchFn).not.toHaveBeenCalled()
+})
+
+it('synthetic preview relay is explicit, development-only and fixed to the approved endpoint', async () => {
+  const previousMode = process.env.NODE_ENV
+  try {
+    process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY = 'synthetic'
+    Object.assign(process.env, { NODE_ENV: 'production' })
+    const fetchFn = jest.fn(async () => new Response(JSON.stringify(outcome), { status: 200 }))
+    const options = { origin: 'https://samd.mediprisma.tw', authPolicy: 'intranet' as const, signal: new AbortController().signal, fetch: fetchFn }
+    await expect(requestHfDryRun(input(), options)).rejects.toThrow('gateway-config')
+    expect(fetchFn).not.toHaveBeenCalled()
+    Object.assign(process.env, { NODE_ENV: 'development' })
+    await requestHfDryRun(input(), options)
+    expect((fetchFn.mock.calls[0] as unknown as [string])[0]).toContain('/__hf-local-preview/hf/v1/dry-run?')
+    await expect(requestHfDryRun(input(), { ...options, origin: 'https://other.test' })).rejects.toThrow('gateway-config')
+    await expect(requestHfDryRun(input(), { ...options, authPolicy: 'firebase', token: 'TEST' })).rejects.toThrow('gateway-config')
+  } finally {
+    Object.assign(process.env, { NODE_ENV: previousMode })
+    delete process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY
+  }
+})
