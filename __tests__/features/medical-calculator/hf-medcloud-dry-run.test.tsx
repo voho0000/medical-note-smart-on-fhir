@@ -369,3 +369,35 @@ it('the hook rejects a missing selected diagnosis even if another same-day visit
   await act(async () => { await result.current.validate() })
   expect(requestHfDryRun).not.toHaveBeenCalled()
 })
+
+it('clears cached HF results on an import event without a parent rerender', async () => {
+  jest.mocked(requestHfDryRun).mockResolvedValue(accepted)
+  jest.mocked(requestHfPrediction).mockResolvedValue({ verdict: 'scored', horizonMonths: 1, probability: 0.1234, riskTier: 'low', notes: [] })
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  await act(async () => { await result.current.validate() })
+  await act(async () => { await result.current.predict() })
+  expect(result.current.prediction?.verdict).toBe('scored')
+  act(() => {
+    jest.mocked(LocalBundleService.getActiveImportId).mockReturnValue('next-import')
+    window.dispatchEvent(new Event('mediprisma:local-bundle-changed'))
+  })
+  expect(result.current.current).toBeNull()
+  expect(result.current.prediction).toBeNull()
+  expect(result.current.result).toBeNull()
+})
+it('aborts pending validation on an import event without a parent rerender', async () => {
+  jest.mocked(requestHfDryRun).mockImplementation(() => new Promise(() => undefined))
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  act(() => { void result.current.validate() })
+  await waitFor(() => expect(requestHfDryRun).toHaveBeenCalled())
+  const signal = jest.mocked(requestHfDryRun).mock.calls[0][1].signal
+  act(() => {
+    jest.mocked(LocalBundleService.getActiveImportId).mockReturnValue('next-import')
+    window.dispatchEvent(new Event('mediprisma:local-bundle-changed'))
+  })
+  expect(signal.aborted).toBe(true)
+  expect(result.current.busy).toBe(false)
+  expect(result.current.current).toBeNull()
+})

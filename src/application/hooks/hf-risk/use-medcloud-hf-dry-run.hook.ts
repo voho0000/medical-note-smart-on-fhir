@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
@@ -10,6 +11,18 @@ import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction } from '@/src/infrastructure/hf-risk/dry-run-client'
 
+function subscribeToRecordChange(onChange: () => void) {
+  window.addEventListener(BUNDLE_CHANGED_EVENT, onChange)
+  window.addEventListener('storage', onChange)
+  return () => {
+    window.removeEventListener(BUNDLE_CHANGED_EVENT, onChange)
+    window.removeEventListener('storage', onChange)
+  }
+}
+function recordSnapshot() {
+  return JSON.stringify([shouldUseLocalBundle(), LocalBundleService.getActiveImportId()])
+}
+const serverRecordSnapshot = () => '[false,null]'
 interface Context {
   importId: string
   source: HfRecordSource
@@ -23,7 +36,8 @@ export function useMedcloudHfDryRun() {
   let configured = false
   const policySetting = process.env.NEXT_PUBLIC_HF_AUTH_POLICY
   try { configured = !!origin && !!hfGatewayUrl(origin) && !!hfAuthPolicy(policySetting) } catch { /* Render a configuration notice; no network fallback. */ }
-  const activeImportId = LocalBundleService.getActiveImportId()
+  const snapshot = useSyncExternalStore(subscribeToRecordChange, recordSnapshot, serverRecordSnapshot)
+  const [localMode, activeImportId] = JSON.parse(snapshot) as [boolean, string | null]
   const [context, setContext] = useState<Context | null>(null)
   const [result, setResult] = useState<{ importId: string; input: HfInput; value: HfDryRunResult } | null>(null)
   const [prediction, setPrediction] = useState<{ importId: string; input: HfInput; value: HfPredictionResult } | null>(null)
@@ -32,7 +46,6 @@ export function useMedcloudHfDryRun() {
   const busy = busyImportId !== null && busyImportId === activeImportId
   const controller = useRef<AbortController | null>(null)
   const unsubscribeAuth = useRef<(() => void) | null>(null)
-  const localMode = shouldUseLocalBundle()
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleResult = result?.importId === activeImportId && result.input === current?.input ? result.value : null
   const visiblePrediction = prediction?.importId === activeImportId && prediction.input === current?.input ? prediction.value : null
