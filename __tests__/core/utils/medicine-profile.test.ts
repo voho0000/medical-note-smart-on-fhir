@@ -41,6 +41,11 @@ describe('medicineProfile', () => {
     expect(profile.complete).toBe(true)
     expect(profile.mechanism).toMatch(/^acetaminophen: .+; chlorpheniramine: Histamine-1 Receptor Antagonist$/)
     expect(profile.anticholinergic).toBe('ACB 3 (chlorpheniramine)')
+    // The same ingredient in an eye drop acts where it is applied.
+    expect(medicineProfile({
+      atcCode: 'S01GX99',
+      ingredientText: 'TAURINE 5 MG/ML+CHLORPHENIRAMINE MALEATE .2 MG/ML+PYRIDOXINE HCL 1 MG/ML',
+    }).anticholinergic).toBeUndefined()
   })
 
   it('says unknown, not "none", for what the sources do not cover', () => {
@@ -58,7 +63,7 @@ describe('medicineProfile', () => {
 
   it('follows the ACB scale and Beers 2023 as published', () => {
     expect(medicineProfile({ atcCode: 'N05AB04' }).anticholinergic).toBe('Beers strong') // prochlorperazine: Beers only
-    expect(medicineProfile({ atcCode: 'R06AX02' }).anticholinergic).toBe('ACB 2') // cyproheptadine
+    expect(medicineProfile({ atcCode: 'R06AX02' }).anticholinergic).toBe('ACB 2 · Beers strong') // cyproheptadine: ACB 2, Beers strong
     expect(medicineProfile({ atcCode: 'A03BB01' }).anticholinergic).toBeUndefined() // butylscopolamine: on neither list
     // A butylscopolamine injection filed as scopolamine: no ACB score, though
     // its mechanism is antimuscarinic.

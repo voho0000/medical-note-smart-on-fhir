@@ -1712,6 +1712,26 @@ describe('finalizeResult', () => {
     expect(result.problems.map((problem) => [problem.label, problem.singleUnassessedLab ?? false])).toEqual([['Hyperglycemia', true]])
   })
 
+  it('tags a chronic disease named from values spanning under three months, and keeps it', () => {
+    const lab = (key: string, date: string) => ({
+      key, resourceType: 'DiagnosticReport', resourceId: `r-${key}`, display: 'eGFR', date, supportsNormalityAssessment: true,
+    })
+    const labs = [lab('L1', '2026-05-25'), lab('L2', '2026-05-31'), lab('L3', '2025-11-01')]
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [
+        { label: 'Chronic kidney disease, stage 3b', kind: 'lab', basisSources: ['L1', 'L2'] },
+        { label: 'Chronic kidney disease, stage 3a', kind: 'lab', basisSources: ['L3', 'L2'] },
+        { label: 'Reduced eGFR, chronicity undetermined', kind: 'lab', basisSources: ['L1', 'L2'] },
+      ],
+    }, labs, { strictGrounding: true })
+    expect(result.problems.map((problem) => [problem.label, problem.shortSpanChronic ?? false])).toEqual([
+      ['Chronic kidney disease, stage 3b', true],
+      ['Chronic kidney disease, stage 3a', false],
+      ['Reduced eGFR, chronicity undetermined', false],
+    ])
+  })
+
   it('removes unsupported assessment language from a strictly-grounded headline', () => {
     const result = useCase.finalizeResult(
       { ...empty, headline: '病人狀況穩定，血糖控制不佳，建議調整用藥' },

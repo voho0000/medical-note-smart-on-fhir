@@ -410,6 +410,12 @@ export interface SummaryProblem {
   /** A lab problem resting on one value with no reference range or flag:
    *  whether it is abnormal is the model's reading, which the row says. */
   singleUnassessedLab?: true
+  /** A chronic disease named from values alone that span under three months:
+   *  its chronicity is the model's reading, which the row says. */
+  shortSpanChronic?: true
+  /** A problem inferred from medicines alone that are also given for another
+   *  listed problem: that problem's label (an SGLT2 inhibitor and CKD). */
+  medicationAlsoFor?: string
   /** Every key the row cites (all columns), for consumers that need one list. */
   sourceKeys: string[]
   /** Per-column citations. Absent on legacy results, which render the single

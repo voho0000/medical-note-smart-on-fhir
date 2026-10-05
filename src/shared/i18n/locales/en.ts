@@ -434,6 +434,8 @@ export const en = {
     problemManagedByInferred: 'inferred from refill',
     problemInferredFromMedication: 'inferred from medication',
     problemSingleUnassessedLab: 'single value',
+    problemShortSpanChronic: 'to verify: values span under 3 months, chronicity undetermined',
+    problemMedicationAlsoFor: 'to verify: this medicine is also given for {problem} on the list; not enough on its own',
     problemMedicationReview: 'medicine class does not fit this problem — to verify',
     // 影像與病理重點 — key findings by organ; every point carries a quote checked verbatim
     reportsTitle: 'Imaging & pathology highlights',

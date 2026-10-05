@@ -434,6 +434,8 @@ export const zhTW = {
     problemManagedByInferred: '由慢箋推定',
     problemInferredFromMedication: '用藥推定',
     problemSingleUnassessedLab: '單次數值',
+    problemShortSpanChronic: '待核對：數值未滿 3 個月，慢性與否未定',
+    problemMedicationAlsoFor: '待核對：此藥也用於清單上的 {problem}，不足以單獨推定',
     problemMedicationReview: '藥物分類與此問題不符，待核對',
     // 影像與病理重點 — 依器官整理的重點；每項都有逐字核對過的原文引句
     reportsTitle: '影像與病理重點',

@@ -68,7 +68,10 @@ export function medicineProfile(input: { atcCode?: string; ingredientText?: stri
   if (ingredients.length > 1) {
     const components = ingredients.map((name) => component(name, ATC_BY_INGREDIENT[name], true))
     const known = components.filter((c) => c.mechanism)
-    const strongest = components
+    // Ingredients resolve through their systemic codes; the product's own
+    // code says where it acts. An eye-drop combination (pheniramine in a
+    // decongestant drop) carries no systemic burden.
+    const strongest = LOCAL_USE.test(input.atcCode ?? '') ? undefined : components
       .map((c) => ({ c, label: anticholinergicOf(c) }))
       .filter((x): x is { c: Component; label: string } => !!x.label)
       .sort((a, b) => strength(b.label) - strength(a.label))[0]

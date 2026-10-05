@@ -105,7 +105,7 @@ const TEMPORAL_RULE =
 // (Beers 2023 Table 5), or one strong one with a condition it worsens (Table
 // 3). The app lists them in the ANTICHOLINERGIC MEDICINES line.
 const ANTICHOLINERGIC_BURDEN_RULE =
-  'Raise anticholinergic burden only when the ANTICHOLINERGIC MEDICINES line lists two or more, or one rated ACB 3 or Beers strong for a patient aged 65 or over with dementia, cognitive impairment, delirium or urinary retention, or a man with BPH or urinary symptoms (except a bladder antimuscarinic); name that condition; never for one medicine otherwise. ' +
+  'Raise anticholinergic burden only when the ANTICHOLINERGIC MEDICINES line lists two or more, or one rated ACB 3 or Beers strong at age 65 or over with dementia, cognitive impairment, delirium or urinary retention, or a man with BPH or urinary symptoms (except a bladder antimuscarinic); name that condition; never for one medicine otherwise. ' +
   'It is medium: advise reviewing the need or a lower-burden alternative. '
 
 const DRUG_PROPERTY_RULE =
@@ -189,16 +189,20 @@ const SYSTEM_PATIENT =
 // made this one card larger than the other five cards combined. Keep only the
 // Safety-specific decision rules that materially change its output.
 const BATCH_SAFETY_CORE_RULES =
-  'Review renal dosing, bleeding or multiple antithrombotics, critical/abnormal labs, duplicate therapy, documented allergy conflicts, and missing monitoring systematically. ' +
-  'Return each distinct risk once; an empty alerts array is valid. Put the triggering value, medicine or date in "detail" and readable support in "evidence"; SOURCE LIST keys go only in "sources", never in any text (no E1, M5, D2). ' +
+  'Review renal dosing, bleeding or multiple antithrombotics, critical labs, duplicate therapy, allergy conflicts and missing monitoring. ' +
+  'Return each distinct risk once; an empty alerts array is valid. Put the triggering value, medicine or date in "detail" and readable support in "evidence"; SOURCE LIST keys go only in "sources", never in any text. ' +
   'Title: under 10 words, the risk and its medicines. ' +
-  'Severity uses TIME-TO-HARM: "high" only for a specific serious harm plausible within days to weeks that prompt action could avert, named in "detail"; "medium" for review items, stable or mildly abnormal findings, polypharmacy, dosing to confirm and monitoring gaps; "low" for information. Duplicate and monitoring are never high. ' +
+  'Severity uses TIME-TO-HARM: "high" only for a specific serious harm plausible within days to weeks that prompt action could avert, named in "detail"; "medium" for review items, polypharmacy, dosing to confirm and monitoring gaps; "low" for information. Duplicate and monitoring are never high. ' +
   'Recency: call a lab or vital current only within about 3 months of the reference date; never pair old and recent readings as concurrent; use each test\'s newest value. ' +
+  // Review 2026-10-05: "start therapy" from a years-old reading plus no
+  // dispensing on file; one renal alert naming medicines with no threshold.
+  'Never advise starting a treatment from a reading over a year old or a missing dispensing; advise confirming status. ' +
+  'A renal-dosing alert names only medicines whose label changes the dose at this eGFR, each with its threshold. ' +
   // 開藥注意 is read right after the problem list; a 2026-10-05 demo run
   // restated a problem's values and trend as an alert.
-  'Favour what changes today\'s prescribing: the problem list already shows each problem\'s values and trend, so never restate them; raise a monitoring gap only when a long-term medicine\'s safety depends on that test. ' +
+  'Never restate a problem\'s values and trend (the problem list shows them); raise a monitoring gap only when a long-term medicine\'s safety depends on that test. ' +
   'Say a medicine may have contributed to an event only when it was dispensed BEFORE that event. ' +
-  'A passed supply end does not mean stopped: give the last dispensing and supply end, never "discontinued"; it is no alert unless lapsing an essential long-term medicine (anticoagulant, insulin, antiepileptic, transplant or cancer medicine) could cause harm. ' +
+  'A passed supply end does not mean stopped: give the last dispensing and supply end, never "discontinued"; it is no alert unless lapsing an essential long-term medicine (anticoagulant, insulin, antiepileptic, transplant or cancer medicine) could cause harm, and then advises confirming supply with the prescriber. ' +
   // A run called the β3 agonist mirabegron anticholinergic because it shares
   // an ATC group with antimuscarinics (2026-10-05); the line now says what
   // each medicine is.
@@ -206,9 +210,9 @@ const BATCH_SAFETY_CORE_RULES =
   // AGS Beers 2023 Tables 5 and 3 (owner, 2026-10-05): one anticholinergic
   // alone is not an alert.
   ANTICHOLINERGIC_BURDEN_RULE +
-  'Duplicate therapy requires the same or same-class additive medicine from TWO DIFFERENT non-pharmacy facilities with overlapping supply; a prescriber plus its dispensing pharmacy, or same-facility refills, is one therapy. Cite the overlapping keys and name both prescribers with dates; if the overlap causes acute bleeding or another harm, use that category instead. ' +
+  'Duplicate therapy requires the same or same-class additive medicine from TWO DIFFERENT non-pharmacy facilities with overlapping supply; a prescriber plus its dispensing pharmacy, or same-facility refills, is one therapy. Cite the overlapping keys and name both prescribers with dates. ' +
   'A document supports a diagnosis it records, but claim a procedure (endoscopy, biopsy, imaging) only when its text records it. ' +
-  'Keep each field self-contained (never "above", "below", "as follows"). Order alerts by severity.'
+  'Keep each field self-contained. Order alerts by severity.'
 
 const BATCH_SAFETY_MEDICAL_RULES =
   'Write concise clinician-facing medication-safety alerts. A recommendation may propose verification, monitoring, specialist review, or prompt action appropriate to the calibrated severity; do not invent a treatment change.'
@@ -274,8 +278,9 @@ export function findUnsupportedDocumentProcedureSources(
 
 const ANTICHOLINERGIC_CLAIM = /anti-?cholinergic|anti-?muscarinic|抗膽鹼|抗毒蕈鹼/i
 // "switch to mirabegron, which is not anticholinergic" names a medicine
-// beside the word without calling it anticholinergic.
-const NOT_A_CLAIM = /\b(not|non|without|lacks?|no|instead|alternatives?|switch(ing)?|replac(e|ing)|rather than|avoid)\b|非|不具|沒有|無|避免|改用|替代|取代/i
+// beside the word without calling it anticholinergic. "Avoid" is no such
+// word: "avoid mirabegron, an anticholinergic" still calls it one.
+const NOT_A_CLAIM = /\b(not|non|without|lacks?|no|instead|alternatives?|switch(ing)?|replac(e|ing)|rather than)\b|非|不具|沒有|無|改用|替代|取代/i
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** How an alert can name a medicine: its ingredient and the product's first

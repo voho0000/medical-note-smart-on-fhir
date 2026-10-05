@@ -43,6 +43,12 @@ interface ProblemsCardProps {
   medicationInferredLabel: string
   /** Tag on a lab problem resting on one unassessed value, e.g. 單次數值. */
   singleValueLabel: string
+  /** Tag on a chronic disease named from values spanning under three months,
+   *  e.g. 數值未滿 3 個月. Optional: callers without it show no tag. */
+  shortSpanLabel?: string
+  /** Tag on a medicine-inferred problem whose medicine also treats another
+   *  listed problem; "{problem}" is replaced. Optional. */
+  medicationAlsoForLabel?: string
   /** Why a medicine token carries the 待核對 flag, e.g. 藥物分類與此問題不符，待核對. */
   medicationReviewLabel: string
   verifyLabel: string
@@ -79,6 +85,8 @@ export function ProblemsCard({
   inferredLabel,
   medicationInferredLabel,
   singleValueLabel,
+  shortSpanLabel,
+  medicationAlsoForLabel,
   medicationReviewLabel,
   verifyLabel,
   legendLabel,
@@ -238,6 +246,10 @@ export function ProblemsCard({
                     )}
                     {problem.inferredFromMedication ? tag(medicationInferredLabel) : null}
                     {problem.singleUnassessedLab ? tag(singleValueLabel) : null}
+                    {problem.shortSpanChronic && shortSpanLabel ? tag(shortSpanLabel) : null}
+                    {problem.medicationAlsoFor && medicationAlsoForLabel
+                      ? tag(medicationAlsoForLabel.replace("{problem}", problem.medicationAlsoFor))
+                      : null}
                     {problem.flag ? (
                       <Flag
                         className="ml-1 inline h-3 w-3 shrink-0 align-[-0.125em] text-amber-500 dark:text-amber-300"

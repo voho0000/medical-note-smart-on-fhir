@@ -61,6 +61,13 @@ describe('anticholinergicMedicinesLine', () => {
       .toBeUndefined()
     expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'ACB 3 medicine in a 90-year-old.'), 1, ['Hip fracture']))
       .toBe('one-without-condition')
+    // Prostate cancer is not BPH; a negated condition is absent; "do not use in dementia" names it.
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'ACB 3 medicine in a 75-year-old.'), 1, ['Prostate cancer']))
+      .toBe('one-without-condition')
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'ACB 3 medicine; no urinary retention, without dementia.'), 1))
+      .toBe('one-without-condition')
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'Do not use in a patient with dementia.'), 1)).toBeUndefined()
+    expect(reviewAnticholinergicAlert(alert('Anticholinergic burden', 'ACB 3 medicine.'), 1, ['Benign prostatic hyperplasia'])).toBeUndefined()
     // Two or more: meets the rule. Not about anticholinergics: not judged.
     expect(reviewAnticholinergicAlert(alert('Anticholinergic burden: 2 medicines', 'Two ACB 3 medicines.'), 2)).toBeUndefined()
     expect(reviewAnticholinergicAlert(alert('Renal dosing review', 'eGFR 31 with a renally cleared medicine.'), 0)).toBeUndefined()

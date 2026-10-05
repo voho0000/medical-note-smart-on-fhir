@@ -95,9 +95,21 @@ export function anticholinergicMedicinesLine(
 
 const ANTICHOLINERGIC_CLAIM = /anti-?cholinergic|anti-?muscarinic|抗膽鹼|抗毒蕈鹼/i
 // A condition one strong anticholinergic is an alert with (Beers 2023 Table
-// 3, and urinary retention in anyone).
+// 3, and urinary retention in anyone). BPH and urinary symptoms by name:
+// prostate cancer is not Table 3's condition.
 const QUALIFYING_CONDITION =
-  /dementia|cognitive|delirium|confusion|\bBPH\b|prostat|\bLUTS\b|lower urinary tract|urinary (retention|symptoms?)|retention of urine|失智|認知|譫妄|攝護腺|前列腺|尿滯留|排尿|解尿/i
+  /dementia|cognitive (impairment|decline|disorder|dysfunction)|delirium|confusion|\bBPH\b|prostatic hyperplasia|enlarged prostate|\bLUTS\b|lower urinary tract symptoms?|urinary (retention|symptoms?|hesitancy)|retention of urine|失智|認知(障礙|功能|退化)|譫妄|攝護腺(肥大|增生)|前列腺(肥大|增生)|下泌尿道症狀|尿滯留|排尿困難|解尿困難/i
+// "no urinary retention", "without dementia": the condition is absent.
+const NEGATION = /\b(no|not|without|denies|denied|negative for|absence of|rule[sd]? out|free of)\b|無|沒有|未見|否認|排除/i
+
+/** A clause names a qualifying condition, and no negation stands just before
+ *  it ("do not use in a patient with dementia" still names dementia). */
+function namesQualifyingCondition(text: string): boolean {
+  return text.split(/[.;,。；，、]|\bbut\b|\band\b/i).some((clause) => {
+    const match = QUALIFYING_CONDITION.exec(clause)
+    return match !== null && !NEGATION.test(clause.slice(Math.max(0, match.index - 16), match.index))
+  })
+}
 
 /** Why an anticholinergic alert does not meet the alert rules, if it does not. */
 export type AnticholinergicAlertReview = 'none-supplied' | 'one-without-condition'
@@ -118,6 +130,6 @@ export function reviewAnticholinergicAlert(
   const text = `${alert.title} ${alert.detail}`
   if (!ANTICHOLINERGIC_CLAIM.test(text)) return undefined
   if (currentCount === 0) return 'none-supplied'
-  if (currentCount === 1 && !QUALIFYING_CONDITION.test(`${text} ${problemLabels.join(' ')}`)) return 'one-without-condition'
+  if (currentCount === 1 && !namesQualifyingCondition([text, ...problemLabels].join('; '))) return 'one-without-condition'
   return undefined
 }

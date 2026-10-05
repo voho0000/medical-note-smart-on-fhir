@@ -21,7 +21,8 @@ export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 // anticholinergic burden, and alerts carry propertyReviewKeys.
 // medsummary36: the anticholinergic label is printed only for a medicine
 // supplied in the last 90 days.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary36', scanKey)
+// medsummary37: problem rows carry shortSpanChronic.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary37', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

@@ -1004,6 +1004,8 @@ export default function MedicalSummaryFeature() {
                 inferredLabel={ms.problemManagedByInferred}
                 medicationInferredLabel={ms.problemInferredFromMedication}
                 singleValueLabel={ms.problemSingleUnassessedLab}
+                shortSpanLabel={ms.problemShortSpanChronic}
+                medicationAlsoForLabel={ms.problemMedicationAlsoFor}
                 medicationReviewLabel={ms.problemMedicationReview}
                 verifyLabel={ms.verifyFlag}
                 legendLabel={ms.problemsLegend}

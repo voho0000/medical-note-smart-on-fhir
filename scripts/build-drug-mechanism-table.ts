@@ -257,14 +257,16 @@ async function main() {
   }
 
   // ---- anticholinergic burden
-  // Labels: "ACB 3" / "ACB 2" (the ACB scale), "Beers strong" (Beers 2023
-  // Table 7 without an ACB score of 2–3; "ACB 1 · Beers strong" for
-  // clidinium), "ACB 1".
+  // Labels: "ACB 3" (the ACB scale), "Beers strong" (Beers 2023 Table 7
+  // without an ACB score), "ACB 2 · Beers strong" / "ACB 1 · Beers strong"
+  // when Beers counts a medicine the scale rates lower (cyproheptadine,
+  // clidinium), "ACB 2", "ACB 1". The single-medicine rule reads "ACB 3 or
+  // Beers strong", so the Beers status must survive a lower ACB score.
   const acbSource = JSON.parse(fs.readFileSync(ACB_FILE, 'utf8')) as {
     entries: Array<{ acb?: 1 | 2 | 3; beers2023?: boolean; names: string[] }>
   }
   const labelOf = (entry: { acb?: number; beers2023?: boolean }) =>
-    entry.acb && entry.acb >= 2 ? `ACB ${entry.acb}`
+    entry.acb === 3 ? 'ACB 3'
       : entry.beers2023 ? (entry.acb ? `ACB ${entry.acb} · Beers strong` : 'Beers strong')
         : `ACB ${entry.acb}`
   const rank = (label: string) => (/ACB 3|Beers/.test(label) ? 3 : /ACB 2/.test(label) ? 2 : 1)

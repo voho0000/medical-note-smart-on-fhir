@@ -31,7 +31,33 @@ const FIT_RULES: readonly FitRule[] = [
     atc: ['A02', 'A03'],
   },
   { problem: /anemi|貧血/i, atc: ['B03'] },
+  // A loop diuretic sat on a hypokalemia row as its treatment (2026-10-05);
+  // it is a cause. Potassium and potassium-sparing agents treat it.
+  { problem: /hypokal|低血鉀/i, atc: ['A12B', 'C03D', 'C03E'] },
 ]
+
+// Classes with several established uses: a problem inferred from one of them
+// alone is doubtful when another listed problem is one of those uses. A model
+// listed diabetes from an SGLT2 inhibitor given for a patient's CKD
+// (2026-10-05).
+const OTHER_USES: ReadonlyArray<{ atc: string; uses: RegExp }> = [
+  { atc: 'A10BK', uses: /chronic kidney|\bCKD\b|kidney disease|heart failure|\bHF(r|p|mr)?EF\b|慢性腎|腎臟病|心衰竭/i },
+]
+
+/**
+ * For a problem inferred from medicines alone: the other listed problem its
+ * medicines are also given for, when every one of them is such a medicine.
+ */
+export function otherListedUse(
+  atcCodes: readonly (string | undefined)[],
+  otherProblemLabels: readonly string[],
+): string | undefined {
+  const codes = atcCodes.map((code) => code?.trim().toUpperCase() ?? '')
+  if (codes.length === 0) return undefined
+  const rules = codes.map((code) => OTHER_USES.find((rule) => code.startsWith(rule.atc)))
+  if (rules.some((rule) => !rule)) return undefined
+  return otherProblemLabels.find((label) => rules.every((rule) => rule!.uses.test(label)))
+}
 
 /**
  * true: the class treats the problem; false: it clearly does not; undefined:

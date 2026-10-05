@@ -89,7 +89,7 @@ import { MAX_INVESTIGATION_TREND_POINTS } from '@/src/shared/utils/investigation
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
-import { medicationFitsProblem } from '@/src/core/utils/problem-medication-fit.utils'
+import { medicationFitsProblem, otherListedUse } from '@/src/core/utils/problem-medication-fit.utils'
 import { medicineProfile } from '@/src/core/utils/medicine-profile.utils'
 import {
   anticholinergicMedicinesLine,
@@ -1094,9 +1094,10 @@ const MEDICATION_INFERENCE_RULE =
   'Medication-only problems: a problem may rest on medicines alone, judged by the ATC therapeutic class given beside each medicine, when that class points to one condition — ' +
   'for example glucose-lowering drugs → diabetes mellitus, thyroid hormone → hypothyroidism, urate-lowering drugs → hyperuricemia or gout, ' +
   'antiglaucoma drops → "glaucoma or ocular hypertension", bone-disease drugs → osteoporosis. Name the condition no more specifically than the class allows. ' +
-  'Its "basis" says it is inferred from medication and names the medicines. ' +
+  'Its "basis" says "medication"; the medicines column names them. ' +
   'Be careful with classes that serve several conditions — an SGLT2 inhibitor alone, diuretics, beta-blockers, alpha-blockers, ACE inhibitors / ARBs, ' +
-  'acid suppressants, analgesics, antithrombotics, systemic corticosteroids, antibiotics: infer from them only when the rest of the record points to one condition, and say what does. '
+  'acid suppressants, analgesics, antithrombotics, systemic corticosteroids, antibiotics: infer from them only when the rest of the record points to one condition, and say what does. ' +
+  'Such a medicine is never evidence of a further disease when a problem already on the list is one of its uses. '
 
 const PROBLEMS_SCHEMA_FIELDS =
   '"problems": [{"label": "<condition name in the OUTPUT LANGUAGE>", "basis": "<why it is listed, in a few words in the OUTPUT LANGUAGE — evidence type and count, never values or medicines: <n> visits, <code>>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "basisSources": ["<keys that establish the condition: its claim encounters, Condition, D# document or report>"], "metric": "<data-first key indicator, values oldest → newest: <test> <earlier> → <latest>>", "metricSources": ["<the L/O keys whose values the metric quotes; [] when it says the record has none>"], "managedBy": "<organization and specialty exactly as they appear in the data>", "managedByRef": "<catalog key of the latest encounter at that organization>", "medicationSources": ["<M keys of the medicines treating this problem>"], "flag": <true only when something must be verified>, "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]'
@@ -1260,20 +1261,21 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
     // this soft: it must not read as an instruction to stop thinking.
     'This block can be written directly from the listed evidence; it does not need extended deliberation. ',
   problems:
-    'PROBLEMS: Include a condition when it is documented by a visit\'s diagnosis code (weighed by the diagnosis-code rule above), a Condition, care plan, or clinical document, or supported by repeated comparable abnormal results whose abnormality is supplied. ' +
+    'PROBLEMS: Include a condition when it is documented by a visit\'s diagnosis code (weighed by the diagnosis-code rule above), a Condition, care plan, or clinical document; without one, repeated comparable abnormal results whose abnormality is supplied are listed as the finding, as below. ' +
     MEDICATION_INFERENCE_RULE +
     // A held-out patient with a recorded hypertension came out as "elevated
     // BP at check-up" while the example below named blood pressure (owner,
     // 2026-10-05): the recorded diagnosis comes first.
     'A recorded diagnosis — a visit code, a Condition, a care plan or a document — names its problem. Only without one: never turn lab values or readings into a disease or a poor-control problem; name the finding and how long it is documented ("<finding>, chronicity undetermined"). ' +
     'A medicine\'s intended effect is not a problem of its own: a hormone level suppressed by hormone therapy belongs to the condition being treated. ' +
+    'Name a problem with the certainty its record gives ("suspected", "possible", "probable" stay in the label), and a spread of a known cancer to a node or organ is that cancer\'s spread, not a second cancer. ' +
     'This is the complete problem list. Merge duplicates. This list is read by a doctor about to prescribe: keep what matters for today\'s care. A long run of minor or one-off visit codes (e.g. cerumen impaction, a single otitis externa, dry eye) buries the important problems — group them into one line or leave them out, as you judge; a complex patient usually comes to about a dozen problems. Order the list by clinical weight for the doctor about to prescribe: the reason for today\'s visit first when the data shows it; then conditions that are serious or change today\'s prescribing (e.g. cancer, heart failure, CKD, the reason for an anticoagulant, diabetes, the cause of a recent admission); then other chronic conditions; minor or symptom-level problems (e.g. constipation, insomnia, a one-off acute visit) last. A problem inferred from medicines is placed by what the condition is, not by how it was found. ' +
     'Keep "basis" to a few words saying why the problem is listed: the evidence and count ("<n> visits, <this problem\'s code>", "discharge summary"). Never restate the other columns in it: no values or trends (metric shows them), no medicine names (the medicines column shows them). Name every kind of evidence behind it — visit codes first, then documents, reports and lab results by count, and "medication" when medicines support it ("<n> visits, <code>; <n> lab results; medication"). ' +
     'Each column cites its own keys: basisSources for the condition, metricSources for the values in metric (oldest → newest), medicationSources for the M keys of the medicines treating it; the app writes dates and medicine names. managedBy copies an organization exactly as written and managedByRef is that organization\'s latest encounter key. ' +
     '"metric" is a value or finding of this problem — never a medicine or "dispensed", never a test of another problem; leave it out when there is none. ' +
     // 2026-10-05 VGHBrain runs copied whole dispensing batches (M1–M7) onto
     // one row: a refill day holds medicines for several problems.
-    'Choose each medicationSources key by the ingredient and class printed on its SOURCE LIST line — a row takes only the medicines whose class treats that condition, not every medicine dispensed the same day. Never copy a run of consecutive M keys or a whole dispensing day onto one problem. ',
+    'Choose each medicationSources key by the ingredient and class printed on its SOURCE LIST line — a row takes only the medicines whose class treats that condition, not every medicine dispensed the same day, and never a medicine that can cause or worsen it. Never copy a run of consecutive M keys or a whole dispensing day onto one problem. ',
 }
 
 /** The rules a small model broke most on the 2026-10-05 VGHBrain runs,
@@ -1289,7 +1291,7 @@ function localFinalChecklist(
   if (moduleIds.includes('problems')) {
     items.push(
       'problems: a recorded diagnosis names its problem; without one, lab values or readings are named as the finding, not a disease; ' +
-      'a row takes only the medicines whose class treats it, never a whole dispensing day; "metric" is a value of this problem, never a medicine.',
+      'a row takes only the medicines whose class treats it — never one that causes it, never a whole dispensing day; "metric" is a value of this problem, never a medicine.',
     )
   }
   if (withSafety) {
@@ -1992,9 +1994,18 @@ function namesMedication(metric: string | undefined, medicationDisplays: readonl
 const isCodeOrVisitMetric = (value?: string): boolean =>
   /\b(?:icd(?:-?10)?|billing codes?|claim codes?|diagnosis codes?)\b|^\s*last visit\b/i.test(value ?? '')
 
-/** "N/A", "none", "—": a model's way of leaving a field empty. */
+/** "N/A", "none", "undetermined", "—": a model's way of leaving a field empty. */
 const isPlaceholderText = (value?: string): boolean =>
-  !value?.trim() || /^(n\/?a|none|none reported|not reported|no data|nil|not applicable|-+|—+|無)\.?$/i.test(value.trim())
+  !value?.trim() ||
+  /^(n\/?a|none|none reported|not reported|no data|nil|not applicable|undetermined|unknown|-+|—+|無|不明)\.?$/i.test(value.trim())
+
+/** Records that name a diagnosis, as opposed to values and medicines. */
+const DIAGNOSIS_RESOURCE_TYPES = new Set(['Encounter', 'Condition', 'CarePlan', 'DocumentReference', 'Composition'])
+
+/** Problem names that assert a chronic disease, which values alone over
+ *  weeks cannot establish. */
+const CHRONIC_DISEASE_LABEL =
+  /chronic kidney|\bCKD\b|hypertension|diabet|hyperlipid|dyslipid|hypercholesterol|hyperuric|gout|obesity|hypothyroid|hyperthyroid|cirrhosis|chronic hepatitis|慢性腎|高血壓|糖尿病|高血脂|高膽固醇|高尿酸|痛風|肥胖|甲狀腺(功能|機能)?(低下|亢進)|肝硬化/i
 
 /** Normalised, de-duplicated citation keys in their first-seen order. */
 function uniqueKeys(keys: readonly string[]): string[] {
@@ -2649,6 +2660,7 @@ export class GenerateMedicalSummaryUseCase {
     // without a count cannot be reviewed or retired).
     const medicationInference = { inferred: 0, atcClasses: new Set<string>() }
     const carriedMetricReview = new Set(ai.problemsCarriedMetricReview ?? [])
+    const inferredAtcCodes = new Map<SummaryProblem, Array<string | undefined>>()
     const problems = (ai.problems ?? []).flatMap((p): SummaryProblem[] => {
       const basisKeys = uniqueKeys(p.basisSources ?? [])
       const metricKeys = uniqueKeys(p.metricSources ?? [])
@@ -2683,6 +2695,16 @@ export class GenerateMedicalSummaryUseCase {
       // and tagged 單次數值 (owner decision 2026-10-03).
       if (strictGrounding && resolvedSources.length === 0) return []
       const singleUnassessedLab = kind === 'lab' && labOnlyWithoutAssessment
+      // A chronic disease named from values alone that span under three
+      // months (CKD 3b from two eGFRs six days apart, 2026-10-05): the
+      // chronicity is the model's reading, tagged 待核對, never dropped.
+      const labDates = resolvedSources.map((entry) => entry.date).filter((date): date is string => Boolean(date)).sort()
+      const shortSpanChronic = !singleUnassessedLab &&
+        resolvedSources.length > 0 &&
+        resolvedSources.every((entry) => entry.resourceType === 'DiagnosticReport' || entry.resourceType === 'Observation') &&
+        CHRONIC_DISEASE_LABEL.test(p.label) &&
+        labDates.length > 0 &&
+        Date.parse(labDates.at(-1)!) - Date.parse(labDates[0]) < 90 * 86_400_000
       // Evidence-type cross-check: a resolved key renders a green pill even
       // when the model cited the wrong report (依據:心電圖紀錄 citing a chest
       // X-ray). When the basis names an evidence modality and a cited
@@ -2788,7 +2810,7 @@ export class GenerateMedicalSummaryUseCase {
       // finalizer gave its metric the first time (its arrows are gone now).
       const carriedReview = Boolean(metricView.metric) &&
         carriedMetricReview.has(metricReviewCarryKey(p.label, metricView.metric!))
-      return [{
+      const row: SummaryProblem = {
         label: p.label,
         basis,
         kind,
@@ -2805,6 +2827,7 @@ export class GenerateMedicalSummaryUseCase {
         flag: p.flag ?? false,
         ...(medicationOnly ? { inferredFromMedication: true as const } : {}),
         ...(singleUnassessedLab ? { singleUnassessedLab: true as const } : {}),
+        ...(shortSpanChronic ? { shortSpanChronic: true as const } : {}),
         sourceKeys: rawSources.map(registerKey),
         ...(hasColumns
           ? {
@@ -2819,8 +2842,22 @@ export class GenerateMedicalSummaryUseCase {
           : {}),
         ...withDocumentEvidence(p.documentEvidence),
         ...(suspectSourceKeys.length > 0 ? { suspectSourceKeys } : {}),
-      }]
+      }
+      // No visit, Condition, care plan or document names it: the medicines
+      // carry the problem, whatever labs sit beside them.
+      const diagnosisBacked = resolvedSources.some((entry) => DIAGNOSIS_RESOURCE_TYPES.has(entry.resourceType))
+      const rowMedicines = resolvedSources.filter((entry) => entry.resourceType.startsWith('Medication'))
+      if (!diagnosisBacked && rowMedicines.length > 0) {
+        inferredAtcCodes.set(row, rowMedicines.map((entry) => medicationAtcCode(medicationById.get(entry.resourceId))))
+      }
+      return [row]
     })
+    // A problem inferred from a medicine that is also given for another
+    // listed problem is tagged 待核對 with that problem, never dropped.
+    for (const [row, atcCodes] of inferredAtcCodes) {
+      const alsoFor = otherListedUse(atcCodes, problems.filter((other) => other !== row).map((other) => other.label))
+      if (alsoFor) row.medicationAlsoFor = alsoFor
+    }
 
     // 影像與病理重點 is clinician-facing and rendered from the digest even when
     // the reports module failed or never ran.

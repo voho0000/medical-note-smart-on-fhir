@@ -1,4 +1,4 @@
-import { medicationFitsProblem } from '@/src/core/utils/problem-medication-fit.utils'
+import { medicationFitsProblem, otherListedUse } from '@/src/core/utils/problem-medication-fit.utils'
 
 describe('medicationFitsProblem', () => {
   it.each([
@@ -30,6 +30,20 @@ describe('medicationFitsProblem', () => {
     expect(medicationFitsProblem('Pulmonary hypertension', 'G04BD04')).toBeUndefined()
     // Ocular hypertension is judged as glaucoma care.
     expect(medicationFitsProblem('Ocular hypertension', 'S01ED01')).toBe(true)
+  })
+
+  it('does not read a diuretic that lowers potassium as hypokalemia treatment', () => {
+    expect(medicationFitsProblem('Hypokalemia', 'C03CA01')).toBe(false) // furosemide
+    expect(medicationFitsProblem('Hypokalemia', 'A12BA01')).toBe(true) // potassium chloride
+    expect(medicationFitsProblem('Hypokalemia', 'C03DA01')).toBe(true) // spironolactone
+  })
+
+  it('names the listed problem an inferring medicine is also given for', () => {
+    expect(otherListedUse(['A10BK01'], ['Chronic kidney disease stage 3b', 'BPH'])).toBe('Chronic kidney disease stage 3b')
+    expect(otherListedUse(['A10BK01'], ['BPH'])).toBeUndefined()
+    // Metformin is not such a medicine; neither is a mix with one.
+    expect(otherListedUse(['A10BA02'], ['Chronic kidney disease'])).toBeUndefined()
+    expect(otherListedUse(['A10BK01', 'A10BA02'], ['Chronic kidney disease'])).toBeUndefined()
   })
 
   it('accepts a class that fits any condition a combined label names', () => {
