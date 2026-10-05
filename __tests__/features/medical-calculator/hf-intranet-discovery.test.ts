@@ -5,7 +5,7 @@ const originalFetch = global.fetch
 beforeEach(() => { global.fetch = jest.fn() })
 afterEach(() => { global.fetch = originalFetch })
 function reply(status: number, body: unknown, contentType = 'application/json') {
-  jest.mocked(fetch).mockResolvedValue({ status, headers: { get: () => contentType }, text: async () => JSON.stringify(body) } as Response)
+  jest.mocked(fetch).mockResolvedValue({ status, headers: { get: () => contentType }, text: async () => JSON.stringify(body) } as unknown as Response)
 }
 it('discovers access using the authorized model catalogue without patient data or credentials', async () => {
   reply(200, catalogue)
