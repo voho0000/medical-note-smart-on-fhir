@@ -215,3 +215,10 @@ test('account switch during a save never confirms the old account response', asy
   })
   await expect(saveCdssSnapshot({ ...input, ownerUid: 'owner-a' })).rejects.toThrow('cdss_site_changed')
 })
+
+
+test('de-identified source patients never transmit a CDSS save', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, deidentified: true } }))
+    .rejects.toThrow('cdss_patient_deidentified')
+  expect(fetch).not.toHaveBeenCalled()
+})
