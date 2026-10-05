@@ -1,3 +1,4 @@
+import * as hospitalProfile from '@/features/clinical-decision-support/utils/hospital-medication-profile'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
 import {
@@ -12,6 +13,11 @@ import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
 import { useCdssLayoutStore } from '@/features/clinical-decision-support/stores/layout-preference.store'
 import { afAnswersStorageKey, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
+
+jest.mock('@/features/clinical-decision-support/utils/hospital-medication-profile', () => {
+  const actual = jest.requireActual<typeof import('@/features/clinical-decision-support/utils/hospital-medication-profile')>('@/features/clinical-decision-support/utils/hospital-medication-profile')
+  return { ...actual, createHospitalAwareCdssPatientProfile: jest.fn(actual.createHospitalAwareCdssPatientProfile) }
+})
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
   useNhiLipidAiAssist: () => ({
@@ -92,6 +98,7 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
 }))
 
 describe('Live personalized-guidance pathway list', () => {
+  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks() })
   beforeEach(() => {
     window.localStorage.clear()
     useBetaFeaturesStore.setState({ enabledByUser: {} })
@@ -314,6 +321,29 @@ describe('Live personalized-guidance pathway list', () => {
     } finally {
       view.unmount()
       jest.useRealTimers()
+    }
+  })
+
+  it('uses a fresh evaluation instant for same-day chart refreshes and patient switches', () => {
+    jest.useFakeTimers()
+    const build = jest.mocked(hospitalProfile.createHospitalAwareCdssPatientProfile)
+    build.mockClear()
+    const time = () => build.mock.calls[build.mock.calls.length - 1]?.[0].now?.toISOString()
+    jest.setSystemTime(new Date(2026, 9, 6, 8, 0))
+    const view = render(<LiveClinicalDecisionSupportFeature />)
+    try {
+      expect(time()).toBe(new Date(2026, 9, 6, 8, 0).toISOString())
+      act(() => { jest.setSystemTime(new Date(2026, 9, 6, 15, 0)) })
+      const chart = mockUseClinicalData.mock.results[mockUseClinicalData.mock.results.length - 1].value
+      mockUseClinicalData.mockReturnValue({ ...chart, observations: [...chart.observations] })
+      view.rerender(<LiveClinicalDecisionSupportFeature />)
+      expect(time()).toBe(new Date(2026, 9, 6, 15, 0).toISOString())
+      act(() => { jest.setSystemTime(new Date(2026, 9, 6, 16, 0)) })
+      mockUsePatient.mockReturnValue({ patient: { id: 'next-patient', resourceType: 'Patient', age: 72 }, loading: false, error: null })
+      view.rerender(<LiveClinicalDecisionSupportFeature />)
+      expect(time()).toBe(new Date(2026, 9, 6, 16, 0).toISOString())
+    } finally {
+      view.unmount()
     }
   })
 
