@@ -423,6 +423,18 @@ export default function MedicalSummaryFeature() {
     },
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],
   )
+  // 待核對 beside an alert that calls a medicine anticholinergic against its
+  // listed mechanism, naming the medicine by its ingredient.
+  const alertPropertyReview = useCallback(
+    (alert: SafetyAlert) => {
+      const drugs = [...new Set((alert.propertyReviewKeys ?? []).map((key) => {
+        const source = resolveSafetySource(key)
+        return source?.medicationClass?.split(" · ")[0] || source?.display || key
+      }))]
+      return drugs.length ? ms.safetyPropertyReview.replace("{drugs}", drugs.join("、")) : undefined
+    },
+    [resolveSafetySource, ms.safetyPropertyReview],
+  )
   // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
   // as the records they name, in the sentence's own language.
   const resolveSafetyMentions = useCallback(
@@ -999,6 +1011,7 @@ export default function MedicalSummaryFeature() {
               resolveMentions={resolveSafetyMentions}
               staleEvidenceDate={alertStaleEvidenceDate}
               staleEvidenceLabel={ms.safetyStaleEvidence}
+              propertyReviewLabel={alertPropertyReview}
             />
           )}
 

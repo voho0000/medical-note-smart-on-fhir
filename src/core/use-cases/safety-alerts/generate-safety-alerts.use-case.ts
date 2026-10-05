@@ -93,11 +93,13 @@ const TEMPORAL_RULE =
 
 // Appended to both prompts. Flash-Lite labelled tamsulosin (α-blocker) and
 // mosapride (prokinetic) "anticholinergic" while missing the true ones
-// (imipramine, tolterodine) — a clinician reader loses trust instantly.
+// (imipramine, tolterodine), and VGHBrain the β3 agonist mirabegron — a
+// clinician reader loses trust instantly. Examples only moved the error; the
+// SOURCE LIST line now carries each medicine's mechanism and burden.
 const DRUG_PROPERTY_RULE =
   ' Drug-property accuracy: when you attribute a pharmacological property to specific drugs (anticholinergic, nephrotoxic, antithrombotic, QT-prolonging…), ' +
-  'name ONLY drugs that truly have that property — e.g. an α-blocker (tamsulosin/Harnalidge) and a prokinetic (mosapride) are NOT anticholinergic, ' +
-  'while a tricyclic (imipramine) and an antimuscarinic (tolterodine) ARE. If you are not sure a drug has the property, omit that drug rather than guess.'
+  'name ONLY drugs that truly have that property. Each medicine\'s SOURCE LIST line gives its mechanism and, when it has one, "anticholinergic" with its ACB score: ' +
+  'describe a drug by that mechanism, never by its ATC group, and call it anticholinergic only when its line says so. If you are not sure a drug has a property, omit that drug rather than guess.'
 
 const DUPLICATE_RULE =
   ' Duplicate-medication rule (health-record context) — apply it strictly: these are cross-facility insurance records, so ONE prescription can appear multiple times. ' +
@@ -185,7 +187,10 @@ const BATCH_SAFETY_CORE_RULES =
   'Say a medicine may have contributed to an event only when it was dispensed BEFORE that event. ' +
   'A passed supply end does not show the medicine was stopped: give the last dispensing and supply end, never "discontinued". ' +
   'A passed supply is not an alert of its own unless lapsing an essential long-term medicine (an anticoagulant, insulin, an antiepileptic, a transplant or cancer medicine) could cause harm. ' +
-  'Name only medicines known to have a stated drug property; tamsulosin and mosapride are not anticholinergic, while imipramine and tolterodine are. Omit an uncertain attribution. ' +
+  // A run called the β3 agonist mirabegron anticholinergic because it shares
+  // an ATC group with antimuscarinics (2026-10-05); the line now says what
+  // each medicine is.
+  'Describe a medicine by the mechanism on its SOURCE LIST line, never by its ATC group; call it anticholinergic only when its line says "anticholinergic". ' +
   'Duplicate therapy requires the same or same-class additive medicine prescribed by TWO DIFFERENT non-pharmacy facilities with overlapping supply. A prescribing facility plus its dispensing pharmacy, or same-facility refills, is one therapy and must not be flagged. Cite the overlapping MedicationRequest keys and name both prescribers with dates. If the overlap creates acute bleeding or another harm, use that harm category instead of duplicate. ' +
   'A document supports a diagnosis it records, but claim a procedure (endoscopy, biopsy, imaging) only when its text records it. ' +
   'Keep each field self-contained (never "above", "below", "as follows"). Order alerts by severity.'
@@ -249,6 +254,44 @@ export function findUnsupportedDocumentProcedureSources(
     if (!source || !['DocumentReference', 'Composition'].includes(source.resourceType)) return false
     const documentText = source.getContentText?.() ?? ''
     return assertedProcedures.some((procedure) => !procedure.evidence.test(documentText))
+  })
+}
+
+const ANTICHOLINERGIC_CLAIM = /anti-?cholinergic|anti-?muscarinic|抗膽鹼|抗毒蕈鹼/i
+// "switch to mirabegron, which is not anticholinergic" names a medicine
+// beside the word without calling it anticholinergic.
+const NOT_A_CLAIM = /\b(not|non|without|lacks?|no|instead|alternatives?|switch(ing)?|replac(e|ing)|rather than|avoid)\b|非|不具|沒有|無|避免|改用|替代|取代/i
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** How an alert can name a medicine: its ingredient and the product's first
+ *  word, usually the brand ("Betmiga Prolonged-release Tablets 50mg"). */
+function medicineNames(source: SummarySourceCatalogEntry): string[] {
+  const ingredient = source.medicationClass?.split(' · ')[0]?.trim()
+  const brand = /^[A-Za-z][A-Za-z-]{2,}/.exec(source.display.trim())?.[0]
+  return [ingredient, brand].filter((name): name is string => !!name && name.length >= 3)
+}
+
+/**
+ * The cited medicines an alert calls anticholinergic although their SOURCE
+ * LIST line says otherwise — a run called the β3 agonist mirabegron
+ * anticholinergic (2026-10-05). Judged sentence by sentence in the title and
+ * detail, and only for a medicine the sentence names whose every ingredient
+ * the mechanism sources know. Shown as 待核對 beside the alert, never removed.
+ */
+export function findUnlistedAnticholinergicClaims(
+  alert: { title: string; detail: string; sources?: string[] },
+  catalog?: SummarySourceCatalogEntry[],
+): string[] {
+  if (!catalog?.length) return []
+  const claims = [alert.title, ...alert.detail.split(/(?<=[.。;；!?！？])\s*/)]
+    .filter((sentence) => ANTICHOLINERGIC_CLAIM.test(sentence) && !NOT_A_CLAIM.test(sentence))
+  if (claims.length === 0) return []
+  const byKey = new Map(catalog.map((source) => [source.key, source]))
+  return (alert.sources ?? []).filter((key) => {
+    const source = byKey.get(key)
+    if (!source?.resourceType.startsWith('Medication') || !source.medicine?.complete || source.medicine.anticholinergic) return false
+    const named = medicineNames(source).map((name) => new RegExp(`(^|[^a-z])${escapeRegExp(name)}([^a-z]|$)`, 'i'))
+    return claims.some((sentence) => named.some((name) => name.test(sentence)))
   })
 }
 
@@ -338,6 +381,7 @@ export class GenerateSafetyAlertsUseCase {
         id: `sa-${i}`,
         category: normaliseCategory(a.category),
         unsupportedSourceKeys: findUnsupportedDocumentProcedureSources(a, catalog),
+        propertyReviewKeys: findUnlistedAnticholinergicClaims(a, catalog),
       })),
     }
     return enforceSeverityFloor(filterDuplicateFalsePositives(result, catalog))

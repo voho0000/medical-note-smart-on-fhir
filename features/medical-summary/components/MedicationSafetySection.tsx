@@ -6,7 +6,7 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, Flag } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
 import { keyMentionsText, type KeyMentionSegment } from "@/src/core/utils/key-mentions.utils"
@@ -34,6 +34,9 @@ interface MedicationSafetySectionProps {
   staleEvidenceDate?: (alert: SafetyAlert) => string | undefined
   /** "依據資料已逾 1 年（{date}）" */
   staleEvidenceLabel?: string
+  /** "待核對：mirabegron 未列為抗膽鹼藥" for an alert that calls a medicine
+   *  anticholinergic against its listed mechanism; labels, never hides. */
+  propertyReviewLabel?: (alert: SafetyAlert) => string | undefined
 }
 
 export function MedicationSafetySection({
@@ -46,6 +49,7 @@ export function MedicationSafetySection({
   resolveMentions,
   staleEvidenceDate,
   staleEvidenceLabel,
+  propertyReviewLabel,
 }: MedicationSafetySectionProps) {
   const [showAll, setShowAll] = useState(false)
   if (alerts.length === 0) return null
@@ -85,6 +89,7 @@ export function MedicationSafetySection({
       <ol className="space-y-1.5" data-safety-alerts>
         {visible.map((alert) => {
           const staleDate = staleEvidenceLabel ? staleEvidenceDate?.(alert) : undefined
+          const review = propertyReviewLabel?.(alert)
           return (
             <li key={alert.id} className="border-b border-border pb-1.5 last:border-b-0 last:pb-0">
               <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
@@ -94,6 +99,15 @@ export function MedicationSafetySection({
                 {staleDate ? (
                   <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
                     {staleEvidenceLabel!.replace("{date}", staleDate)}
+                  </span>
+                ) : null}
+                {review ? (
+                  <span
+                    className="ml-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 align-baseline text-[0.625rem] font-normal leading-4 text-amber-700 dark:text-amber-300"
+                    data-property-review
+                  >
+                    <Flag className="h-2.5 w-2.5 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
+                    {review}
                   </span>
                 ) : null}
               </p>

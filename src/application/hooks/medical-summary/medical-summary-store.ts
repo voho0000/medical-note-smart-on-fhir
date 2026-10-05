@@ -17,7 +17,9 @@ export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 // older entries intentionally regenerate.
 // v18: problem rows carry medicationReviewKeys (a medicine whose class does
 // not treat the row, tagged 待核對), written at finalize; a v17 entry lacks it.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary34', scanKey)
+// medsummary35: SOURCE LIST lines carry each medicine's mechanism and
+// anticholinergic burden, and alerts carry propertyReviewKeys.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary35', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

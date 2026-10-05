@@ -90,6 +90,7 @@ import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
 import { medicationFitsProblem } from '@/src/core/utils/problem-medication-fit.utils'
+import { anticholinergicLineLabel, medicineProfile, showsAnticholinergic } from '@/src/core/utils/medicine-profile.utils'
 import {
   qualifyingSharedReportKeys,
   reportSource,
@@ -311,18 +312,29 @@ function sourceOwnedContentText(value: unknown): string {
   return leaves.join('\n␞\n')
 }
 
-/** "donepezil · N06D ANTI-DEMENTIA DRUGS": the drug master's ingredient (or
- *  the ATC substance) and its four-character ATC subgroup, which says what
- *  the medicine treats. Absent when the record resolves to no terminology. */
-function catalogMedicationClass(m: MedicationEntity): string | undefined {
+/** "oxybutynin · G04B UROLOGICALS · Cholinergic Muscarinic Antagonist ·
+ *  anticholinergic ACB 3": the drug master's ingredient (or the ATC
+ *  substance), its four-character ATC subgroup (what the medicine treats), its
+ *  mechanism, and its anticholinergic burden when it has one. The mechanism is
+ *  what the medicine IS — an ATC subgroup can hold several (G04B holds
+ *  oxybutynin and the β3 agonist mirabegron). Absent when the record resolves
+ *  to no terminology. */
+function catalogMedication(m: MedicationEntity): Pick<SummarySourceCatalogEntry, 'medicationClass' | 'medicine'> {
   const t = m.drugTerminology
   const a = m.atcClassification
   const substance = (t?.atcNameEn ?? a?.atcNameEn ?? t?.ingredientText ?? '').trim().toLowerCase()
   const groupCode = t?.atcLevel3Code ?? a?.atcLevel3Code ?? t?.atcLevel2Code ?? a?.atcLevel2Code
   const groupName = t?.atcLevel3NameEn ?? a?.atcLevel3NameEn ?? t?.atcLevel2NameEn ?? a?.atcLevel2NameEn
   const group = groupCode ? [groupCode, groupName].filter(Boolean).join(' ') : ''
-  const label = [substance, group].filter(Boolean).join(' · ')
-  return label || undefined
+  const medicine = medicineProfile({ atcCode: t?.atcCode ?? a?.atcCode, ingredientText: t?.ingredientText })
+  const anticholinergic = medicine.anticholinergic && showsAnticholinergic(medicine.anticholinergic)
+    ? anticholinergicLineLabel(medicine.anticholinergic)
+    : ''
+  const label = [substance, group, medicine.mechanism ?? '', anticholinergic].filter(Boolean).join(' · ')
+  return {
+    ...(label ? { medicationClass: label } : {}),
+    ...(medicine.mechanism ? { medicine } : {}),
+  }
 }
 
 const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = []): string => {
@@ -418,7 +430,6 @@ export function buildSourceCatalog(
 
   selectCatalogMedications(input.medications ?? [])
     .forEach((m, i) => {
-      const medicationClass = catalogMedicationClass(m)
       entries.push({
         key: `M${i + 1}`,
         resourceType: m._sourceResourceType ?? 'MedicationRequest',
@@ -429,7 +440,7 @@ export function buildSourceCatalog(
         ) || 'Medication',
         date: day(m.authoredOn),
         organization: m.requester?.display,
-        ...(medicationClass ? { medicationClass } : {}),
+        ...catalogMedication(m),
         getContentText: () => sourceOwnedContentText(m),
       })
     })

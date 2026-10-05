@@ -62,6 +62,21 @@ describe('MedicationSafetySection', () => {
     expect(screen.getByText('Synthetic recent lab')).not.toHaveTextContent('逾 1 年')
   })
 
+  it('labels an alert that calls a medicine anticholinergic against its mechanism, and hides nothing', () => {
+    render(
+      <MedicationSafetySection
+        alerts={[alert('ac', 'medium', 'Synthetic anticholinergic burden')]}
+        title="開藥注意"
+        moreLabel="顯示其餘 {count} 項"
+        lessLabel="收合"
+        disclaimer="AI 掃描，僅供參考"
+        propertyReviewLabel={() => '待核對：mirabegron 未列為抗膽鹼藥'}
+      />,
+    )
+    expect(screen.getByText('Synthetic anticholinergic burden')).toHaveTextContent('待核對：mirabegron 未列為抗膽鹼藥')
+    expect(screen.getByText('Synthetic anticholinergic burden detail')).toBeInTheDocument()
+  })
+
   it('writes keys in the prose as the records they name, and lets those open them', () => {
     const sources: Record<string, KeyMentionSource> = {
       M8: { key: 'M8', resourceType: 'MedicationRequest', display: 'SYN-NAPRO 250MG', medicationClass: 'naproxen · M01A ANTIINFLAMMATORY' },

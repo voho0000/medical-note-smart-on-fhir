@@ -55,6 +55,9 @@ export interface SafetyAlert extends SafetyAlertInput {
   /** Existing D# resources whose document text does not support a procedure
    *  asserted by this alert. The UI keeps them visible but marks them amber. */
   unsupportedSourceKeys?: string[]
+  /** Cited medicines the alert calls anticholinergic although their listed
+   *  mechanism and burden say otherwise. Shown as 待核對, never removed. */
+  propertyReviewKeys?: string[]
 }
 
 export interface SafetyScanResult {

@@ -354,11 +354,16 @@ export interface SummarySourceCatalogEntry {
   getContentText?: () => string
   /** Only set for Encounter entries whose class is recognisable. */
   encounterClass?: EncounterClass
-  /** Medication entries only: the ingredient and the ATC pharmacological
-   *  subgroup from the drug master ("donepezil · N06D ANTI-DEMENTIA DRUGS"),
-   *  printed beside the key so a medicine is chosen by what it is, not by the
-   *  dispensing batch it sits in. */
+  /** Medication entries only: the ingredient, the ATC pharmacological
+   *  subgroup, the mechanism and any anticholinergic burden ("oxybutynin ·
+   *  G04B UROLOGICALS · Cholinergic Muscarinic Antagonist · anticholinergic
+   *  ACB 3"), printed beside the key so a medicine is chosen and described by
+   *  what it is, not by the dispensing batch it sits in. */
   medicationClass?: string
+  /** Medication entries only, when a listed source knows the medicine: its
+   *  mechanism, whether every ingredient is known, and its anticholinergic
+   *  burden ("ACB 3", "antimuscarinic", "ACB 3 (chlorpheniramine)"). */
+  medicine?: { mechanism?: string; complete: boolean; anticholinergic?: string }
 }
 
 /** A cited source resolved against the catalog. `verified: false` means the
