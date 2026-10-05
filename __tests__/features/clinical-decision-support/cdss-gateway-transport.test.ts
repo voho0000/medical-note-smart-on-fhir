@@ -37,7 +37,7 @@ beforeEach(() => {
     return { status: 201, json: async () => ({ status: 'stored', save_id: body.save_id }) } as Response
   })
   delete process.env.NEXT_PUBLIC_CDSS_API_ORIGIN
-  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet-pilot'
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet'
   process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN = 'https://collector.must-not-receive-clinical.invalid'
   window.history.replaceState({}, '', '/app/?site=vghtpe')
 })

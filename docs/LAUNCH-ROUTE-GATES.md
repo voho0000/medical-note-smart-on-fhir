@@ -1,5 +1,7 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-10-05 owner decision: FHIR CDSS admission uses `intranet` for the hospital pilot. On site=vghtpe, existing save/history controls can send requests without Firebase sign-in; the independent API checks the hospital source subnet. This adds no login popup and does not change the existing CDSS tab, Beta, audience or hospital-launch visibility rules. Firebase/OAuth remain optional admission modes. Deployment target: `https://fhir.mediprisma.tw`.
+
 Every place the app behaves differently because of *how it was opened* is
 listed here. A gate is one of two kinds, and the kind decides how strict the
 review is:
