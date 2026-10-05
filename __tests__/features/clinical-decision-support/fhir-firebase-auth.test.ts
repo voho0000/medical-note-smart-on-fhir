@@ -14,8 +14,9 @@ beforeEach(() => {
 })
 afterEach(() => { delete process.env.NEXT_PUBLIC_CDSS_ADMISSION })
 
-test.each([null, { isAnonymous: true, getIdToken: mockGetIdToken }])('intranet admission does not require Firebase or an OAuth popup', async user => {
-  process.env.NEXT_PUBLIC_CDSS_ADMISSION = 'intranet'
+test.each(['intranet', 'intranet-pilot'].flatMap(admission =>
+  [null, { isAnonymous: true, getIdToken: mockGetIdToken }].map(user => ({ admission, user }))))('$admission admission does not require Firebase or an OAuth popup', async ({ admission, user }) => {
+  process.env.NEXT_PUBLIC_CDSS_ADMISSION = admission
   mockAuth.currentUser = user
   const popup = jest.spyOn(window, 'open').mockImplementation(() => null)
   try {
