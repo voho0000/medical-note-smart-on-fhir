@@ -10,6 +10,7 @@ import {
   type OutpatientPrefs,
 } from '@/src/application/stores/outpatient-prefs.store'
 import { doc, onSnapshot, runTransaction } from 'firebase/firestore'
+import { BUILTIN_MED_COPY_FORMATS } from '@/features/clinical-summary/medications/utils/medication-copy-text'
 
 jest.mock('@/src/shared/config/firebase.config', () => ({ db: {} }))
 jest.mock('firebase/firestore', () => ({
@@ -462,5 +463,41 @@ describe('mergeOutpatientPrefs (three-way)', () => {
     const theirs = prefs({ ...base, formats: [format('f1'), format('f2', 'edited')] })
     expect(names(mergeOutpatientPrefs(base, mine, theirs, true))).toEqual(['f1:f1', 'f2:edited'])
     expect(names(mergeOutpatientPrefs(base, theirs, mine, true))).toEqual(['f1:f1', 'f2:edited'])
+  })
+})
+
+describe('mergeOutpatientPrefs — 用藥複製格式', () => {
+  const medFormat = (numbering: 'dot' | 'dash') => ({
+    ...BUILTIN_MED_COPY_FORMATS['builtin:standard'],
+    id: 'mine',
+    numbering,
+  })
+
+  it('is one choice: the side that changed it wins, apart from the lab formats', () => {
+    const base = prefs({ medFormat: medFormat('dot') })
+    const mine = prefs({ ...base, formats: [format('f-mine')] })
+    const theirs = prefs({ ...base, medFormat: medFormat('dash') })
+    const merged = mergeOutpatientPrefs(base, mine, theirs, true)
+    expect(merged.medFormat?.numbering).toBe('dash')
+    expect(merged.formats.map((f) => f.id)).toEqual(['f-mine'])
+  })
+
+  it('when both changed it, the newer side wins', () => {
+    const base = prefs({ medFormat: null })
+    const mine = prefs({ medFormat: medFormat('dot') })
+    const theirs = prefs({ medFormat: medFormat('dash') })
+    expect(mergeOutpatientPrefs(base, mine, theirs, true).medFormat?.numbering).toBe('dot')
+    expect(mergeOutpatientPrefs(base, mine, theirs, false).medFormat?.numbering).toBe('dash')
+  })
+
+  it('sends the med format to the account field', async () => {
+    stop = syncOutpatientPrefsForAccount('a')
+    emit(snapshot(remoteField({}, 100)))
+    await settle()
+    jest.setSystemTime(20_000)
+    store.getState().update('a', { medFormat: medFormat('dash') })
+    await settle()
+    const saved = account as OutpatientPrefs & { updatedAt: number }
+    expect(saved.medFormat?.numbering).toBe('dash')
   })
 })

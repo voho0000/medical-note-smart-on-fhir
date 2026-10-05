@@ -7,6 +7,7 @@ import { Fragment, useMemo, useState, type ReactElement, type Ref } from 'react'
 import { Pill } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
 import { formatDate } from '@/src/shared/utils/date.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
@@ -21,6 +22,8 @@ import type { OverviewMedItem, OverviewMedsData } from '../hooks/useOverviewData
 import type { OverviewSectionFit } from '../overview.types'
 import { OVERVIEW_SECTION_DOM_ID } from '../overview.types'
 import { OverviewSectionCard } from './OverviewSectionCard'
+import { toMedCopySourceItems } from '../utils/overview-med-copy'
+import { MedCopyButtons, MedCopyDialogs, useMedCopyActions } from '@/features/clinical-summary/medications/components/MedCopyActions'
 import {
   OverviewEmptyRow,
   OverviewExpandButton,
@@ -155,7 +158,12 @@ export function OverviewMedsSection({
   headingRef?: Ref<HTMLDivElement>
 }) {
   const { t, locale } = useLanguage()
+  const { audience } = useAudience()
   const strings = t.overview
+  // 複製現在用藥 is a clinician's paste into their own chart — medical only.
+  const canCopy = audience === 'medical'
+  const copySources = useMemo(() => toMedCopySourceItems(data.items), [data.items])
+  const copyState = useMedCopyActions(copySources, 'overview_meds')
   // 使用中 by default: the card answers "what is this patient on", and 全部
   // stays one click away for the times that is not the question.
   const [filter, setFilter] = useState<MedFilter>('current')
@@ -361,17 +369,35 @@ export function OverviewMedsSection({
         </>
       )}
     >
+      {canCopy && <MedCopyDialogs state={copyState} />}
       {shown.length === 0 ? (
-        <OverviewEmptyRow hasWindowData={data.items.length > 0} />
+        <>
+          <OverviewEmptyRow hasWindowData={data.items.length > 0} />
+          {canCopy && (
+            <div className="flex justify-end">
+              <MedCopyButtons state={copyState} />
+            </div>
+          )}
+        </>
       ) : (
         <>
           <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
             {renderRows(shown)}
           </div>
-          {/* Always offered: the default list is deliberately only what the
-              patient is on now, so an empty 「另 N 項」 does not mean the chart
-              holds nothing else. */}
-          <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+          {/* 複製｜編輯 sit on the footer line, beside the route to the 用藥
+              tab — the same place as the 檢驗 card's 自訂 actions — so the
+              header never grows a second line however narrow the card. */}
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            {/* Always offered: the default list is deliberately only what the
+                patient is on now, so an empty 「另 N 項」 does not mean the
+                chart holds nothing else. */}
+            {/* Wrapped: the note's own mt-auto would otherwise pin it to the
+                bottom of this row instead of centring it beside the buttons. */}
+            <div className="min-w-0">
+              <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+            </div>
+            {canCopy && <MedCopyButtons state={copyState} />}
+          </div>
           <OverviewFullListDialog
             open={listOpen}
             onOpenChange={setListOpen}

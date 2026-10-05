@@ -2,14 +2,19 @@ import { toast } from 'sonner'
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { CdssStorageActions } from '@/features/clinical-decision-support/renderers/CdssStorageActions'
+import { listCdssHistory, readCdssHistory } from '@/features/clinical-decision-support/telemetry/cdss-history'
 import { cancelCdssGatewayRequests, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 
 jest.mock('@/features/clinical-decision-support/telemetry/cdss-gateway', () => ({
   cdssGatewayStatus: () => ({ enabled: true }),
   cancelCdssGatewayRequests: jest.fn(),
   saveCdssSnapshot: jest.fn(),
+}))
+
+jest.mock('@/features/clinical-decision-support/telemetry/cdss-history', () => ({
+  listCdssHistory: jest.fn(), readCdssHistory: jest.fn(),
 }))
 
 const input: Parameters<typeof CdssStorageActions>[0]['input'] = {
@@ -95,4 +100,78 @@ test('an established account can save while unrelated profile synchronization is
   expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
   expect(screen.getByTestId('cdss-history-records')).toBeEnabled()
   view.unmount(); mockAccount.loading = false
+})
+
+
+test.each([
+  [false, false], [false, true], [true, false], [true, true],
+])('identity failures explain how to correct patient data (English=%s, full-window=%s)', async (english, fullWindow) => {
+  jest.clearAllMocks()
+  mockAccount.user = { uid: 'owner-a' }
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error('cdss_identity_unavailable'))
+  const target = document.createElement('div')
+  document.body.append(target)
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} saveTarget={fullWindow ? target : null} />)
+  try {
+    fireEvent.click(screen.getByTestId('cdss-save-record'))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      english ? 'Patient identification failed. CDSS record was not saved.' : '病人識別失敗，CDSS 紀錄未儲存。',
+      { description: expect.stringContaining(english ? 'partially masked national ID' : '部分遮蔽的身分證字號'), duration: 10000 },
+    ))
+    const description = jest.mocked(toast.error).mock.calls[0][1]?.description
+    expect(description).toEqual(expect.stringContaining(english ? 'full name without masking characters' : '完整姓名'))
+    expect(description).toEqual(expect.stringContaining(english ? 'valid date of birth' : '有效出生日期'))
+    expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
+    expect(toast.success).not.toHaveBeenCalled()
+  } finally { view.unmount(); target.remove() }
+})
+
+test.each([false, true])('other save failures retain the general error and do not expose raw error text (English=%s)', async english => {
+  jest.clearAllMocks()
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error('private server error'))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+    english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。',
+  ))
+  expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
+  view.unmount()
+})
+
+test.each([
+  [false, false], [false, true], [true, false], [true, true],
+])('history list/detail identity failures show recovery guidance (English=%s, detail=%s)', async (english, detail) => {
+  const record = { saveId: '11111111-1111-4111-8111-111111111111', documentId: '1', patientId: '2', receivedAt: '2026-10-03T00:00:00Z', packId: 'synthetic', versionId: '1' }
+  jest.mocked(listCdssHistory).mockReset()
+  jest.mocked(readCdssHistory).mockReset()
+  if (detail) {
+    jest.mocked(listCdssHistory).mockResolvedValueOnce({ records: [record], hasMore: false })
+    jest.mocked(readCdssHistory).mockRejectedValueOnce(new Error('cdss_identity_unavailable'))
+  } else {
+    jest.mocked(listCdssHistory).mockRejectedValueOnce(new Error('cdss_identity_unavailable'))
+  }
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  if (detail) fireEvent.click(await screen.findByRole('button', { name: /synthetic/ }))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(english ? 'Patient identification failed. CDSS history cannot be retrieved.' : '病人識別失敗，無法取得 CDSS 歷史紀錄。')
+  expect(alert).toHaveTextContent(english ? 'partially masked national ID' : '部分遮蔽的身分證字號')
+  expect(alert).not.toHaveTextContent('cdss_identity_unavailable')
+  view.unmount()
+})
+
+
+test.each([false, true])('history retry clears the failure and retains general errors for other causes (English=%s)', async english => {
+  jest.mocked(listCdssHistory).mockReset()
+  jest.mocked(listCdssHistory).mockRejectedValueOnce(new Error('private server error'))
+    .mockResolvedValueOnce({ records: [], hasMore: false })
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(english ? 'Records unavailable. Please try again.' : '目前無法取得紀錄，請稍後重試。')
+  expect(alert).not.toHaveTextContent('private server error')
+  fireEvent.click(screen.getByRole('button', { name: english ? 'Retry' : '重試' }))
+  await screen.findByText(english ? 'No saved records.' : '尚無儲存紀錄。')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  view.unmount()
 })

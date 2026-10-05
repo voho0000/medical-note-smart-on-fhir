@@ -11,7 +11,6 @@ import type { Autofill } from '../hooks/use-lab-autofill.hook'
 import { useCalcFavorites } from '../hooks/use-calc-favorites.hook'
 import { HF_PROGNOSIS_MODELS, type PrognosisEvidence, type HfPrognosisModelId } from './models'
 import { PrognosisModelDetail } from './PrognosisModelDetail'
-import { HfMedcloudDryRun } from './HfMedcloudDryRun'
 
 /** The LVEF the evidence carries, as a number, where it reads as one. */
 function lvefOf(evidence: PrognosisEvidence): number | undefined {
@@ -98,7 +97,6 @@ export function HfPrognosisModels({ locale, evidence = {}, autofill }: {
         </li>
       })}
     </ul>
-    <HfMedcloudDryRun locale={locale} />
     <Dialog open={!!model} onOpenChange={open => { if (!open) setSelected(null) }}>
       {model ? <DialogContent className="@container max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>

@@ -147,7 +147,7 @@ export interface UsageEventParams {
     agent_mode: boolean
   }
   /** EMR hand-off copy button. Never carries the copied text. */
-  handoff_copy: { mode: 'all' | 'labs' | 'reports' | 'custom' }
+  handoff_copy: { mode: 'all' | 'labs' | 'reports' | 'custom' | 'overview_meds' | 'meds_tab' }
   /** A guided tour was started (auto-offer and help menu are not yet split). */
   tour_start: { tour: AnalyticsTour }
   /** A guided tour closed. `step` is the step id it closed on. `tour_outcome`
