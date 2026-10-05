@@ -38,6 +38,10 @@ const nextConfig: NextConfig = {
   ...(process.env.NODE_ENV === 'development'
     ? { allowedDevOrigins: ['127.0.0.1', '192.168.1.112'] }
     : {}),
+  // Explicit synthetic-only loopback relay for the isolated HF calculator preview.
+  ...(process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY === 'synthetic'
+    ? { async rewrites() { return ['dry-run', 'predict'].map(operation => ({ source: '/__hf-local-preview/hf/v1/' + operation, destination: 'http://127.0.0.1:3004/hf/v1/' + operation })); } }
+    : {}),
   // Static export is only required for the GitHub Pages deploy. In dev mode
   // (and on Vercel) we want the full Next.js server so dynamic API routes
   // like /api/feedback work. Without this gate, `output: "export"` forces
