@@ -320,6 +320,8 @@ export const en = {
     safetyPropertyReview: 'To verify: {drugs} not listed as anticholinergic',
     safetyAnticholinergicNoneSupplied: 'To verify: no anticholinergic supplied in the last 90 days',
     safetyAnticholinergicSingle: 'To verify: one anticholinergic, no related condition named',
+    headlineReviewUnlisted: 'To verify: the headline names items not in the problem list ({items})',
+    headlineReviewMedsValues: 'To verify: the headline contains medicine names or lab values',
     intro: 'AI condenses cross-hospital visits, medications and labs into a one-page first-visit overview: one positioning line, the problems and the facilities responsible for them, and the imaging and pathology highlights.',
     generate: 'Generate summary',
     regenerate: 'Regenerate',

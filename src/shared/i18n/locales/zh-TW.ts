@@ -320,6 +320,8 @@ export const zhTW = {
     safetyPropertyReview: '待核對：{drugs} 未列為抗膽鹼藥',
     safetyAnticholinergicNoneSupplied: '待核對：近 90 天沒有抗膽鹼藥供藥',
     safetyAnticholinergicSingle: '待核對：只有 1 種抗膽鹼藥，未寫出相關病況',
+    headlineReviewUnlisted: '待核對：首段提到問題清單沒有的項目（{items}）',
+    headlineReviewMedsValues: '待核對：首段含藥名或檢驗數值',
     intro: '由 AI 將跨院就醫、用藥與檢驗彙整成一頁初診快覽：一句定位、問題清單與負責院所，以及影像與病理重點。',
     generate: '產生摘要',
     regenerate: '重新產生',

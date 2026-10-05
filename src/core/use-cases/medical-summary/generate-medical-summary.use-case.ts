@@ -1094,7 +1094,7 @@ const MEDICATION_INFERENCE_RULE =
   'acid suppressants, analgesics, antithrombotics, systemic corticosteroids, antibiotics: infer from them only when the rest of the record points to one condition, and say what does. '
 
 const PROBLEMS_SCHEMA_FIELDS =
-  '"problems": [{"label": "<condition name in the OUTPUT LANGUAGE, e.g. Type 2 diabetes mellitus / 第二型糖尿病>", "basis": "<why it is listed, in a few words in the OUTPUT LANGUAGE — evidence type and count, never values or medicines, e.g. 3 visits, I50.3 / 3 次門診 I50.3>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "basisSources": ["<keys that establish the condition: its claim encounters, Condition, D# document or report>"], "metric": "<data-first key indicator, values oldest → newest, e.g. eGFR 35 → 32 ▼>", "metricSources": ["<the L/O keys whose values the metric quotes; [] when it says the record has none>"], "managedBy": "<organization and specialty exactly as they appear in the data>", "managedByRef": "<catalog key of the latest encounter at that organization>", "medicationSources": ["<M keys of the medicines treating this problem>"], "flag": <true only when something must be verified>, "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]'
+  '"problems": [{"label": "<condition name in the OUTPUT LANGUAGE>", "basis": "<why it is listed, in a few words in the OUTPUT LANGUAGE — evidence type and count, never values or medicines: <n> visits, <code>>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "basisSources": ["<keys that establish the condition: its claim encounters, Condition, D# document or report>"], "metric": "<data-first key indicator, values oldest → newest: <test> <earlier> → <latest>>", "metricSources": ["<the L/O keys whose values the metric quotes; [] when it says the record has none>"], "managedBy": "<organization and specialty exactly as they appear in the data>", "managedByRef": "<catalog key of the latest encounter at that organization>", "medicationSources": ["<M keys of the medicines treating this problem>"], "flag": <true only when something must be verified>, "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]'
 
 const REPORT_ORGAN_ENUM = 'brain|head-neck|chest-lung|heart|breast|abdomen-liver-biliary|abdomen-other|kidney-urinary|gynecologic|prostate|musculoskeletal|vascular|hematologic-lymph|other'
 
@@ -1236,18 +1236,18 @@ const referenceDateLine = (referenceDate: string): string =>
 
 const MEDICAL_ENGLISH_LANGUAGE_CONTRACT =
   'OUTPUT LANGUAGE: ENGLISH (MANDATORY), in the concise clinical English Taiwanese physicians write in charts — ' +
-  // Fictional, judgement-free examples: earlier ones copied a test patient
-  // ("94M with CKD 3b", "HbA1c 6.6%") and modelled a control judgement the
-  // evidence contract forbids (owner, 2026-10-05).
-  'a one-liner headline such as "78F with T2DM, CKD 3a, AF, s/p TKA" and problem-list terms such as "CKD stage 3a" or "Type 2 diabetes mellitus". ' +
-  'This covers every problem field a reader sees — "label", "basis" and "metric" ("3 abnormal lab results", "HbA1c 7.4% → 6.9%"). ' +
+  // Templates, not examples: a test patient's own figures ("94M with CKD 3b")
+  // and then a fictional "CKD 3a" were both copied into other patients'
+  // headlines (owner, 2026-10-05). Nothing here can be copied as content.
+  'a one-liner headline "<age><F or M> with <this patient\'s own main problems, most important first>", and problems named as English charts name them, with the usual abbreviations (CKD, T2DM, AF, COPD). ' +
+  'This covers every problem field a reader sees — "label", "basis" ("<count> <kind of record>") and "metric" ("<test> <earlier value> → <latest value>"). ' +
   'The records are partly Chinese; translate their meaning, never copy Chinese prose. Copy organization (hospital, clinic, pharmacy) names and medicine names exactly as they appear in the records — never translate them. ' +
   'Keep any uncertainty the records themselves state in English ("suspected", "history of", "s/p"). Keep JSON keys, enum values and source keys unchanged.'
 
 const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
   overview:
     'OVERVIEW: The headline states only documented facts. Do not infer a disease from a medicine or infer control/stability from one value. ' +
-    'Keep it to ~30 words naming at most about six problems — no medicine names (not "on TAGRISSO"), no lab values (not "HbA1c 8.1%"), no ICD or other codes. ' +
+    'Keep it to ~30 words naming at most about six problems, each one a problem this patient\'s records establish — no medicine names, no lab values or units, no ICD or other codes. ' +
     'Name a coded diagnosis as the diagnosis-code rule above allows, never with "claim code only". ' +
     'medicationEducation is for patients only and must cite a real M key. Use no treatment advice. ' +
     // The overview is the section the clinician is waiting on, and it is a
@@ -1260,10 +1260,10 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
     // A held-out patient with a recorded hypertension came out as "elevated
     // BP at check-up" while the example below named blood pressure (owner,
     // 2026-10-05): the recorded diagnosis comes first.
-    'A recorded diagnosis — a visit code, a Condition, a care plan or a document — names its problem. Only without one: never turn lab values or readings into a disease or a poor-control problem; name the finding and how long it is documented (e.g. "reduced eGFR, chronicity undetermined", not CKD). ' +
+    'A recorded diagnosis — a visit code, a Condition, a care plan or a document — names its problem. Only without one: never turn lab values or readings into a disease or a poor-control problem; name the finding and how long it is documented ("<finding>, chronicity undetermined"). ' +
     'A medicine\'s intended effect is not a problem of its own: a hormone level suppressed by hormone therapy belongs to the condition being treated. ' +
     'This is the complete problem list. Merge duplicates. This list is read by a doctor about to prescribe: keep what matters for today\'s care. A long run of minor or one-off visit codes (e.g. cerumen impaction, a single otitis externa, dry eye) buries the important problems — group them into one line or leave them out, as you judge; a complex patient usually comes to about a dozen problems. Order the list by clinical weight for the doctor about to prescribe: the reason for today\'s visit first when the data shows it; then conditions that are serious or change today\'s prescribing (e.g. cancer, heart failure, CKD, the reason for an anticoagulant, diabetes, the cause of a recent admission); then other chronic conditions; minor or symptom-level problems (e.g. constipation, insomnia, a one-off acute visit) last. A problem inferred from medicines is placed by what the condition is, not by how it was found. ' +
-    'Keep "basis" to a few words saying why the problem is listed: the evidence and count (e.g. "3 visits, I50.3", "2 ED visits, S72.002A; CT", "discharge summary"). Never restate the other columns in it: no values or trends (metric shows them), no medicine names (the medicines column shows them). Name every kind of evidence behind it — visit codes first, then documents, reports and lab results by count, and "medication" when medicines support it ("2 visits, E11.9; 3 lab results; medication"). ' +
+    'Keep "basis" to a few words saying why the problem is listed: the evidence and count ("<n> visits, <this problem\'s code>", "discharge summary"). Never restate the other columns in it: no values or trends (metric shows them), no medicine names (the medicines column shows them). Name every kind of evidence behind it — visit codes first, then documents, reports and lab results by count, and "medication" when medicines support it ("<n> visits, <code>; <n> lab results; medication"). ' +
     'Each column cites its own keys: basisSources for the condition, metricSources for the values in metric (oldest → newest), medicationSources for the M keys of the medicines treating it; the app writes dates and medicine names. managedBy copies an organization exactly as written and managedByRef is that organization\'s latest encounter key. ' +
     '"metric" is a value or finding of this problem — never a medicine or "dispensed", never a test of another problem; leave it out when there is none. ' +
     // 2026-10-05 VGHBrain runs copied whole dispensing batches (M1–M7) onto

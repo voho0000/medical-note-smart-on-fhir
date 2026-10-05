@@ -59,6 +59,7 @@ import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
 import { staleEvidenceDate } from "@/src/core/utils/stale-evidence.utils"
 import { keyMentionLanguage, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
 import { currentAnticholinergicMedicines, reviewAnticholinergicAlert } from "@/src/core/utils/anticholinergic-burden.utils"
+import { reviewHeadline } from "@/src/core/utils/headline-review.utils"
 import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
 import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
 import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
@@ -453,6 +454,23 @@ export default function MedicalSummaryFeature() {
     },
     [resolveSafetySource, currentAnticholinergicCount, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle],
   )
+  // 待核對 under a clinician headline that does not match the problem list —
+  // problems the list does not hold, medicines, lab values. Judged only once
+  // both requests have answered; labels, never rewrites.
+  const headline = result?.headline
+  const problemList = result?.problems
+  const headlineReviewLabel = useMemo(() => {
+    if (isPatient || !headline || !problemList?.length) return undefined
+    const medicineNames = (safetySourceCatalog ?? [])
+      .filter((entry) => entry.resourceType.startsWith("Medication"))
+      .flatMap((entry) => [entry.medicationClass?.split(" · ")[0] ?? "", /^[A-Za-z][A-Za-z-]+/.exec(entry.display.trim())?.[0] ?? ""])
+    const review = reviewHeadline(headline, problemList.map((problem) => problem.label), medicineNames)
+    if (!review) return undefined
+    return [
+      review.unlisted.length ? ms.headlineReviewUnlisted.replace("{items}", review.unlisted.join("、")) : undefined,
+      review.medicines.length || review.values.length ? ms.headlineReviewMedsValues : undefined,
+    ].filter(Boolean).join("；")
+  }, [isPatient, headline, problemList, safetySourceCatalog, ms.headlineReviewUnlisted, ms.headlineReviewMedsValues])
   // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
   // as the records they name, in the sentence's own language.
   const resolveSafetyMentions = useCallback(
@@ -931,6 +949,7 @@ export default function MedicalSummaryFeature() {
                 copyLabel={t.common.copy}
                 copiedLabel={t.common.copied}
                 copyFailedLabel={t.common.copyFailed}
+                reviewLabel={headlineReviewLabel}
               />
             ) : null,
           )}

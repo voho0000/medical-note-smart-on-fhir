@@ -2,7 +2,7 @@
 // button. Safety alerts live in 開藥注意 after 影像與病理重點.
 "use client"
 
-import { Check, ClipboardList, Copy } from "lucide-react"
+import { Check, ClipboardList, Copy, Flag } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
@@ -17,6 +17,10 @@ interface OverviewHeroCardProps {
   copyLabel: string
   copiedLabel: string
   copyFailedLabel: string
+  /** 待核對 beside a headline that does not match the problem list (items it
+   *  names that the list does not, medicines, lab values); labels, never
+   *  rewrites. */
+  reviewLabel?: string
 }
 
 export function OverviewHeroCard({
@@ -26,6 +30,7 @@ export function OverviewHeroCard({
   copyLabel,
   copiedLabel,
   copyFailedLabel,
+  reviewLabel,
 }: OverviewHeroCardProps) {
   const { copied, copy } = useCopyToClipboard()
 
@@ -78,6 +83,15 @@ export function OverviewHeroCard({
         <p className="mt-1.5 text-[0.875rem] font-semibold leading-snug text-foreground @min-[48rem]:text-[0.9375rem]">
           {result.headline}
         </p>
+        {reviewLabel ? (
+          <p
+            className="mt-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300"
+            data-headline-review
+          >
+            <Flag className="h-2.5 w-2.5 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
+            {reviewLabel}
+          </p>
+        ) : null}
       </div>
 
     </section>
