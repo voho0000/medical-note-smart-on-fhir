@@ -108,8 +108,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
           </select>
         </label>
       </div>
-      <div className="sticky top-0 z-10 space-y-1 border-y border-border bg-background py-2" data-testid="hf-model-actions">
       <p className="text-xs text-muted-foreground">{en ? 'Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded.' : '執行檢查會將整理後的生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。'}</p>
+      <div className="sticky top-0 z-10 space-y-1 border-y border-border bg-background py-2" data-testid="hf-model-actions">
       <div className="grid grid-cols-2 gap-2">
       <button type="button" className={button + ' min-w-0 px-2'} disabled={busy || !configured || missingIndexDiagnosis} onClick={validate}>
         {busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Run intranet input validation' : '執行院內輸入檢查')}
@@ -119,8 +119,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </button>
       </div>
       {missingIndexDiagnosis && <p className="text-xs font-medium" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in diagnosis settings, or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在診斷設定補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
-      {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Prediction becomes available after input checks pass. Warnings remain relevant even when accepted.' : '請先完成輸入檢查；即使通過，仍需核對資料警告。'}</p>}
       </div>
+      {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Prediction becomes available after input checks pass. Warnings remain relevant even when accepted.' : '請先完成輸入檢查；即使通過，仍需核對資料警告。'}</p>}
       <details className="border-t border-border pt-2">
         <summary className="cursor-pointer py-2 text-sm font-medium">{en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'}{current.input.physicianDiagnosis ? (en ? ' · Confirmed' : ' · 已確認') : ''}</summary>
         <div className="space-y-2 pb-2">
@@ -135,12 +135,14 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
               <span>{en ? 'HF diagnosed during the most recent admission' : '最近一次住院有心衰診斷'}</span>
             </label>
           </fieldset>
-          {draft?.quickChoice && <p className="text-xs text-muted-foreground">{en ? 'Selected HF dates' : '心衰診斷日期'}：{diagnosisVisits.filter(visit => draft.encounters.includes(visit.reference)).map(visit => visit.date).join('、')} · I50.9<br />{en ? 'Unranked supplemental codes will be added as secondary diagnoses; existing ranks are retained.' : '未標順位的補充碼列為附加次診斷，既有順位保留。'}</p>}
+          {!outpatientSuggestion && <p className="text-xs text-muted-foreground">{en ? 'Outpatient option unavailable: requires the index visit and one other eligible outpatient visit.' : '門診選項無法使用：需有基準門診及另一筆可用門診紀錄。'}</p>}
+          {!inpatientSuggestion && <p className="text-xs text-muted-foreground">{en ? 'Admission option unavailable: no eligible completed admission on or before the index date.' : '住院選項無法使用：基準日以前沒有可用的已結束住院紀錄。'}</p>}
+          {draft?.quickChoice && <p className="text-xs text-muted-foreground">{en ? 'Selected HF dates' : '心衰診斷日期'}：{diagnosisVisits.filter(visit => draft.encounters.includes(visit.reference)).map(visit => visit.date + (diagnosisVisits.filter(item => draft.encounters.includes(item.reference) && item.date === visit.date).length > 1 ? ` (#${diagnosisVisits.findIndex(item => item.reference === visit.reference) + 1})` : '')).join('、')} · I50.9<br />{en ? 'Unranked supplemental codes will be added as secondary diagnoses; existing ranks are retained.' : '未標順位的補充碼列為附加次診斷，既有順位保留。'}</p>}
+          {draft?.encounters.some(reference => diagnosisVisits.some(visit => visit.reference === reference && diagnosisVisits.some(other => other.reference !== reference && draft.encounters.includes(other.reference) && other.date === visit.date))) && <p className="text-xs text-muted-foreground">{en ? 'Same-day visits are separate encounters. Match the displayed visit number in advanced settings before selecting.' : '同日紀錄是不同次就診，請依進階設定的就診編號核對，勿將同日紀錄視為同一次。'}</p>}
           <details>
             <summary className="cursor-pointer py-2 text-xs text-muted-foreground">{en ? 'Advanced settings: dates and diagnosis ranks' : '進階設定：日期與診斷順位'}</summary>
             <div className="space-y-2">
           <p className="text-xs text-muted-foreground">{en ? 'Only existing visits at the selected hospital are used. If the HF dates differ, use advanced settings. The source record is unchanged.' : '僅使用所選院所的既有就診；心衰診斷若不是這些日期，請用進階設定。原始病歷不變。'}</p>
-          {(!outpatientSuggestion || !inpatientSuggestion) && <p className="text-xs text-muted-foreground">{en ? 'Options without enough existing encounters are unavailable.' : '缺少足夠既有就診的選項無法使用。'}</p>}
           <p className="text-xs text-muted-foreground">{en ? 'Acceptance still depends on the API. Synthetic tests suggest outpatient diagnosis counts affect eligibility; one added code may still be refused.' : '是否接受仍由 API 判定；合成測試顯示門診診斷次數會影響檢查，單筆補碼仍可能被拒絕。'}</p>
           <label className="block space-y-1 text-sm">{en ? 'Supplemental ICD-10-CM code' : '補充 ICD-10-CM 診斷碼'}
             <select className={control} value={draft?.code ?? ''} disabled={busy} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, code: event.target.value, confirmed: false })}>
@@ -154,7 +156,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
               {diagnosisVisits.map(visit => <div key={visit.reference} className="py-1">
                 <label className="flex min-h-11 items-center gap-2 text-sm">
                   <input type="checkbox" checked={draft?.encounters.includes(visit.reference) ?? false} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, confirmed: false, encounters: event.target.checked ? [...current.diagnosisDraft.encounters, visit.reference] : current.diagnosisDraft.encounters.filter(reference => reference !== visit.reference) })} />
-                  <span>{visit.date} · {visit.encounterClass === 'AMB' ? (en ? 'Outpatient' : '門診') : visit.encounterClass === 'IMP' ? (en ? 'Admission' : '住院') : (en ? 'Emergency' : '急診')}{visit.reference === current.baseInput.indexEncounterReference ? (en ? ' · Index visit' : ' · 基準就診') : ''}</span>
+                  <span>{visit.date} · {visit.encounterClass === 'AMB' ? (en ? 'Outpatient' : '門診') : visit.encounterClass === 'IMP' ? (en ? 'Admission' : '住院') : (en ? 'Emergency' : '急診')} · #{diagnosisVisits.findIndex(item => item.reference === visit.reference) + 1}{visit.reference === current.baseInput.indexEncounterReference ? (en ? ' · Index visit' : ' · 基準就診') : ''}</span>
                 </label>
                 {draft?.encounters.includes(visit.reference) && <label className="block space-y-1 pb-2 text-sm">{en ? `Diagnosis rank for ${visit.date}` : `${visit.date} 診斷順位`}
                   <input type="number" min={1} max={50} step={1} className={control} value={draft.ranks[visit.reference] || ''} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, confirmed: false, ranks: { ...current.diagnosisDraft.ranks, [visit.reference]: Number(event.target.value) } })} />
@@ -162,7 +164,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
               </div>)}
             </div>
           </fieldset>
-          {invalidDiagnosisRank && <p className="text-xs font-medium" role="alert">{en ? 'Enter an integer diagnosis rank from 1 to 50 for every selected visit. Incomplete supplementation is not applied.' : '每次所選就診的診斷順位須為 1–50 的整數；補充資料未完整前不會套用。'}</p>}
+          {visibleMessage === 'physician-diagnosis-rank-conflict' && <p className="text-xs font-medium" role="alert">{text(ERRORS['physician-diagnosis-rank-conflict'])}</p>}
+          {invalidDiagnosisRank && <p className="text-xs font-medium" role="status" aria-live="polite">{en ? 'Enter an integer diagnosis rank from 1 to 50 for every selected visit. Incomplete supplementation is not applied.' : '每次所選就診的診斷順位須為 1–50 的整數；補充資料未完整前不會套用。'}</p>}
           <p className="text-xs text-muted-foreground">{en ? 'Rank 1 is primary; rank 2 or higher is secondary. Confirm the actual rank; the API does not recognize unranked supplemental diagnoses.' : '順位 1 為主診斷，2 以上為次診斷。請依當時就診確認順位；API 不辨識未標順位的補充碼。'}</p>
             </div>
           </details>
