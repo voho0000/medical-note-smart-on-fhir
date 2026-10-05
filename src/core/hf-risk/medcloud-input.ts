@@ -58,7 +58,7 @@ function diagnoses(resource: FhirRecord, resolve: ReturnType<typeof lookup>, ind
 }
 export interface HfVisit { reference: string; provider: string; providerName?: string; date: string }
 export function medcloudHfVisits(input: unknown, today = taipeiToday()): HfVisit[] {
-  const { entry, source } = records(input)
+  const { entry } = records(input)
   const resolve = lookup(entry)
   const patient = entry.find(item => item.resource.resourceType === 'Patient')!.resource
   return entry.flatMap(item => {
@@ -68,8 +68,7 @@ export function medcloudHfVisits(input: unknown, today = taipeiToday()): HfVisit
     if (resource.resourceType !== 'Encounter' || resource.class?.code !== 'AMB'
       || VOID.includes(resource.status) || !date || date > today || !provider
       || resolve(resource.subject?.reference) !== patient
-      || (resource.type ?? []).some((type: FhirRecord) => coding(type).some(code => code.code === '08' && /case-type/.test(code.system ?? '')))
-      || (source === 'medcloud' && !diagnoses(resource, resolve, date).length)) return []
+      || (resource.type ?? []).some((type: FhirRecord) => coding(type).some(code => code.code === '08' && /case-type/.test(code.system ?? '')))) return []
     const providerName = resolve(resource.serviceProvider?.reference)?.name
     return [{ reference: item.fullUrl ?? 'Encounter/' + resource.id, provider, ...(typeof providerName === 'string' ? { providerName } : {}), date }]
   }).sort((a, b) => b.date.localeCompare(a.date))
@@ -194,6 +193,6 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   if (!counts.Observation) gap('lab-none')
   const indexEncounter = output.find(item => item.resource.id === encounterIds.get(resolve(selection.encounter)!))?.resource
   if (!indexEncounter?.diagnosis?.length) gap('index-diagnosis-missing')
-  return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, claim: selection.claim,
+  return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, indexEncounterReference: indexEncounter ? 'urn:uuid:' + indexEncounter.id : undefined, claim: selection.claim,
     gaps: [...gaps].map(([code, count]) => ({ code, count })), counts }
 }

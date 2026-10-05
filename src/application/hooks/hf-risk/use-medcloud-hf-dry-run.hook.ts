@@ -8,6 +8,7 @@ import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
 import { hfRecordSource, type HfRecordSource } from '@/src/core/hf-risk/record-source'
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
 import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
+import { emptyHfDiagnosisDraft, withPhysicianHfDiagnosis, type HfPhysicianDiagnosisDraft } from '@/src/core/hf-risk/physician-diagnosis'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction } from '@/src/infrastructure/hf-risk/dry-run-client'
 
@@ -30,6 +31,8 @@ interface Context {
   visits: HfVisit[]
   selection: HfSelection
   input: HfInput
+  baseInput: HfInput
+  diagnosisDraft: HfPhysicianDiagnosisDraft
 }
 export function useMedcloudHfDryRun() {
   const origin = process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN ?? ''
@@ -46,6 +49,16 @@ export function useMedcloudHfDryRun() {
   const busy = busyImportId !== null && busyImportId === activeImportId
   const controller = useRef<AbortController | null>(null)
   const unsubscribeAuth = useRef<(() => void) | null>(null)
+  const [observedSnapshot, setObservedSnapshot] = useState(snapshot)
+  // Reset during a scope-changing render so old attestations cannot reappear on a return to the same import.
+  if (observedSnapshot !== snapshot) {
+    setObservedSnapshot(snapshot)
+    setContext(null)
+    setResult(null)
+    setPrediction(null)
+    setMessage(null)
+    setBusyImportId(null)
+  }
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleResult = result?.importId === activeImportId && result.input === current?.input ? result.value : null
   const visiblePrediction = prediction?.importId === activeImportId && prediction.input === current?.input ? prediction.value : null
@@ -68,7 +81,8 @@ export function useMedcloudHfDryRun() {
       const visits = medcloudHfVisits(bundle)
       if (!visits.length) throw new Error('no-visit')
       const selection: HfSelection = { provider: visits[0].provider, encounter: visits[0].reference, claim: 'P1_CD_mortality_1m' }
-      setContext({ importId, source: hfRecordSource(bundle!), bundle: bundle!, visits, selection, input: buildMedcloudHfInput(bundle, selection) })
+      const input = buildMedcloudHfInput(bundle, selection)
+      setContext({ importId, source: hfRecordSource(bundle!), bundle: bundle!, visits, selection, input, baseInput: input, diagnosisDraft: emptyHfDiagnosisDraft() })
     } catch (error) {
       setContext(null)
       setMessage({ importId, code: error instanceof Error ? error.message : 'bundle-invalid' })
@@ -83,8 +97,26 @@ export function useMedcloudHfDryRun() {
     setResult(null)
     setPrediction(null)
     setMessage(null)
-    try { setContext({ ...current, selection, input: buildMedcloudHfInput(current.bundle, selection) }) }
+    try {
+      const input = buildMedcloudHfInput(current.bundle, selection)
+      setContext({ ...current, selection, input, baseInput: input, diagnosisDraft: emptyHfDiagnosisDraft() })
+    }
     catch { setMessage({ importId: current.importId, code: 'source-changed' }) }
+  }
+  function supplementDiagnosis(draft: HfPhysicianDiagnosisDraft) {
+    if (!current || busy) return
+    controller.current?.abort()
+    unsubscribeAuth.current?.()
+    unsubscribeAuth.current = null
+    setResult(null)
+    setPrediction(null)
+    setMessage(null)
+    try {
+      setContext({ ...current, diagnosisDraft: draft, input: withPhysicianHfDiagnosis(current.baseInput, draft) })
+    } catch (error) {
+      setContext({ ...current, diagnosisDraft: { ...draft, confirmed: false }, input: current.baseInput })
+      setMessage({ importId: current.importId, code: error instanceof Error ? error.message : 'physician-diagnosis-invalid' })
+    }
   }
   async function submit(operation: 'dry-run' | 'predict') {
     if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing') || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
@@ -133,5 +165,5 @@ export function useMedcloudHfDryRun() {
       if (controller.current === abort) setBusyImportId(null)
     }
   }
-  return { current, configured, intranet: policySetting === 'intranet', busy, result: visibleResult, prediction: visiblePrediction, message: visibleMessage, prepare, select, validate: () => submit('dry-run'), predict: () => submit('predict') }
+  return { current, configured, intranet: policySetting === 'intranet', busy, result: visibleResult, prediction: visiblePrediction, message: visibleMessage, prepare, select, supplementDiagnosis, validate: () => submit('dry-run'), predict: () => submit('predict') }
 }

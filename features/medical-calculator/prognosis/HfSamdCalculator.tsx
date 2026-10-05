@@ -34,12 +34,12 @@ function HfSamdNavigation({ locale, session }: { locale: string; session: HfSamd
 
 export function HfSamdPage({ locale, state, onBack }: { locale: string; state: HfSamdSessionState['state']; onBack: () => void }) {
   const en = locale === 'en'
-  return <section className="@container space-y-3" aria-label={en ? 'TVGH SaMD HF calculator' : '北榮 SaMD HF 計算機'}>
+  return <section className="@container space-y-2" aria-label={en ? 'TVGH research trial HF calculator' : '北榮研究試用 HF 計算機'}>
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="ghost" size="sm" onClick={onBack} className="min-h-11 gap-1 px-2">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />{en ? 'Back' : '返回'}
       </Button>
-      <h2 className="text-sm font-semibold">{en ? 'HF outpatient prognosis' : 'HF 門診預後模型'} · {en ? 'TVGH SaMD' : '北榮 SaMD'}</h2>
+      <h2 className="text-sm font-semibold">{en ? 'HF outpatient prognosis' : 'HF 門診預後模型'} · {en ? 'TVGH research trial' : '北榮研究試用'}</h2>
     </div>
     <p className="text-xs text-muted-foreground">{en ? 'You can switch views while processing. Return here to see the result.' : '執行中可切換其他畫面，回到此頁查看結果。'}</p>
     <HfMedcloudDetail locale={locale} state={state} />
@@ -58,7 +58,7 @@ export function HfSamdCard({ locale, state, onOpen }: { locale: string; state: H
           <Calculator className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="mb-1 flex flex-wrap gap-1">
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{en ? 'TVGH SaMD' : '北榮 SaMD'}</span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{en ? 'TVGH research trial' : '北榮研究試用'}</span>
               <span className="text-xs text-muted-foreground">{en ? 'Research pilot' : '研究試辦'}</span>
             </span>
             <span className="block text-sm font-semibold">{title}</span>
