@@ -52,8 +52,12 @@ const ERRORS: Record<string, [string, string]> = {
   'invalid-dry-run-response': ['服務回應不符合輸入檢查格式，已丟棄', 'Invalid input-validation response discarded'],
 }
 export function HfMedcloudDryRun({ locale }: { locale: string }) {
+  return <HfMedcloudDetail locale={locale} state={useMedcloudHfDryRun()} />
+}
+
+export function HfMedcloudDetail({ locale, state }: { locale: string; state: ReturnType<typeof useMedcloudHfDryRun> }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, result: visibleResult, prediction, message: visibleMessage, prepare, select, validate, predict } = useMedcloudHfDryRun()
+  const { current, configured, intranet, busy, result: visibleResult, prediction, message: visibleMessage, prepare, select, validate, predict } = state
   const summary = current ? summarizeHfInput(current.input) : null
   const hasWarnings = visibleResult?.issues.some(issue => issue.severity === 'warning')
   const text = (pair: [string, string]) => pair[en ? 1 : 0]

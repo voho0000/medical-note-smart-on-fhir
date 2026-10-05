@@ -168,3 +168,11 @@ AF is listed alongside HF and lipid in the HMC host, including production builds
 The HF calculator remains visible on its existing clinician routes. Unset NEXT_PUBLIC_HF_AUTH_POLICY retains the Firebase caller requirement. Explicit intranet mode removes the Firebase requirement for HF input checks and explicit formal predictions, with network authorization enforced by the SaMD ingress/service; the owner approved all approved hospital network clients in chat. Unknown policy values disable submission with a configuration notice. No route, care pack, traditional calculator or result surface is hidden by this change.
 
 2026-10-05 production activation: the owner authorized enabling HF at https://mediprisma.tw/app/. The /app build receives NEXT_PUBLIC_HF_GATEWAY_ORIGIN and NEXT_PUBLIC_HF_AUTH_POLICY from repository variables; its HF submission gate uses the approved intranet policy. The separate /app-hmc publisher and pilot branch remain unchanged.
+
+## HF SaMD calculator hospital gate (2026-10-05)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| HF AI-SaMD calculator card, input checks, prediction and results on `/`, `/app/`, `/app-hmc/` | Offered in clinician calculator lists with exact `site=vghtpe`, OR after an explicitly configured intranet policy receives a valid HF catalogue from the existing network-authorized `/samd/v1/models` endpoint. A missing/other site and failed/unknown network discovery omit this hospital integration; the probe sends no patient data and does not use `/health` as authorization. The card carries 「北榮 SaMD」 and opens the full input-check/prediction/result detail. Traditional HF calculators retain their existing visibility. This presentation gate does not replace service authorization. | Owner explicitly requested 「僅限site=vghtpe才出現」 and the existing calculator UI, then added confirmed hospital-network clients as an alternative visibility condition in chat, 2026-10-05. |
+
+The earlier HF activation entries describe their rollout at that time. Their unrestricted SaMD presentation is superseded by the hospital gate above; traditional HF calculator visibility is unchanged. The active surface is HfSamdCard with HfMedcloudDetail; HfMedcloudDryRun remains a compatibility wrapper.
