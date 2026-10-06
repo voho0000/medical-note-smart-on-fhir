@@ -56,6 +56,12 @@ jobs:
           NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY: ${{ secrets.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY }}
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
+      # Keep GitHub Pages as an entry to the production origin. Firebase sign-in,
+      # SMART callbacks, and browser storage continue on mediprisma.tw.
+      - name: Point the renamed Pages entry to production
+        run: |
+          cp scripts/github-pages-redirect.html out/index.html
+          cp scripts/github-pages-redirect.html out/404.html
       - uses: actions/upload-pages-artifact@v5
         with:
           path: ./out
