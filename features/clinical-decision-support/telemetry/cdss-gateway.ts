@@ -3,7 +3,7 @@
 import type { CdssPatientProfile, CdssResult } from '@voho0000/personalized-care'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { cdssAssessmentSchema, cdssGatewaySaveSchema, cdssInteractionSchema, type CdssAssessmentChange, type CdssGatewayEvent, type CdssSource } from '@/src/shared/contracts/cdss-gateway-event'
-import { isCollectorSite } from '@/src/application/telemetry/collector'
+import { isCdssStorageSite } from './storage-site'
 import { captureFhirRequestAuth } from './fhir-auth'
 import { buildPatientTextLiterals, scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { cdssPatientIdentity } from './patient-identity'
@@ -19,6 +19,7 @@ const pending = new Map<string, CdssGatewayEvent[]>()
 const patientSessions = new Map<string, string>()
 const retryable = new Map<string, { content: string; saveId: string; savedAt: string }>()
 const active = new Set<AbortController>()
+let requestGeneration = 0
 
 export function cdssEndpoint(path = '/cdss/v1/saves'): string | null {
   try {
@@ -40,7 +41,7 @@ function sessionFor(patientId: string): string {
 
 /** Records local UI actions only. Network traffic begins in saveCdssSnapshot. */
 export function recordCdssEvent(patientId: string, packId: string, body: EventBody): void {
-  if (!patientId || !isCollectorSite()) return
+  if (!patientId || !isCdssStorageSite()) return
   const candidate = {
     ...body, pack_id: packId, occurred_at: new Date().toISOString(),
   }
@@ -56,7 +57,7 @@ export function recordCdssEvent(patientId: string, packId: string, body: EventBo
 }
 
 export function cdssGatewayStatus() {
-  return { enabled: isCollectorSite() && cdssEndpoint() !== null,
+  return { enabled: isCdssStorageSite() && cdssEndpoint() !== null,
     pending_events: [...pending.values()].reduce((sum, events) => sum + events.length, 0),
     saving: active.size > 0 }
 }
@@ -82,8 +83,9 @@ export async function saveCdssSnapshot(input: {
   physicianDecisions: Record<string, unknown>
   sourceRecords: CdssSource[]
 }): Promise<void> {
+  const generation = requestGeneration
   const patientId = input.patient.id
-  if (!patientId || !isCollectorSite()) throw new Error('cdss_site_unavailable')
+  if (!patientId || !isCdssStorageSite()) throw new Error('cdss_site_unavailable')
   const url = cdssEndpoint()
   if (!url) throw new Error('cdss_endpoint_unavailable')
   const controller = new AbortController()
@@ -113,19 +115,19 @@ export async function saveCdssSnapshot(input: {
     const [auth, identity] = await cancellable(Promise.all([
       captureFhirRequestAuth(input.ownerUid), cdssPatientIdentity(input.patient),
     ]), controller.signal)
-    if (!isCollectorSite() || controller.signal.aborted || !auth.isCurrent()) throw new Error('cdss_site_changed')
+    if (!isCdssStorageSite() || controller.signal.aborted || generation !== requestGeneration || !auth.isCurrent()) throw new Error('cdss_site_changed')
     const signature = JSON.stringify({ ...identity, ...content })
     const retryKey = `${auth.uid}:${patientId}`
     const previous = retryable.get(retryKey)
     const receipt = previous?.content === signature
       ? previous : { content: signature, saveId: crypto.randomUUID(), savedAt: new Date().toISOString() }
-    const parsed = cdssGatewaySaveSchema.parse({ schema_version: 2, save_id: receipt.saveId,
+    const parsed = cdssGatewaySaveSchema.parse({ schema_version: 3, save_id: receipt.saveId,
       saved_at: receipt.savedAt, ...identity, ...content })
     const body = JSON.stringify(parsed)
     if (new TextEncoder().encode(body).length > MAX_BYTES) throw new Error('cdss_payload_too_large')
     retryable.set(retryKey, receipt)
     const token = await cancellable(auth.getToken(), controller.signal)
-    if (!isCollectorSite() || controller.signal.aborted || !auth.isCurrent()) throw new Error('cdss_site_changed')
+    if (!isCdssStorageSite() || controller.signal.aborted || generation !== requestGeneration || !auth.isCurrent()) throw new Error('cdss_site_changed')
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -134,7 +136,7 @@ export async function saveCdssSnapshot(input: {
     })
     if (response.status !== 201) throw new Error('cdss_gateway_rejected')
     const ack = await response.json() as { status?: string; save_id?: string }
-    if (!isCollectorSite() || controller.signal.aborted || !auth.isCurrent()) throw new Error('cdss_site_changed')
+    if (!isCdssStorageSite() || controller.signal.aborted || generation !== requestGeneration || !auth.isCurrent()) throw new Error('cdss_site_changed')
     if (ack.status !== 'stored' || ack.save_id !== parsed.save_id) throw new Error('cdss_gateway_unconfirmed')
     const current = pending.get(patientId) ?? []
     const saved = new Set(events)
@@ -146,9 +148,15 @@ export async function saveCdssSnapshot(input: {
   }
 }
 
-export function cancelCdssGatewayRequests(): void {
+export function abortCdssGatewayRequests(): void {
+  requestGeneration++
   for (const controller of active) controller.abort()
   active.clear()
+  retryable.clear()
+}
+
+export function cancelCdssGatewayRequests(): void {
+  abortCdssGatewayRequests()
   pending.clear()
   patientSessions.clear()
   retryable.clear()

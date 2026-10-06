@@ -19,6 +19,7 @@ export interface PatientEntity {
   age?: number
   /** Source data was explicitly de-identified; retained through local demographic overlays. */
   deidentified?: boolean
+  meta?: { source?: string }
   // Optional extended demographics (filled in by PatientMapper.toDomain).
   identifier?: {
     use?: string
@@ -62,7 +63,19 @@ export interface PatientEntity {
 
 /** Cloud export marks de-identified names as anonymous; ID masking alone is not this option. */
 export function isDeidentifiedPatient(patient: PatientEntity): boolean {
-  return patient.deidentified === true || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))
+  if (patient.deidentified === true || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))) return true
+  const source = patient.meta?.source?.normalize('NFKC').trim()
+  // These exporters do not emit anonymous names. Recognize their documented
+  // privacy transforms only within their own source namespace, never cloud masking.
+  if (source === 'nhi-fhir-bridge/scraper') {
+    return (patient.identifier ?? []).some(id => id.system?.normalize('NFKC').trim() === 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id'
+      && /[Xx*＊○〇●Ｏ◯]/u.test((id.value ?? '').normalize('NFKC').trim().slice(1)))
+  }
+  if (source === 'ehr-fhir-bridge/scraper') {
+    return (patient.name ?? []).some(name => /^DEID-/i.test(name.text ?? ''))
+      || (patient.identifier ?? []).some(id => id.system?.normalize('NFKC').trim() === 'urn:oid:his.patient.mrn' && /^[a-f0-9]{32}$/i.test(id.value ?? ''))
+  }
+  return false
 }
 
 export type PatientDemographicField = 'name' | 'gender' | 'birthDate'

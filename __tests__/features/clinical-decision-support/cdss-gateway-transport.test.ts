@@ -1,6 +1,7 @@
+import { waitFor } from '@testing-library/react'
 import type { CdssPatientProfile, CdssResult } from '@voho0000/personalized-care'
 import { createHash, webcrypto } from 'node:crypto'
-import { cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
+import { abortCdssGatewayRequests, cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
 
 const mockGetToken = jest.fn()
@@ -91,7 +92,7 @@ test('records clicks locally and sends all used data only on explicit save', asy
   expect(body.physician_decisions.module.note).toBe('clinician text [已遮蔽] [已遮蔽]')
   expect(body.events).toHaveLength(1)
   expect(body.patient_session_id).toMatch(/^[0-9a-f-]{36}$/)
-  expect(body.schema_version).toBe(2)
+  expect(body.schema_version).toBe(3)
   expect(body.patient_identity).toEqual({
     name_masked: '陳○華', birth_year: '1968',
     identifier_masked: 'A123XXXXXX', identifier_system: 'https://example.org/national-id',
@@ -221,4 +222,47 @@ test('de-identified source patients never transmit a CDSS save', async () => {
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, deidentified: true } }))
     .rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each([
+  { ...input.patient, meta: { source: 'nhi-fhir-bridge/scraper' }, identifier: [{ system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', value: 'A123456789' }] },
+  { ...input.patient, id: '00001234', meta: { source: 'ehr-fhir-bridge/scraper' }, identifier: [{ system: 'urn:oid:his.patient.mrn', value: '00001234' }] },
+])('bridge save sends v3 masked identity, never its original identifier', async patient => {
+  await saveCdssSnapshot({ ...input, patient })
+  expect(fetch).toHaveBeenCalledTimes(1)
+  const payload = JSON.parse(jest.mocked(fetch).mock.calls[0][1]!.body as string)
+  expect(payload.schema_version).toBe(3)
+  expect(cdssGatewaySaveSchema.safeParse(payload).success).toBe(true)
+  expect(JSON.stringify(payload)).not.toContain(patient.identifier[0].value)
+})
+test.each([
+  { ...input.patient, meta: { source: 'nhi-fhir-bridge/scraper' }, identifier: [{ system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', value: 'A12345XXXX' }] },
+  { ...input.patient, meta: { source: 'ehr-fhir-bridge/scraper' }, name: [{ text: 'DEID-aaaaaaaa' }], identifier: [{ system: 'urn:oid:his.patient.mrn', value: 'a'.repeat(32) }] },
+])('deidentified bridge fails without any save transmission', async patient => {
+  await expect(saveCdssSnapshot({ ...input, patient })).rejects.toThrow('cdss_patient_deidentified')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('cancelling during complete-ID key derivation cannot transmit a stale save', async () => {
+  let release!: (bits: ArrayBuffer) => void
+  const derive = jest.spyOn(crypto.subtle, 'deriveBits').mockImplementation(() => new Promise(resolve => { release = resolve }))
+  try {
+    const patient = { ...input.patient, meta: { source: 'nhi-fhir-bridge/scraper' }, identifier: [{ system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', value: 'A123456789' }] }
+    const request = saveCdssSnapshot({ ...input, patient })
+    const rejection = expect(request).rejects.toThrow('cdss_site_changed')
+    await waitFor(() => expect(derive).toHaveBeenCalled())
+    cancelCdssGatewayRequests()
+    release(new ArrayBuffer(32))
+    await rejection
+    expect(fetch).not.toHaveBeenCalled()
+  } finally { derive.mockRestore() }
+})
+
+test('demographic cancellation retains pending clinical events for the next save', async () => {
+  recordCdssEvent(input.patient.id, input.packId, { kind: 'interaction', action: 'layout_selected' })
+  abortCdssGatewayRequests()
+  expect(cdssGatewayStatus().pending_events).toBe(1)
+  await saveCdssSnapshot(input)
+  const payload = JSON.parse(jest.mocked(fetch).mock.calls[0][1]!.body as string)
+  expect(payload.events).toHaveLength(1)
 })

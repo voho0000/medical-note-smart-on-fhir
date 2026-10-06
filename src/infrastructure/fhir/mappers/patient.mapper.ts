@@ -15,6 +15,7 @@ export class PatientMapper {
       id: fhirResource.id || '',
       resourceType: FHIR_RESOURCES.PATIENT,
       name: fhirResource.name,
+      meta: fhirResource.meta?.source ? { source: fhirResource.meta.source } : undefined,
       ...(isDeidentifiedPatient(fhirResource) ? { deidentified: true } : {}),
       gender: fhirResource.gender,
       birthDate: fhirResource.birthDate,

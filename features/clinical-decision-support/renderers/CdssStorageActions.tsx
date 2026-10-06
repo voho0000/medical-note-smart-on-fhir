@@ -8,7 +8,7 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { storedTimestampForDisplay } from '@/src/shared/contracts/cdss-stored-save-v2'
-import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '../telemetry/cdss-gateway'
+import { abortCdssGatewayRequests, cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '../telemetry/cdss-gateway'
 import { listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
 import { authorizeFhir, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
 
@@ -74,7 +74,14 @@ export function CdssStorageActions(props: StorageProps) {
   // Provider loading also includes Firestore profile writes; a known account can already authorize FHIR.
   const { user } = useAuth()
   const ownerUid = user?.uid
-  return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
+  const privacyState = isDeidentifiedPatient(props.input.patient)
+  const sourceIdentity = JSON.stringify([props.input.patient.id, privacyState, props.input.patient.meta?.source, props.input.patient.identifier])
+  // Demographic correction cancels stale views/requests but retains account
+  // authorization and pending clinical events. A different source identity or
+  // account must discard pending events instead.
+  useEffect(() => () => { cancelCdssGatewayRequests(); disconnectFhir() }, [ownerUid])
+  useEffect(() => () => { cancelCdssGatewayRequests() }, [sourceIdentity])
+  return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient), props.input.patient.meta?.source, props.input.patient.identifier, props.input.patient.name, props.input.patient.birthDate])} {...props} ownerUid={ownerUid} />
 }
 
 function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid }: StorageProps & { ownerUid?: string }) {
@@ -90,14 +97,14 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const controller = useRef<AbortController | null>(null)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => {
-    mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
+    mounted.current = false; controller.current?.abort(); abortCdssGatewayRequests()
   } }, [])
   const deidentifiedHelp = english
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
-    : '請取消雲抓的「去識別化」選項後，重新匯入病人資料。'
+    : '請取消資料匯出工具的「去識別化」選項後，重新匯入病人資料。'
   const identityHelp = english
-    ? 'Check that the patient data includes a full name without masking characters, a valid date of birth, and a partially masked national ID. Then reimport the data and try again.'
-    : '請確認病人資料包含完整姓名（不可含 ○ 等遮蔽字元）、有效出生日期，以及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
+    ? 'Check that the patient data includes a full name without masking characters, a valid date of birth, and a national ID (full or partially masked), or a Taipei Veterans General Hospital medical record number from the VGH export tool. Then reimport the data and try again.'
+    : '請確認病人資料包含完整姓名（不可含 ○ 等遮蔽字元）、有效出生日期，以及身分證字號（完整或部分遮蔽），或北榮抓抓提供的北榮病歷號；確認後重新匯入資料再試。'
   const run = async (saveId?: string) => {
     if (!ownerUid) return
     controller.current?.abort()

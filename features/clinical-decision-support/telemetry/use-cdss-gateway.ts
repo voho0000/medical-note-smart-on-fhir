@@ -12,7 +12,7 @@ import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
 import { usePreventStore } from '../stores/prevent-inputs.store'
 import { DECISION_REASONS } from '../renderers/heart-failure-visit-flow'
 import { recordCdssEvent } from './cdss-gateway'
-import { isCollectorSite } from '@/src/application/telemetry/collector'
+import { isCdssStorageSite } from './storage-site'
 
 const SIGN_TERMS = [
   'exertional-dyspnea', 'orthopnea', 'paroxysmal-nocturnal-dyspnea',
@@ -53,7 +53,7 @@ export function useCdssGateway(input: {
   const { patientId, packId, ready } = input
 
   useEffect(() => {
-    if (!patientId || !ready || !isCollectorSite()) return
+    if (!patientId || !ready || !isCdssStorageSite()) return
     const unsubs = [
       useClinicVitalsStore.subscribe((next, previous) => {
         const before = previous.byPatientId[patientId]
