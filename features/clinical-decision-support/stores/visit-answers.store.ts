@@ -267,3 +267,15 @@ export function useVisitAnswersHydrated(patientId: string | undefined): boolean 
     (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
   )
 }
+
+/** Replace a confirmed saved snapshot, retaining its original clinical dates. */
+export function restoreVisitAnswers(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const restored = toVisitAnswerRecord(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  useVisitAnswersStore.setState(state => ({
+    byPatientId: { ...state.byPatientId, [patientId]: restored },
+    hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+  }))
+  try { writeStored(patientId, restored) } catch { /* The encrypted cache is best effort. */ }
+}

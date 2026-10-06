@@ -1,3 +1,4 @@
+jest.mock('@/features/clinical-decision-support/telemetry/latest-cdss-save', () => ({ latestCdssSave: async () => null }))
 jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', () => ({ captureFhirFirebaseAuth: async () => ({ uid: 'owner-a', isCurrent: () => true, getToken: async () => 'synthetic-token' }) }))
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))

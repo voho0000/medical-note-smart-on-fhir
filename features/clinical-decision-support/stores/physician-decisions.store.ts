@@ -148,7 +148,7 @@ function currentDecisionKey(key: string): string {
  * decrypt hands back nothing, and a hand-edited value can be anything at all.
  * Every path therefore degrades to 「還沒決定」.
  */
-function toDecisions(parsed: unknown): PhysicianDecisionMap {
+export function toDecisions(parsed: unknown): PhysicianDecisionMap {
   try {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     const decisions: Record<string, PhysicianDecision> = {}
@@ -345,4 +345,16 @@ export function usePhysicianDecisionsHydrated(patientId: string | undefined): bo
  *  stored copy is encrypted, so only what this session has read back is here. */
 export function getPhysicianDecisions(patientId: string): PhysicianDecisionMap {
   return usePhysicianDecisionsStore.getState().byPatientId[patientId] ?? EMPTY_DECISIONS
+}
+
+/** Replace a confirmed saved snapshot, retaining its original clinical dates. */
+export function restorePhysicianDecisions(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const restored = toDecisions(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  usePhysicianDecisionsStore.setState(state => ({
+    byPatientId: { ...state.byPatientId, [patientId]: restored },
+    hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+  }))
+  try { writeStoredDecisions(patientId, restored) } catch { /* The encrypted cache is best effort. */ }
 }

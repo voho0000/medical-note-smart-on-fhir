@@ -175,7 +175,7 @@ function isChoice(value: unknown): value is PhenotypeAnswerChoice {
   return value === 'reduced' || value === 'preserved' || value === 'unknown'
 }
 
-function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
+export function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
   try {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
     const record = parsed as Record<string, unknown>
@@ -380,4 +380,18 @@ export function usePhenotypeAnswerHydrated(patientId: string | undefined): boole
   return usePhenotypeAnswerStore(
     (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
   )
+}
+
+/** Restore without stamping a historical diagnosis as today's answer. */
+export function restorePhenotypeAnswer(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const answer = parseStoredAnswer(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  usePhenotypeAnswerStore.setState(state => {
+    const byPatientId = { ...state.byPatientId }
+    if (answer) byPatientId[patientId] = answer
+    else delete byPatientId[patientId]
+    return { byPatientId, hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true } }
+  })
+  try { void (answer ? repository.save(patientId, answer) : repository.clear(patientId)).catch(() => {}) } catch { /* Cache is best effort. */ }
 }

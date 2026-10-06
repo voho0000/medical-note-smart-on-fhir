@@ -62,7 +62,7 @@ export function discardPlaintextEvidenceOverrides(): void {
  * true and false survive a read, and everything else degrades to "no
  * override", which is the same reading the pack gives on a first visit.
  */
-function toOverrides(parsed: unknown): EvidenceOverrideMap {
+export function toOverrides(parsed: unknown): EvidenceOverrideMap {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_OVERRIDES
   const overrides: Record<string, boolean> = {}
   for (const [itemId, enabled] of Object.entries(parsed as Record<string, unknown>)) {
@@ -186,4 +186,16 @@ export function useEvidenceOverridesHydrated(patientId: string | undefined): boo
  *  stored copy is encrypted, so only what this session has read back is here. */
 export function getEvidenceOverrides(patientId: string): EvidenceOverrideMap {
   return useEvidenceOverridesStore.getState().byPatientId[patientId] ?? EMPTY_OVERRIDES
+}
+
+/** Replace a confirmed saved snapshot, retaining its original clinical dates. */
+export function restoreEvidenceOverrides(patientId: string, value: unknown): void {
+  if (!patientId) return
+  const restored = toOverrides(value)
+  if (hydration.isPending(patientId)) hydration.invalidate()
+  useEvidenceOverridesStore.setState(state => ({
+    byPatientId: { ...state.byPatientId, [patientId]: restored },
+    hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+  }))
+  try { writeStored(patientId, restored) } catch { /* The encrypted cache is best effort. */ }
 }

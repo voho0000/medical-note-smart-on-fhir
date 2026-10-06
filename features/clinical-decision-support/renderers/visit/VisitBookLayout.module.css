@@ -120,7 +120,8 @@
 
 /* ------------------------------- header ------------------------------- */
 
-/* Only the explicit save moves here; its controller remains in the CDSS panel. */
+/* Save, state and explicit restore travel together; their controller stays mounted. */
+.saveRecord { min-width: 0; max-width: 100%; }
 .saveRecord:empty { display: none; }
 .saveRecord :global(button) {
   min-height: 44px;

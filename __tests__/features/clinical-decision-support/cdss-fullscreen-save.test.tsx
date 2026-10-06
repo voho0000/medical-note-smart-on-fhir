@@ -1,3 +1,4 @@
+jest.mock('@/features/clinical-decision-support/telemetry/latest-cdss-save', () => ({ latestCdssSave: async () => null }))
 import { toast } from 'sonner'
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
