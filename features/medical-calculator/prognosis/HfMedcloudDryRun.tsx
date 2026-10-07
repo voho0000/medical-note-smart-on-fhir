@@ -110,7 +110,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </div>
       <section aria-label={en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'} className="space-y-2 border-t border-border pt-2" data-testid="hf-physician-diagnosis">
         <h4 className="text-sm font-semibold">{en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'}{current.input.physicianDiagnosis ? (en ? ' · Confirmed' : ' · 已確認') : ''}</h4>
-        <p className="text-xs text-muted-foreground">{en ? 'Cloud records may omit HF diagnoses. Confirm the HF history before running input validation; select the applicable visits below.' : '雲端病歷可能未完整提供心衰診斷。執行輸入檢查前，請由醫師確認心衰病史並選擇適用的就診紀錄。'}</p>
+        <p className="text-xs text-muted-foreground">{en ? 'Cloud records may omit HF diagnoses. Confirm the HF history before running prediction; select the applicable visits below.' : '雲端病歷可能未完整提供心衰診斷。執行預測前，請由醫師確認心衰病史並選擇適用的就診紀錄。'}</p>
         <div className="space-y-2 pb-2">
           <fieldset disabled={busy} className="grid grid-cols-1 gap-x-2 gap-y-1 @xs:grid-cols-2">
             <legend className="mb-1 text-sm font-medium">{en ? 'Confirm HF history' : '確認心衰病史'}</legend>

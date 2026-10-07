@@ -136,12 +136,12 @@ export function useMedcloudHfDryRun() {
     }
     const stillCurrent = () => !abort.signal.aborted && shouldUseLocalBundle() && LocalBundleService.getActiveImportId() === snapshot.importId
     const request = async (options: HfRequestOptions, checkAuthorization: () => Promise<void>) => {
-      const validation = await requestHfDryRun(snapshot.input, options)
+      const validation = await requestHfDryRun(snapshot.input, { ...options })
       await checkAuthorization()
       if (!stillCurrent()) return
       setResult({ importId: snapshot.importId, input: snapshot.input, value: validation })
       if (operation === 'dry-run' || validation.verdict !== 'accepted') return
-      const value = await requestHfPrediction(snapshot.input, options)
+      const value = await requestHfPrediction(snapshot.input, { ...options })
       await checkAuthorization()
       if (stillCurrent()) storeResult(value)
     }
@@ -162,9 +162,12 @@ export function useMedcloudHfDryRun() {
         setPrediction(null)
         setMessage({ importId: snapshot.importId, code: 'gateway-unauthorized' })
       })
-      await request({ origin, token, signal: abort.signal }, async () => {
+      const options = { origin, token, signal: abort.signal }
+      await request(options, async () => {
         // Check authorization between validation and prediction as well as after prediction.
-        if (!await auth.getToken()) throw new Error('gateway-unauthorized')
+        const refreshedToken = await auth.getToken()
+        if (!refreshedToken) throw new Error('gateway-unauthorized')
+        options.token = refreshedToken
       })
     } catch (error) {
       if (stillCurrent()) setMessage({ importId: snapshot.importId, code: error instanceof Error ? error.message : 'gateway-unavailable' })

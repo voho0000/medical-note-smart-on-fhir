@@ -373,7 +373,6 @@ it('prepares a TVGH bridge import but prevents upload with unverified generic IC
   expect(screen.getByText('病歷來源：北榮懷爾抓抓')).toBeVisible()
   expect(screen.getByText(/門診缺少可核對的 ICD-10-CM/)).toBeVisible()
   expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
   expect(requestHfDryRun).not.toHaveBeenCalled()
   expect(requestHfPrediction).not.toHaveBeenCalled()
 })
@@ -395,7 +394,6 @@ it('the hook rejects a missing selected diagnosis even if another same-day visit
 })
 
 it('clears cached HF results on an import event without a parent rerender', async () => {
-  jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
   jest.mocked(requestHfDryRun).mockResolvedValue(accepted)
   jest.mocked(requestHfPrediction).mockResolvedValue(predicted)
   const { result } = renderHook(() => useMedcloudHfDryRun())
@@ -517,4 +515,13 @@ it('explains a disabled index-diagnosis check outside collapsed details', async 
   expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
   expect(screen.getByTestId('hf-model-actions')).toHaveTextContent('基準門診缺少可用診斷')
   expect(screen.getByText('本次輸入摘要與來源缺漏').closest('details')!.open).toBe(false)
+})
+
+it('uses a refreshed caller token for prediction after input validation', async () => {
+  getToken.mockResolvedValueOnce('SYNTHETIC-FIRST').mockResolvedValueOnce('SYNTHETIC-REFRESHED').mockResolvedValue('SYNTHETIC-REFRESHED')
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => { await result.current.prepare() })
+  await act(async () => { await result.current.predict() })
+  expect(requestHfDryRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ token: 'SYNTHETIC-FIRST' }))
+  expect(requestHfPrediction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ token: 'SYNTHETIC-REFRESHED' }))
 })
