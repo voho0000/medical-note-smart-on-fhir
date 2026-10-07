@@ -806,6 +806,13 @@ export default function LiveClinicalDecisionSupportFeature({
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
             </Button>
           ) : null}
+          <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
+            onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
+            packId: result.packId, profile, result,
+            physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
+              nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
+            physicianDecisions: { ...physicianDecisions },
+          }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
           {/* The map's 今天待決定 and its rail say what needs the clinician,
               point by point; these two counts would repeat it less exactly,
               so the map leaves them out. */}
@@ -822,13 +829,7 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
-      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
-        onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
-        packId: result.packId, profile, result,
-        physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
-          nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
-        physicianDecisions: { ...physicianDecisions },
-      }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
+
       <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
 
       {/*

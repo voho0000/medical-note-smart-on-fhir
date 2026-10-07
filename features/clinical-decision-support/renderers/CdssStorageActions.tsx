@@ -20,6 +20,7 @@ const isIdentityFailure = (failure: unknown) => failure instanceof Error && fail
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
 const text = (value: unknown) => typeof value === 'string' ? value : ''
+const toolbarButton = 'h-[32px] min-h-[32px] px-2 text-[12px] shadow-none max-md:h-[44px] max-md:min-h-[44px]'
 const subscribeSite = (notify: () => void) => {
   window.addEventListener('popstate', notify)
   return () => window.removeEventListener('popstate', notify)
@@ -190,25 +191,26 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const label = english ? 'Saved CDSS records' : 'CDSS 歷史紀錄'
   const result = object(selected?.save.result)
   const recommendations = Array.isArray(result.recommendations) ? result.recommendations : []
-  const saveButton = <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={!ownerUid || saving || (fhirOAuthEnabled() && !authorized)} aria-busy={saving} data-testid="cdss-save-record">
+  const saveButton = <Button type="button" size="sm" variant="outline" className={toolbarButton} onClick={() => void save()} disabled={!ownerUid || saving || (fhirOAuthEnabled() && !authorized)} aria-busy={saving} data-testid="cdss-save-record">
       {!ownerUid ? english ? 'Sign in to save' : '請先登入後儲存' : saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
     </Button>
   const compatible = selected?.save.pack_id === input.packId && selected?.save.result.packVersion === input.result.packVersion
-  const carryButton = onCarryForward && <Button type="button" variant="outline" className="min-h-[44px] shadow-none"
+  const carryButton = onCarryForward && <Button type="button" size="sm" variant="outline" className={toolbarButton}
     disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)} data-testid="cdss-carry-forward-latest"
     onClick={() => { setOpen(true); void run(undefined, true) }}>{english ? 'Bring in last record' : '帶入上次紀錄'}</Button>
   const sourceNotice = appliedFrom && <p role="status" className="w-full break-words text-sm text-muted-foreground">{english ? 'Carried forward from: ' : '帶入來源：'}{new Date(storedTimestampForDisplay(appliedFrom)).toLocaleString(english ? 'en' : 'zh-TW')}{english ? '. Existing entries kept; guidance recalculated.' : '；保留當次已填內容，建議已重新計算。'}</p>
-  return <div className="flex flex-wrap gap-2">
-    {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || authorizing}
+  const authButton = fhirOAuthEnabled() && <Button type="button" size="sm" variant="outline" className={toolbarButton} disabled={!ownerUid || authorizing}
       data-testid="cdss-fhir-authorize" onClick={() => {
         if (authorized) { disconnectFhir(); return }
         setAuthorizing(true)
         void authorizeFhir(ownerUid).catch(() => { if (mounted.current) toast.error(english ? 'FHIR authorization failed. Please try again.' : 'FHIR 授權未完成，請重試。') })
           .finally(() => { if (mounted.current) setAuthorizing(false) })
-      }}>{authorizing ? english ? 'Authorizing…' : '授權中…' : authorized ? english ? 'Disconnect FHIR' : '斷開 FHIR 授權' : english ? 'Authorize FHIR' : '登入 FHIR 授權'}</Button>}
-    {saveTarget ? createPortal(<>{saveButton}{carryButton}{sourceNotice}</>, saveTarget) : <>{saveButton}{carryButton}{sourceNotice}</>}
-    <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)}
-      onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
+      }}>{authorizing ? english ? 'Authorizing…' : '授權中…' : authorized ? english ? 'Disconnect FHIR' : '斷開 FHIR 授權' : english ? 'Authorize FHIR' : '登入 FHIR 授權'}</Button>
+  const historyButton = <Button type="button" size="sm" variant="outline" className={toolbarButton} disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)}
+    onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
+  const controls = <>{authButton}{saveButton}{carryButton}{historyButton}{sourceNotice}</>
+  return <div className="flex min-w-0 flex-wrap items-center gap-1" data-testid="cdss-record-toolbar">
+    {saveTarget ? createPortal(controls, saveTarget) : controls}
     <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) { controller.current?.abort(); setApplying(false); setConfirming(false) } }}>
       <DialogContent className="sm:max-w-3xl" showCloseButton={false}>
         <DialogHeader><DialogTitle>{label}</DialogTitle>

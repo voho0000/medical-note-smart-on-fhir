@@ -54,11 +54,11 @@ for (const [entry, width] of [
     await expect(save).toBeVisible()
     await expect(save).toHaveText('儲存 CDSS 紀錄')
     await expect(page.getByTestId('cdss-save-record')).toHaveCount(1)
-    expect(await save.evaluate(button => {
+    expect(await save.evaluate((button, minimumHeight) => {
       const rect = button.getBoundingClientRect()
-      return !button.closest('[inert]') && rect.left >= 0 && rect.right <= window.innerWidth && rect.height >= 44
+      return !button.closest('[inert]') && rect.left >= 0 && rect.right <= window.innerWidth && rect.height >= minimumHeight
         && document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest('button') === button
-    })).toBe(true)
+    }, width >= 768 ? 32 : 44)).toBe(true)
     await page.screenshot({ path: info.outputPath('cdss-save.png') })
     let saveCount = 0
     let release!: () => void
