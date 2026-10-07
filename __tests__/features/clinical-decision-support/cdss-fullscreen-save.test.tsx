@@ -119,7 +119,8 @@ test.each([
       { description: expect.stringContaining(english ? 'partially masked national ID' : '部分遮蔽的身分證字號'), duration: 10000 },
     ))
     const description = jest.mocked(toast.error).mock.calls[0][1]?.description
-    expect(description).toEqual(expect.stringContaining(english ? 'full name without masking characters' : '完整姓名'))
+    expect(description).toEqual(expect.stringContaining(english ? 'at least two recognizable letters' : '至少保留兩個可辨識文字'))
+    expect(description).toEqual(expect.stringContaining(english ? 'unrecognized source characters may appear as *' : '來源未辨識字元可保留 *'))
     expect(description).toEqual(expect.stringContaining(english ? 'valid date of birth' : '有效出生日期'))
     expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
     expect(toast.success).not.toHaveBeenCalled()

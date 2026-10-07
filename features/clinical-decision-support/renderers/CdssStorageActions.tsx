@@ -96,8 +96,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
     : '請取消雲抓的「去識別化」選項後，重新匯入病人資料。'
   const identityHelp = english
-    ? 'Check that the patient data includes a full name without masking characters, a valid date of birth, and a partially masked national ID. Then reimport the data and try again.'
-    : '請確認病人資料包含完整姓名（不可含 ○ 等遮蔽字元）、有效出生日期，以及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
+    ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a partially masked national ID. Then reimport the data and try again.'
+    : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
   const run = async (saveId?: string) => {
     if (!ownerUid) return
     controller.current?.abort()

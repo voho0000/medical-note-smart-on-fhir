@@ -1,6 +1,7 @@
 import { isDeidentifiedPatient, type PatientEntity } from '@/src/core/entities/patient.entity'
 
 const MASK = /[Xx*＊○〇●Ｏ◯]/u
+const NAME_MASK = /[Xx○〇●Ｏ◯]/u
 const MASKED_NATIONAL_ID = /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u
 const NATIONAL_ID_SYSTEM = /national[-_]?id/i
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -9,7 +10,11 @@ function normalizedName(patient: PatientEntity): string {
   const names = (patient.name ?? [])
     .map((name) => name.text?.normalize('NFKC').trim().replace(/\s+/gu, ' '))
     .filter((name): name is string => Boolean(name))
-  if (names.length !== 1 || Array.from(names[0]).length < 2 || MASK.test(names[0])) {
+  // A source may substitute an unrecognized character with '*'. Keep it in
+  // the lookup key; removing or guessing it could mix different patients.
+  const knownLetters = names[0]?.match(/\p{L}/gu)?.length ?? 0
+  if (names.length !== 1 || Array.from(names[0]).length < 2 || NAME_MASK.test(names[0])
+    || (names[0].includes('*') && knownLetters < 2)) {
     throw new Error('cdss_identity_unavailable')
   }
   return names[0]
