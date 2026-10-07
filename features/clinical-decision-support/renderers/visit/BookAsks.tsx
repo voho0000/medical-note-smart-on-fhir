@@ -2,6 +2,7 @@
 
 import { useId } from 'react'
 import { effectiveAnswer } from './visit-decisions'
+import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import type { VisitAnswerProvenance } from './VisitAsks'
 import type { VisitAnswers, VisitAsk } from '../../types'
 import styles from './VisitBookLayout.module.css'
@@ -89,6 +90,7 @@ export function BookAsks({
   onGrade?: (id: string, value: string | null) => void
 }) {
   const idBase = useId()
+  const carriedFrom = useCarriedLookup()
   if (asks.length === 0 && examAsks.length === 0) return null
   return (
     <div className={styles.asks} data-testid="cdss-book-asks">
@@ -97,6 +99,7 @@ export function BookAsks({
         const labelId = `${idBase}-${ask.id}`
         const source = !prefilled && value ? sources?.[ask.id] : undefined
         const elsewhere = source?.packId && pagePackId && source.packId !== pagePackId ? source : undefined
+        const carried = !prefilled && value ? carriedFrom(`visit:${ask.id}`) : null
         return (
           <div key={ask.id} className={styles.askRow} data-book-ask={ask.id} data-answered={value ? 'true' : 'false'}>
             <span id={labelId} className={styles.askLabel}>{ask.label}</span>
@@ -122,6 +125,8 @@ export function BookAsks({
             </div>
             {prefilled && ask.prefill ? (
               <span className={styles.askNote}>{isEnglish ? 'From the record · ' : '紀錄帶入 · '}{ask.prefill.basis}</span>
+            ) : carried ? (
+              <span className={styles.carriedNote} data-carried-from={carried}>{carriedLabel(carried, isEnglish)}</span>
             ) : elsewhere ? (
               <span className={styles.askNote}>
                 {isEnglish
@@ -157,7 +162,9 @@ export function BookAsks({
                   )
                 })}
               </div>
-              {ask.previous ? <span className={styles.askNote}>{ask.previous}</span> : null}
+              {ask.answer && carriedFrom(ask.id) ? (
+                <span className={styles.carriedNote} data-carried-from={carriedFrom(ask.id) ?? undefined}>{carriedLabel(carriedFrom(ask.id) ?? '', isEnglish)}</span>
+              ) : ask.previous ? <span className={styles.askNote}>{ask.previous}</span> : null}
               {ask.note || ask.usedBy?.length ? (
                 <span className={styles.askNote}>
                   {ask.note ?? ''}

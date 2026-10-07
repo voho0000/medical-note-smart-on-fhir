@@ -2,7 +2,7 @@ jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', (
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { webcrypto } from 'node:crypto'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
 import { readCdssHistory } from '@/features/clinical-decision-support/telemetry/cdss-history'
@@ -49,7 +49,7 @@ test('last record is read and applied only after explicit confirmation; it does 
   const onCarryForward = jest.fn(() => 2)
   jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
   render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} />)
-  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
   fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
   expect(onCarryForward).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('checkbox', { name: /人工輸入/ }))
@@ -66,7 +66,7 @@ test('old rule versions stay viewable but cannot be carried forward', async () =
   const apply = jest.fn(() => 1)
   jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
   render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={apply} />)
-  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
   expect(await screen.findByText(/疾病或指引版本不同/)).toBeVisible()
   expect(screen.queryByTestId('cdss-carry-forward-review')).not.toBeInTheDocument()
   expect(apply).not.toHaveBeenCalled()
@@ -77,7 +77,7 @@ test('closing confirmation or changing patients never applies a record', async (
   const apply = jest.fn(() => 1)
   jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
   const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={apply} />)
-  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
   fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
   fireEvent.click(screen.getByRole('button', { name: '取消' }))
   expect(screen.queryByTestId('cdss-carry-forward-confirm')).not.toBeInTheDocument()
@@ -89,7 +89,7 @@ test('closing confirmation or changing patients never applies a record', async (
 test('last record does not choose a different disease', async () => {
   jest.mocked(fetch).mockResolvedValue(response({ records: [{ ...index, packId: 'other' }], hasMore: false }))
   render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1} />)
-  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
   expect(await screen.findByText(/最近 10 筆儲存中沒有此疾病/)).toBeVisible()
   expect(jest.mocked(fetch).mock.calls).toHaveLength(1)
 })
@@ -99,7 +99,7 @@ test('a rules change clears a selected confirmation without disconnecting author
   const apply = jest.fn(() => 1)
   jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
   const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={apply} />)
-  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
   fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
   view.rerender(<CdssStorageActions input={{ ...currentInput, result: { ...currentInput.result, packVersion: '2' } }} sourceRecords={() => []} onCarryForward={apply} />)
   expect(screen.queryByTestId('cdss-carry-forward-confirm')).not.toBeInTheDocument()
@@ -168,9 +168,11 @@ test.each([false, true])('saved detail presents the full stored recommendation a
   fireEvent.click(screen.getByTestId('cdss-history-records'))
   fireEvent.click(await screen.findByRole('button', { name: /synthetic/ }))
   await waitFor(() => expect(screen.getByText('SAVED_NEXT_ACTION')).toBeInTheDocument())
-  for (const value of ['Synthetic module', 'SAVED_PRIMARY_RECOMMENDATION', 'SAVED_DECISION_TITLE', 'needs-data',
+  // Each prompt opens in place; its rationale and evidence sit behind the row.
+  fireEvent.click(screen.getByRole('heading', { level: 4, name: 'SAVED_DECISION_TITLE' }))
+  for (const value of ['Synthetic module', 'SAVED_PRIMARY_RECOMMENDATION', 'SAVED_DECISION_TITLE', english ? 'Needs data' : '需補資料',
     'SAVED_RATIONALE', 'SAVED_SAFETY_BOUNDARY', 'SAVED_MISSING_DATA', 'SAVED_EVIDENCE', 'SAVED_EVIDENCE_VALUE']) {
-    expect(screen.getByText(value)).toBeVisible()
+    expect(within(screen.getByTestId('cdss-history-recommendation')).getByText(value)).toBeVisible()
   }
   const displayedTime = new Date(storedTimestampForDisplay(stored.savedAt)).toLocaleString(english ? 'en' : 'zh-TW')
   // ICU can emit thin/non-breaking spaces. Compare the exact localized text
@@ -183,7 +185,8 @@ test.each([false, true])('saved detail presents the full stored recommendation a
   expect(JSON.stringify(input)).toBe(originalInput)
   expect(sourceRecords).not.toHaveBeenCalled()
   expect(jest.mocked(fetch).mock.calls.map(([url]) => String(url))).toEqual([
-    'http://127.0.0.1:8098/cdss/v1/history', 'http://127.0.0.1:8098/cdss/v1/history/read',
+    // Opening reads the newest record of this disease; choosing it again reads it again.
+    'http://127.0.0.1:8098/cdss/v1/history', 'http://127.0.0.1:8098/cdss/v1/history/read', 'http://127.0.0.1:8098/cdss/v1/history/read',
   ])
 })
 
@@ -215,4 +218,85 @@ test('switching accounts clears open history and aborts an in-flight detail read
   await waitFor(() => expect(screen.queryByText('SAVED_NEXT_ACTION')).not.toBeInTheDocument())
   expect(screen.getByTestId('cdss-history-records')).toBeEnabled()
   view.unmount(); mockAccount.user = { uid: 'owner-a' }
+})
+
+test('opening shows the newest record of this disease beside the list, and compares each prompt with today', async () => {
+  const stored = await detail({ result: { ...result, recommendations: [
+    { ...result.recommendations[0], id: 'changed', title: 'CHANGED_PROMPT' },
+    { ...result.recommendations[0], id: 'same', title: 'SAME_PROMPT', status: 'review' },
+    { ...result.recommendations[0], id: 'gone', title: 'GONE_PROMPT', status: 'actionable', priority: 'high' },
+  ] } })
+  const other = { ...index, saveId: '22222222-2222-4222-8222-222222222222', packId: 'other', receivedAt: '2026-10-04T00:00:00Z' }
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index, other], hasMore: false }))
+  const today = { ...currentInput, result: { ...currentInput.result, recommendations: [
+    { id: 'changed', status: 'actionable' }, { id: 'same', status: 'review' },
+  ] } } as unknown as typeof currentInput
+  render(<CdssStorageActions input={today} sourceRecords={() => []} onCarryForward={() => 1}
+    packLabel={packId => ({ synthetic: '合成疾病', other: '其他疾病' })[packId]} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  const rows = await screen.findAllByTestId('cdss-history-recommendation')
+  expect(rows.map(row => within(row).getByRole('heading', { level: 4 }).textContent)).toEqual(['CHANGED_PROMPT', 'SAME_PROMPT', 'GONE_PROMPT'])
+  expect(within(rows[0]).getByText('今天：建議處理')).toBeVisible()
+  expect(within(rows[1]).getByText('相同')).toBeVisible()
+  expect(within(rows[2]).getByText('今天未出現')).toBeVisible()
+  expect(within(rows[2]).getByText('優先')).toBeVisible()
+  expect(screen.getByTestId(`cdss-history-row-${index.saveId}`)).toHaveAttribute('aria-current', 'true')
+  expect(screen.getByTestId(`cdss-history-row-${other.saveId}`)).toHaveTextContent('其他疾病・僅供調閱')
+  fireEvent.click(screen.getByRole('button', { name: '合成疾病', pressed: false }))
+  expect(screen.queryByTestId(`cdss-history-row-${other.saveId}`)).not.toBeInTheDocument()
+  expect(screen.getByTestId('cdss-carry-forward-review')).toHaveTextContent('帶入這筆…')
+})
+
+test('deleting asks first; only a confirmed delete reaches the server, and the record leaves the list', async () => {
+  const stored = await detail()
+  const calls: string[] = []
+  jest.mocked(fetch).mockImplementation(async (url, init) => {
+    const path = String(url)
+    calls.push(path.replace('http://127.0.0.1:8098', ''))
+    if (path.endsWith('/delete')) {
+      expect(JSON.parse(String(init?.body)).save_id).toBe(saveId)
+      return response({ status: 'deleted', save_id: saveId })
+    }
+    return response(path.endsWith('/read') ? stored : { records: [index], hasMore: false })
+  })
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  fireEvent.click(await screen.findByTestId('cdss-history-delete'))
+  const confirm = await screen.findByRole('alertdialog', { name: '確定要刪除這筆紀錄嗎？' })
+  fireEvent.click(within(confirm).getByRole('button', { name: '取消' }))
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  expect(calls).not.toContain('/cdss/v1/history/delete')
+  fireEvent.click(screen.getByTestId('cdss-history-delete'))
+  fireEvent.click(await screen.findByTestId('cdss-history-delete-confirm-button'))
+  await waitFor(() => expect(screen.queryByTestId(`cdss-history-row-${saveId}`)).not.toBeInTheDocument())
+  expect(calls.filter(path => path === '/cdss/v1/history/delete')).toHaveLength(1)
+  expect(screen.getByText('尚無儲存紀錄。')).toBeVisible()
+})
+
+test('the carry confirmation counts every saved decision', async () => {
+  const decision = { decision: 'deferred', reasons: ['synthetic'], recordedAt: '2026-10-03T00:00:00Z', packVersion: '1' }
+  const stored = await detail({ physician_decisions: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`m${i}`, decision])) })
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
+  expect(screen.getByText('9 項決策')).toBeVisible()
+})
+
+test('deleting the last record of a filtered disease falls back to all records', async () => {
+  const stored = await detail()
+  const other = { ...index, saveId: '22222222-2222-4222-8222-222222222222', packId: 'other', receivedAt: '2026-10-02T00:00:00Z' }
+  jest.mocked(fetch).mockImplementation(async url => {
+    const path = String(url)
+    if (path.endsWith('/delete')) return response({ status: 'deleted', save_id: saveId })
+    return response(path.endsWith('/read') ? stored : { records: [index, other], hasMore: false })
+  })
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1}
+    packLabel={packId => ({ synthetic: '合成疾病', other: '其他疾病' })[packId]} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  fireEvent.click(await screen.findByRole('button', { name: '合成疾病', pressed: false }))
+  expect(screen.queryByTestId(`cdss-history-row-${other.saveId}`)).not.toBeInTheDocument()
+  fireEvent.click(await screen.findByTestId('cdss-history-delete'))
+  fireEvent.click(await screen.findByTestId('cdss-history-delete-confirm-button'))
+  expect(await screen.findByTestId(`cdss-history-row-${other.saveId}`)).toBeVisible()
 })

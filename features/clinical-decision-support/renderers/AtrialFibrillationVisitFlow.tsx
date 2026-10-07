@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { TINTED_PRIMARY } from './visit/visit-presentation'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import type { CdssRecommendation, CdssResult } from '../types'
 import type { AfAnswers } from '../stores/af-answers.store'
@@ -187,6 +188,8 @@ function AfQuestionGroups({
 }) {
   const diagnosis = board.items.find((r) => r.id === 'af-diagnosis-and-pattern')?.diagnosisContext
   const confirmed = diagnosis?.mode === 'follow-up'
+  // An answer brought in from a saved record says so, as it does on the decision map.
+  const carriedFrom = useCarriedLookup()
   const evidenceFor = (id: string) => {
     const rows = result.recommendations.flatMap((r) => r.evidenceTables ?? []).flatMap((t) => t.items)
     // A HAS-BLED question's record reading is its score row; one the record
@@ -320,6 +323,12 @@ function AfQuestionGroups({
                 >
                   <span className="min-w-0 text-sm">
                     {en ? q.en : q.zh}
+                    {answers[q.id] !== undefined && carriedFrom(`af:${q.id}`) ? (
+                      <span className="mt-1 block w-fit rounded border border-primary/25 bg-primary/5 px-1.5 text-xs tabular-nums text-primary"
+                        data-carried-from={carriedFrom(`af:${q.id}`) ?? undefined}>
+                        {carriedLabel(carriedFrom(`af:${q.id}`) ?? '', en)}
+                      </span>
+                    ) : null}
                     {answers[q.id] === undefined &&
                     answerValue(q.id) !== undefined ? (
                       <span className="mt-1 block text-xs text-muted-foreground">

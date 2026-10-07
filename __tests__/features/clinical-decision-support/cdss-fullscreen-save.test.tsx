@@ -22,12 +22,13 @@ test('carry-forward moves into the full-window header without duplicating or unm
   const onCarryForward = jest.fn(() => 1)
   const view = render(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} />)
   view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} saveTarget={target} />)
-  expect(within(target).getByTestId('cdss-carry-forward-latest')).toBeVisible()
-  expect(within(target).getByTestId('cdss-history-records')).toBeVisible()
-  expect(screen.getAllByTestId('cdss-carry-forward-latest')).toHaveLength(1)
+  // Viewing and bringing back share one button.
+  expect(within(target).getByTestId('cdss-history-records')).toHaveAccessibleName('CDSS 紀錄與帶入')
+  expect(screen.getAllByTestId('cdss-history-records')).toHaveLength(1)
+  expect(screen.queryByTestId('cdss-carry-forward-latest')).not.toBeInTheDocument()
   view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} />)
   expect(target).toBeEmptyDOMElement()
-  expect(screen.getByTestId('cdss-carry-forward-latest')).toBeVisible()
+  expect(screen.getByTestId('cdss-history-records')).toBeVisible()
   view.unmount(); target.remove()
 })
 
@@ -65,7 +66,7 @@ test.each([false, true])('moving the save between panel and full-window header p
     expect(saveCdssSnapshot).toHaveBeenCalledWith({ ...input, ownerUid: 'owner-a', sourceRecords: [] })
     await act(async () => complete())
     expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
-    expect(screen.getByTestId('cdss-save-record')).toHaveTextContent(english ? 'Save CDSS record' : '儲存 CDSS 紀錄')
+    expect(screen.getByTestId('cdss-save-record')).toHaveAccessibleName(english ? 'Save CDSS record' : '儲存 CDSS 紀錄')
   } finally {
     view.unmount()
     target.remove()
@@ -78,7 +79,7 @@ test.each([false, true])('guests and restoring sessions cannot save or view hist
   const sourceRecords = jest.fn(() => [])
   const view = render(<CdssStorageActions input={input} sourceRecords={sourceRecords} english={english} />)
   expect(screen.getByTestId('cdss-save-record')).toBeDisabled()
-  expect(screen.getByTestId('cdss-save-record')).toHaveTextContent(english ? 'Sign in to save' : '請先登入後儲存')
+  expect(screen.getByTestId('cdss-save-record')).toHaveAccessibleName(english ? 'Sign in to save' : '請先登入後儲存')
   expect(screen.getByTestId('cdss-history-records')).toBeDisabled()
   mockAccount.loading = true
   view.rerender(<CdssStorageActions input={input} sourceRecords={sourceRecords} english={english} />)
@@ -167,7 +168,8 @@ test.each([
   }
   const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
   fireEvent.click(screen.getByTestId('cdss-history-records'))
-  if (detail) fireEvent.click(await screen.findByRole('button', { name: /synthetic/ }))
+  // Opening reads the newest record of this disease, so a detail failure shows without a second click.
+  if (detail) await waitFor(() => expect(readCdssHistory).toHaveBeenCalledTimes(1))
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent(english ? 'Patient identification failed. CDSS history cannot be retrieved.' : '病人識別失敗，無法取得 CDSS 歷史紀錄。')
   expect(alert).toHaveTextContent(english ? 'partially masked national ID' : '部分遮蔽的身分證字號')
@@ -258,5 +260,23 @@ test('switching the same patient to de-identified cancels a pending history look
   await act(async () => complete({ records: [], hasMore: false }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(screen.queryByText('尚無儲存紀錄。')).not.toBeInTheDocument()
+  view.unmount()
+})
+
+test('三區塊 does not offer saving or records, and switching to it neither cancels a pending save nor unmounts the controller', async () => {
+  mockAccount.user = { uid: 'owner-a' }; mockAccount.loading = false
+  jest.clearAllMocks()
+  let complete!: () => void
+  jest.mocked(saveCdssSnapshot).mockImplementation(() => new Promise<void>(resolve => { complete = resolve }))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} offered={false} />)
+  expect(screen.queryByTestId('cdss-save-record')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('cdss-history-records')).not.toBeInTheDocument()
+  expect(cancelCdssGatewayRequests).not.toHaveBeenCalled()
+  await act(async () => complete())
+  expect(toast.success).toHaveBeenCalledWith('CDSS 紀錄已儲存。')
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} />)
+  expect(screen.getByTestId('cdss-history-records')).toBeVisible()
   view.unmount()
 })
