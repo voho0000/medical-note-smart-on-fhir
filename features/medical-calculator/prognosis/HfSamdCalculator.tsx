@@ -62,7 +62,7 @@ export function HfSamdCard({ locale, state, onOpen }: { locale: string; state: H
               <span className="text-xs text-muted-foreground">{en ? 'Research pilot' : '研究試辦'}</span>
             </span>
             <span className="block text-sm font-semibold">{title}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{en ? 'TVGH in-hospital death within 1 or 3 months of visit. Check inputs before prediction.' : '就診後 1、3 個月內北榮院內死亡；先檢查輸入，再執行預測。'}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">{en ? 'TVGH in-hospital death within 1 or 3 months of visit. Prediction checks inputs automatically and reports gaps.' : '就診後 1、3 個月內北榮院內死亡；執行預測時自動檢查資料，缺漏會顯示提醒。'}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
             <span aria-live="polite" aria-atomic="true" className="text-right text-xs text-muted-foreground">{scored ? <><span className="block font-semibold tabular-nums text-foreground">{probability}</span>{en ? `${scored.horizonMonths} month(s)` : `${scored.horizonMonths} 個月`}</> : state.busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Not calculated' : '尚未計算')}</span>
