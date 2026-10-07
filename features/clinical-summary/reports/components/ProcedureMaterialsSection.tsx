@@ -63,7 +63,7 @@ export function ProcedureMaterialsSection({ materials, procedureTitle }: Procedu
                 </div>
                 {(inferred || material.licenseNumbers.length > 0) && (
                   <details className="group mt-1 text-xs">
-                    <summary className="inline-flex min-h-6 max-md:min-h-11 cursor-pointer items-center gap-2 text-primary">
+                    <summary className="inline-flex min-h-[24px] max-md:min-h-[44px] cursor-pointer items-center gap-2 text-primary">
                       {inferred && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/70 px-2 py-px text-foreground">
                           <Link2 className="h-3 w-3" aria-hidden="true" />
