@@ -4,6 +4,7 @@ import type { Observation } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
 import { getProcedureCategoryCode } from '../utils/procedure-category'
 import { useLanguage } from "@/src/application/providers/language.provider"
+import type { ProcedureSpecialMaterialEntity } from "@/src/core/entities/clinical-data.entity"
 
 export function useProcedureRows(procedures: any[]) {
   const { t, locale } = useLanguage()
@@ -214,6 +215,19 @@ export function useProcedureRows(procedures: any[]) {
       for (const { facts: cf } of childFacts) {
         components.push(buildChildComponent(cf))
       }
+      const specialMaterials: ProcedureSpecialMaterialEntity[] = Array.isArray(procedure?.specialMaterials)
+        ? procedure.specialMaterials
+        : []
+      if (specialMaterials.length > 0) {
+        components.push({
+          code: { text: t.procedures.materials.heading },
+          valueString: specialMaterials
+            .map((m) => [m.materialCode, m.nameZh, m.nameEn].filter(Boolean).join(' '))
+            .join('; '),
+          _isProcedureMaterials: true,
+          _materials: specialMaterials,
+        })
+      }
 
       const observation: Observation = {
         resourceType: "Observation",
@@ -247,6 +261,7 @@ export function useProcedureRows(procedures: any[]) {
         procedureCategory: f.procedureCategory,
         // Number of sub-procedures grouped under this session (0 = standalone).
         relatedCount: children.length,
+        specialMaterialCount: specialMaterials.length,
       }
     })
   }, [procedures, t, isZh])

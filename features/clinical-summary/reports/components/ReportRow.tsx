@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
+import { AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, Package, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -1353,6 +1353,15 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
                 <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:bg-primary/10 dark:text-primary">
                   +{row.relatedCount} 相關處置
+                </span>
+              )}
+              {row.group === "procedures" && (row.specialMaterialCount ?? 0) > 0 && (
+                <span
+                  data-testid="procedure-material-count"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground"
+                >
+                  <Package className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  {t.procedures.materials.count.replace('{count}', String(row.specialMaterialCount))}
                 </span>
               )}
             </div>
