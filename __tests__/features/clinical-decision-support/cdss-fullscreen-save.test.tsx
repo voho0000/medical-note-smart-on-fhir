@@ -23,6 +23,7 @@ test('carry-forward moves into the full-window header without duplicating or unm
   const view = render(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} />)
   view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} saveTarget={target} />)
   expect(within(target).getByTestId('cdss-carry-forward-latest')).toBeVisible()
+  expect(within(target).getByTestId('cdss-history-records')).toBeVisible()
   expect(screen.getAllByTestId('cdss-carry-forward-latest')).toHaveLength(1)
   view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} />)
   expect(target).toBeEmptyDOMElement()

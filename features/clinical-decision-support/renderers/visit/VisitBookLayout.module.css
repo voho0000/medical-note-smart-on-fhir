@@ -120,22 +120,26 @@
 
 /* ------------------------------- header ------------------------------- */
 
-/* Save and carry-forward move here; their controller remains in the CDSS panel. */
-.saveRecord { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+/* Record controls move here; their controller remains in the CDSS panel. */
+.saveRecord { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; }
 .saveRecord:empty { display: none; }
 .saveRecord :global(button) {
-  min-height: 44px;
-  padding: 6px 12px;
+  height: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
   border: 1px solid var(--blue);
   border-radius: 8px;
   background: var(--sheet);
   color: var(--blue-ink);
-  font: 500 13px/1.4 var(--sans);
+  font: 500 12px/1.4 var(--sans);
   box-shadow: none;
 }
 .saveRecord :global(button:hover:not(:disabled)) { background: var(--blue-soft); }
 .saveRecord :global(button:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
 .saveRecord :global(button:disabled) { cursor: wait; }
+@media (max-width: 767px) {
+  .saveRecord :global(button) { height: 44px; min-height: 44px; }
+}
 
 
 .head {
