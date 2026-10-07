@@ -1,10 +1,12 @@
 'use client'
 
+import { useEffect, useState, type ReactNode } from 'react'
+import { Check, ChevronRight } from 'lucide-react'
 import { useMedcloudHfDryRun } from '@/src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook'
 import { hfDiagnosisVisits, suggestHfDiagnosis, type HfPhysicianDiagnosisDraft } from '@/src/core/hf-risk/physician-diagnosis'
 import { summarizeHfInput } from '@/src/core/hf-risk/input-summary'
-import { HfPredictionResultView } from './HfPredictionResult'
-import type { HfSelection } from '@/src/core/hf-risk/contract'
+import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
+import { HfProvenance, HfResultsView, hfResultText } from './HfPredictionResult'
 
 const GAP: Record<string, [string, string]> = {
   'index-diagnosis-missing': ['門診缺少可核對的 ICD-10-CM／ICD-9-CM 診斷；一般 ICD-10 不自行換碼，可由醫師確認後補充本次診斷', 'The index visit lacks a verified ICD-10-CM/ICD-9-CM diagnosis; correct the source or explicitly supply HF for this exact visit'],
@@ -56,13 +58,42 @@ const ERRORS: Record<string, [string, string]> = {
   'invalid-prediction-response': ['預測回應不符合模型契約，已丟棄', 'Prediction response does not match the model contract; discarded'],
   'invalid-dry-run-response': ['服務回應不符合輸入檢查格式，已丟棄', 'Invalid input-validation response discarded'],
 }
+
+const LAB_NAMES: Record<string, string> = {
+  BNP: 'NT-proBNP', CREAT: 'Creatinine', BUN: 'BUN', K: 'K', HGB: 'Hemoglobin', ALB: 'Albumin', PLT: 'Platelet', WBC: 'WBC', CRP: 'CRP',
+  GLU: 'Glucose', HBA1C: 'HbA1c', BILI: 'Bilirubin', ALT: 'ALT', AST: 'AST', UA: 'Uric acid', LDLC: 'LDL-C', HDLC: 'HDL-C', CHOL: 'Cholesterol',
+  RDW: 'RDW', LYMP: 'Lymphocyte', SEG: 'Segment', TG: 'Triglyceride',
+}
+const GUIDE_KEY = 'mediprisma.hf-samd.guide-dismissed'
+const readGuideDismissed = () => { try { return window.localStorage.getItem(GUIDE_KEY) === '1' } catch { return false } }
+
 export function HfMedcloudDryRun({ locale }: { locale: string }) {
   return <HfMedcloudDetail locale={locale} state={useMedcloudHfDryRun()} />
 }
 
+function Step({ number, done, active, title, status, children, label }: { number: number; done: boolean; active?: boolean; title: string; status?: ReactNode; children: ReactNode; label?: string }) {
+  return <section aria-label={label ?? title} className={`space-y-3 rounded-lg border bg-background p-3 ${active ? 'border-primary ring-1 ring-primary' : 'border-border'}`}>
+    <div className="flex flex-wrap items-center gap-2">
+      <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${done ? 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950' : active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{done ? <Check className="h-3.5 w-3.5" /> : number}</span>
+      <h4 className="text-sm font-semibold">{title}</h4>
+      {status && <span className="ml-auto text-xs text-muted-foreground">{status}</span>}
+    </div>
+    {children}
+  </section>
+}
+
 export function HfMedcloudDetail({ locale, state }: { locale: string; state: ReturnType<typeof useMedcloudHfDryRun> }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, result: visibleResult, prediction, message: visibleMessage, prepare, select, supplementDiagnosis, predict } = state
+  const { current, configured, intranet, busy, runs, message: visibleMessage, recordKey, prepare, select, supplementDiagnosis, predict } = state
+  const [guideOpen, setGuideOpen] = useState(true)
+  const [diagnosisOpen, setDiagnosisOpen] = useState(!current?.input.physicianDiagnosis)
+  const { copied, copy } = useCopyToClipboard()
+  const [copyFailed, setCopyFailed] = useState(false)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-only preference, read after hydration
+  useEffect(() => { if (readGuideDismissed()) setGuideOpen(false) }, [])
+  // Preparing is local and sends nothing; do it as soon as the view opens or the record changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!current && !busy) void prepare() }, [recordKey])
   const summary = current ? summarizeHfInput(current.input) : null
   const missingIndexDiagnosis = current?.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')
   const diagnosisVisits = current ? hfDiagnosisVisits(current.baseInput) : []
@@ -75,139 +106,204 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
     confirmed: next.code === 'I50.9' && next.encounters.length > 0
       && next.encounters.every(reference => Number.isInteger(next.ranks[reference]) && next.ranks[reference] >= 1 && next.ranks[reference] <= 50),
   })
-  const hasWarnings = visibleResult?.issues.some(issue => issue.severity === 'warning')
   const text = (pair: [string, string]) => pair[en ? 1 : 0]
+  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(ERRORS[code] ?? ['無法完成檢查，請確認院內連線後重試', 'Unable to validate; check the intranet connection and retry'])
+  const hospital = current ? current.visits.find(visit => visit.reference === current.selection.encounter)?.providerName ?? current.selection.provider : ''
+  const confirmed = current?.input.physicianDiagnosis
+  const suggestionDates = (suggestion: HfPhysicianDiagnosisDraft | null) => suggestion ? diagnosisVisits.filter(visit => suggestion.encounters.includes(visit.reference))
+    .map(visit => visit.date + (visit.reference === current?.baseInput.indexEncounterReference ? (en ? ' (index)' : '（基準）') : '')).join('、') : ''
+  const attestation = confirmed ? `${en ? 'Physician confirmation (user attestation)' : '醫師確認（使用者聲明）'}：I50.9 · ${confirmed.visits.map(visit => `${visit.date} (${en ? 'rank' : '順位'} ${visit.rank})`).join('、')}` : undefined
+  const hasScore = !!runs && Object.values(runs).some(run => run?.prediction?.verdict === 'scored')
   const button = 'min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+  const link = 'min-h-8 rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   const control = 'min-h-11 w-full rounded-md border border-border bg-background px-2 text-sm'
-  return <section aria-label={en ? 'HF record model' : 'HF 病歷模型'} className="@container min-w-0 space-y-2 border-t border-border px-2.5 pb-2 pt-2" data-testid="hf-medcloud-dry-run">
-    <div className="flex items-center justify-between gap-2">
-      <h3 className="text-sm font-semibold">{en ? 'TVGH HF research trial' : '北榮 HF 研究試用'}</h3>
-      <button type="button" className={button} onClick={prepare} disabled={busy}>{en ? 'Prepare model input' : '整理模型資料'}</button>
+  const chevron = <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+  const quickChoice = (choice: 'outpatient' | 'inpatient', suggestion: HfPhysicianDiagnosisDraft | null, label: string, unavailable: string) => {
+    const id = `hf-dx-${choice}`
+    const checked = draft?.quickChoice === choice
+    return <div className={`rounded-md border p-3 ${checked ? 'border-primary bg-primary/5' : 'border-border'} ${suggestion ? '' : 'opacity-70'}`}>
+      <label className="flex min-h-6 items-start gap-3 text-sm font-medium">
+        <input type="radio" name="hf-diagnosis-quick-choice" className="mt-0.5 h-4 w-4 shrink-0" checked={checked} disabled={!suggestion} aria-describedby={id} onChange={() => suggestion && chooseDiagnosis(suggestion)} />
+        <span>{label}</span>
+      </label>
+      <p id={id} className="pl-7 text-xs text-muted-foreground tabular-nums">{suggestion ? `${suggestionDates(suggestion)} · ${hospital}` : unavailable}</p>
     </div>
-    <details className="text-xs text-muted-foreground">
-      <summary className="cursor-pointer py-1">{en ? 'About the model and access' : '模型與使用說明'}</summary>
-      <div className="space-y-1 pb-1">
-        <p>{en ? 'Outpatient 1- and 3-month models. Running prediction checks inputs first, then predicts if accepted; missing or incompatible data is reported.' : '門診 1、3 個月模型。點擊執行預測後會先檢查資料，通過後自動進行預測；缺漏或不符合條件會顯示提醒。'}</p>
-        <p>{en ? 'Supports imported cloud, health-bank and TVGH EHR bridge records. Available inputs depend on the source data.' : '支援雲端、健康與北榮懷爾抓抓匯入的病歷；可用欄位依來源資料而定。'}</p>
-        {intranet && <p>{en ? 'Hospital network authorization; no Firebase sign-in required. The service verifies access.' : '院內網路授權模式，不需 Firebase 登入；是否可用由院內服務驗證。'}</p>}
+  }
+
+  return <section aria-label={en ? 'HF record model' : 'HF 病歷模型'} className="@container min-w-0 space-y-3 px-2.5 pb-3 pt-2" data-testid="hf-medcloud-dry-run">
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-base font-semibold">{en ? 'TVGH HF research trial' : '北榮 HF 研究試用'}</h3>
+        <span className="rounded-full border border-amber-600/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-900 dark:text-amber-200">{en ? 'Research pilot' : '研究試辦'}</span>
+      </div>
+      <p className="text-sm text-muted-foreground">{en ? 'Estimates TVGH in-hospital death within 1 and 3 months of an outpatient visit.' : '估計門診後 1 個月與 3 個月內，在北榮院內死亡的機率。'}</p>
+    </div>
+
+    <details className="group rounded-lg border border-border bg-background" open={guideOpen} onToggle={event => setGuideOpen(event.currentTarget.open)}>
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">{chevron}{en ? 'How to use: three steps' : '使用說明：三個步驟'}</summary>
+      <div className="space-y-3 px-3 pb-3">
+        <ol className="grid gap-2 @md:grid-cols-3">
+          {[
+            [en ? '1 Choose the index visit' : '1 選基準門診', en ? 'The visit the 1- and 3-month predictions start from.' : '以哪一次門診為起點，同時預測 1 與 3 個月。'],
+            [en ? '2 Confirm HF history' : '2 確認心衰病史', en ? 'The model applies only to patients with an HF diagnosis; cloud records often omit it.' : '模型只適用已有心衰診斷的病人，雲端資料常缺，由您確認。'],
+            [en ? '3 Run prediction' : '3 執行預測', en ? 'Inputs are checked first; gaps are listed.' : '自動檢查資料，通過才計算；缺漏會列出。'],
+          ].map(([title, body]) => <li key={title} className="space-y-1 rounded-md bg-muted/50 p-2.5">
+            <p className="text-xs font-semibold text-primary">{title}</p>
+            <p className="text-xs text-muted-foreground">{body}</p>
+          </li>)}
+        </ol>
+        <p className="text-xs text-muted-foreground">{en ? 'Supports imported cloud, health-bank and TVGH EHR bridge records; available inputs depend on the source.' : '支援雲端、健康與北榮懷爾抓抓匯入的病歷；可用欄位依來源資料而定。'}</p>
+        {intranet && <p className="text-xs text-muted-foreground">{en ? 'Hospital network authorization; no Firebase sign-in required. The service verifies access.' : '院內網路授權模式，不需 Firebase 登入；是否可用由院內服務驗證。'}</p>}
+        <button type="button" className={button + ' min-h-9 py-1 text-xs text-primary'} onClick={() => { try { window.localStorage.setItem(GUIDE_KEY, '1') } catch { /* preference only */ } setGuideOpen(false) }}>{en ? 'Got it; keep collapsed' : '知道了，之後收起'}</button>
       </div>
     </details>
     {process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY === 'synthetic' && <p className="text-xs text-muted-foreground">{en ? 'Local preview relay: only the supplied synthetic fixture is accepted. Production browser CORS is not verified by this preview.' : '本機驗收中繼：僅接受指定合成病例；此預覽不代表正式瀏覽器 CORS 已通過。'}</p>}
+    {!configured && <p className="text-sm font-medium">{text(ERRORS['gateway-config'])}</p>}
+    {!current && !visibleMessage && <p className="text-sm text-muted-foreground" role="status">{en ? 'Preparing the record…' : '整理病歷資料中…'}</p>}
+    {!current && visibleMessage && <button type="button" className={link} onClick={prepare}>{en ? 'Prepare the record again' : '重新整理病歷資料'}</button>}
+
     {current && <>
-      <div className="grid gap-2 @xs:grid-cols-2">
-        <label className="min-w-0 space-y-1 text-sm">{en ? 'Index visit / hospital' : '門診基準日／院所'}
+      <Step number={1} done title={en ? 'Step 1 · Index visit' : '步驟 1　基準門診'} status={en ? 'Most recent visit selected' : '已自動帶入最近一次門診'}>
+        <label className="block min-w-0 space-y-1 text-sm">{en ? 'Index visit / hospital' : '門診基準日／院所'}
           <select className={control} value={current.selection.encounter} disabled={busy} onChange={event => {
             const visit = current.visits.find(visit => visit.reference === event.target.value)
-            if (visit) select({ ...current.selection, encounter: visit.reference, provider: visit.provider })
+            if (visit) { setDiagnosisOpen(true); select({ ...current.selection, encounter: visit.reference, provider: visit.provider }) }
           }}>{current.visits.map((visit, index) => <option key={visit.reference} value={visit.reference}>{visit.date} · {visit.providerName ?? visit.provider}{current.source === 'medcloud' ? ` · ${visit.provider}` : ''} · {index + 1}</option>)}</select>
         </label>
-        <label className="min-w-0 space-y-1 text-sm">{en ? 'Model time horizon' : '模型期間'}
-          <select className={control} value={current.selection.claim} disabled={busy} onChange={event => select({ ...current.selection, claim: event.target.value as HfSelection['claim'] })}>
-            <option value="P1_CD_mortality_1m">{en ? 'In-hospital death within 1 month of visit' : '就診後 1 個月內院內死亡'}</option>
-            <option value="P1_CD_mortality_3m">{en ? 'In-hospital death within 3 months of visit' : '就診後 3 個月內院內死亡'}</option>
-          </select>
-        </label>
-      </div>
-      <section aria-label={en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'} className="space-y-2 border-t border-border pt-2" data-testid="hf-physician-diagnosis">
-        <h4 className="text-sm font-semibold">{en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'}{current.input.physicianDiagnosis ? (en ? ' · Confirmed' : ' · 已確認') : ''}</h4>
-        <p className="text-xs text-muted-foreground">{en ? 'Cloud records may omit HF diagnoses. Confirm the HF history before running prediction; select the applicable visits below.' : '雲端病歷可能未完整提供心衰診斷。執行預測前，請由醫師確認心衰病史並選擇適用的就診紀錄。'}</p>
-        <div className="space-y-2 pb-2">
-          <fieldset disabled={busy} className="grid grid-cols-1 gap-x-2 gap-y-1 @xs:grid-cols-2">
-            <legend className="mb-1 text-sm font-medium">{en ? 'Confirm HF history' : '確認心衰病史'}</legend>
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input type="radio" name="hf-diagnosis-quick-choice" checked={draft?.quickChoice === 'outpatient'} disabled={!outpatientSuggestion} onChange={() => outpatientSuggestion && chooseDiagnosis(outpatientSuggestion)} />
-              <span>{en ? 'HF diagnosed at the two most recent outpatient visits' : '最近兩次門診皆有心衰診斷'}</span>
-            </label>
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input type="radio" name="hf-diagnosis-quick-choice" checked={draft?.quickChoice === 'inpatient'} disabled={!inpatientSuggestion} onChange={() => inpatientSuggestion && chooseDiagnosis(inpatientSuggestion)} />
-              <span>{en ? 'HF diagnosed during the most recent admission' : '最近一次住院有心衰診斷'}</span>
-            </label>
+        <p className="text-xs text-muted-foreground">{en ? 'Both 1- and 3-month outcomes are calculated. Only this hospital\'s records on or before the index date are used.' : '同時計算 1 個月與 3 個月。只用這家院所、基準日當天及以前的紀錄。'}{' '}
+          <button type="button" className={link + ' text-xs'} disabled={busy} onClick={prepare}>{en ? 'Prepare again' : '重新整理'}</button>
+        </p>
+      </Step>
+
+      <Step number={2} done={!!confirmed && !diagnosisOpen} active={!confirmed || diagnosisOpen} label={en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'} title={en ? 'Step 2 · Confirm HF history' : '步驟 2　確認心衰病史'}
+        status={confirmed ? (en ? 'Confirmed' : '已確認') : (en ? 'Needs confirmation' : '待確認')}>
+        {confirmed && !diagnosisOpen ? <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 text-sm">{draft?.quickChoice === 'inpatient' ? (en ? 'HF diagnosed during the most recent admission' : '最近一次住院有心衰診斷') : draft?.quickChoice === 'outpatient' ? (en ? 'HF diagnosed at the two most recent outpatient visits' : '最近兩次門診皆有心衰診斷') : (en ? 'Custom visits' : '自訂就診')} · I50.9</p>
+          <button type="button" className={button + ' min-h-9 py-1 text-primary'} disabled={busy} onClick={() => setDiagnosisOpen(true)}>{en ? 'Change' : '修改'}</button>
+        </div> : <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">{en ? 'Cloud records often omit HF diagnoses. Choose the option that matches the chart; I50.9 is added to those visits for this request only.' : '雲端病歷常未帶出心衰診斷。請選一項與病歷相符的情況，系統只在本次請求為那幾次就診補上 I50.9。'}</p>
+          <fieldset disabled={busy} className="grid gap-2 @md:grid-cols-2">
+            <legend className="sr-only">{en ? 'Confirm HF history' : '確認心衰病史'}</legend>
+            {quickChoice('outpatient', outpatientSuggestion, en ? 'HF diagnosed at the two most recent outpatient visits' : '最近兩次門診皆有心衰診斷', en ? 'Unavailable: requires the index visit and one other eligible outpatient visit.' : '門診選項無法使用：需有基準門診及另一筆可用門診紀錄。')}
+            {quickChoice('inpatient', inpatientSuggestion, en ? 'HF diagnosed during the most recent admission' : '最近一次住院有心衰診斷', en ? 'Unavailable: no eligible completed admission on or before the index date.' : '住院選項無法使用：基準日以前沒有可用的已結束住院紀錄。')}
           </fieldset>
-          {!outpatientSuggestion && <p className="text-xs text-muted-foreground">{en ? 'Outpatient option unavailable: requires the index visit and one other eligible outpatient visit.' : '門診選項無法使用：需有基準門診及另一筆可用門診紀錄。'}</p>}
-          {!inpatientSuggestion && <p className="text-xs text-muted-foreground">{en ? 'Admission option unavailable: no eligible completed admission on or before the index date.' : '住院選項無法使用：基準日以前沒有可用的已結束住院紀錄。'}</p>}
-          {draft?.quickChoice && <p className="text-xs text-muted-foreground">{en ? 'Selected HF dates' : '心衰診斷日期'}：{diagnosisVisits.filter(visit => draft.encounters.includes(visit.reference)).map(visit => visit.date + (diagnosisVisits.filter(item => draft.encounters.includes(item.reference) && item.date === visit.date).length > 1 ? ` (#${diagnosisVisits.findIndex(item => item.reference === visit.reference) + 1})` : '')).join('、')} · I50.9<br />{en ? 'Unranked supplemental codes will be added as secondary diagnoses; existing ranks are retained.' : '未標順位的補充碼列為附加次診斷，既有順位保留。'}</p>}
-          {draft?.encounters.some(reference => diagnosisVisits.some(visit => visit.reference === reference && diagnosisVisits.some(other => other.reference !== reference && draft.encounters.includes(other.reference) && other.date === visit.date))) && <p className="text-xs text-muted-foreground">{en ? 'Same-day visits are separate encounters. Match the displayed visit number in advanced settings before selecting.' : '同日紀錄是不同次就診，請依進階設定的就診編號核對，勿將同日紀錄視為同一次。'}</p>}
-          <details>
-            <summary className="cursor-pointer py-2 text-xs text-muted-foreground">{en ? 'Advanced settings: dates and diagnosis ranks' : '進階設定：日期與診斷順位'}</summary>
+          {draft?.encounters.some(reference => diagnosisVisits.some(visit => visit.reference === reference && diagnosisVisits.some(other => other.reference !== reference && draft.encounters.includes(other.reference) && other.date === visit.date))) && <p className="text-xs text-amber-900 dark:text-amber-200">{en ? 'Same-day visits are separate encounters. Match the displayed visit number in advanced settings before selecting.' : '同日紀錄是不同次就診，請依進階設定的就診編號核對，勿將同日紀錄視為同一次。'}</p>}
+          <details className="group border-t border-border pt-1">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">{chevron}{en ? 'Different dates? Choose visits and diagnosis ranks' : '日期不同？自訂就診與診斷順位'}</summary>
             <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">{en ? 'Only existing visits at the selected hospital are used. If the HF dates differ, use advanced settings. The source record is unchanged.' : '僅使用所選院所的既有就診；心衰診斷若不是這些日期，請用進階設定。原始病歷不變。'}</p>
-          <p className="text-xs text-muted-foreground">{en ? 'Acceptance still depends on the API. Synthetic tests suggest outpatient diagnosis counts affect eligibility; one added code may still be refused.' : '是否接受仍由 API 判定；合成測試顯示門診診斷次數會影響檢查，單筆補碼仍可能被拒絕。'}</p>
-          <label className="block space-y-1 text-sm">{en ? 'Supplemental ICD-10-CM code' : '補充 ICD-10-CM 診斷碼'}
-            <select className={control} value={draft?.code ?? ''} disabled={busy} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, code: event.target.value, confirmed: false })}>
-              <option value="">{en ? 'Select a diagnosis' : '請選擇診斷'}</option>
-              <option value="I50.9">{en ? 'I50.9 — Heart failure, unspecified' : 'I50.9 — 心衰竭，未特指'}</option>
-            </select>
-          </label>
-          <fieldset className="space-y-1" disabled={busy}>
-            <legend className="text-sm font-medium">{en ? 'Visits with physician-confirmed HF' : '醫師確認已有心衰診斷的就診日期'}</legend>
-            <div className="max-h-44 overflow-y-auto rounded-md border border-border px-2">
-              {diagnosisVisits.map(visit => <div key={visit.reference} className="py-1">
-                <label className="flex min-h-11 items-center gap-2 text-sm">
-                  <input type="checkbox" checked={draft?.encounters.includes(visit.reference) ?? false} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, confirmed: false, encounters: event.target.checked ? [...current.diagnosisDraft.encounters, visit.reference] : current.diagnosisDraft.encounters.filter(reference => reference !== visit.reference) })} />
-                  <span>{visit.date} · {visit.encounterClass === 'AMB' ? (en ? 'Outpatient' : '門診') : visit.encounterClass === 'IMP' ? (en ? 'Admission' : '住院') : (en ? 'Emergency' : '急診')} · #{diagnosisVisits.findIndex(item => item.reference === visit.reference) + 1}{visit.reference === current.baseInput.indexEncounterReference ? (en ? ' · Index visit' : ' · 基準就診') : ''}</span>
-                </label>
-                {draft?.encounters.includes(visit.reference) && <label className="block space-y-1 pb-2 text-sm">{en ? `Diagnosis rank for ${visit.date}` : `${visit.date} 診斷順位`}
-                  <input type="number" min={1} max={50} step={1} className={control} value={draft.ranks[visit.reference] || ''} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, confirmed: false, ranks: { ...current.diagnosisDraft.ranks, [visit.reference]: Number(event.target.value) } })} />
-                </label>}
-              </div>)}
-            </div>
-          </fieldset>
-          {visibleMessage === 'physician-diagnosis-rank-conflict' && <p className="text-xs font-medium" role="alert">{text(ERRORS['physician-diagnosis-rank-conflict'])}</p>}
-          {invalidDiagnosisRank && <p className="text-xs font-medium" role="status" aria-live="polite">{en ? 'Enter an integer diagnosis rank from 1 to 50 for every selected visit. Incomplete supplementation is not applied.' : '每次所選就診的診斷順位須為 1–50 的整數；補充資料未完整前不會套用。'}</p>}
-          <p className="text-xs text-muted-foreground">{en ? 'Rank 1 is primary; rank 2 or higher is secondary. Confirm the actual rank; the API does not recognize unranked supplemental diagnoses.' : '順位 1 為主診斷，2 以上為次診斷。請依當時就診確認順位；API 不辨識未標順位的補充碼。'}</p>
+              <p className="text-xs text-muted-foreground">{en ? 'Tick the visits that had HF and enter each rank (1 is primary). The API does not recognize unranked supplemental codes; acceptance is still decided by the API. The source record is unchanged.' : '勾選確有心衰診斷的就診並填順位（1 為主診斷，2 以上為次診斷）。API 不辨識未標順位的補充碼，是否接受仍由 API 判定。原始病歷不變。'}</p>
+              <label className="block space-y-1 text-sm">{en ? 'Supplemental ICD-10-CM code' : '補充 ICD-10-CM 診斷碼'}
+                <select className={control} value={draft?.code ?? ''} disabled={busy} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, code: event.target.value, confirmed: false })}>
+                  <option value="">{en ? 'Select a diagnosis' : '請選擇診斷'}</option>
+                  <option value="I50.9">{en ? 'I50.9 — Heart failure, unspecified' : 'I50.9 — 心衰竭，未特指'}</option>
+                </select>
+              </label>
+              <fieldset className="space-y-1" disabled={busy}>
+                <legend className="text-sm font-medium">{en ? 'Visits with physician-confirmed HF' : '醫師確認已有心衰診斷的就診日期'}</legend>
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border px-2">
+                  {diagnosisVisits.map(visit => <div key={visit.reference} className="py-1">
+                    <label className="flex min-h-11 items-center gap-2 text-sm">
+                      <input type="checkbox" checked={draft?.encounters.includes(visit.reference) ?? false} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, confirmed: false, encounters: event.target.checked ? [...current.diagnosisDraft.encounters, visit.reference] : current.diagnosisDraft.encounters.filter(reference => reference !== visit.reference) })} />
+                      <span className="tabular-nums">{visit.date} · {visit.encounterClass === 'AMB' ? (en ? 'Outpatient' : '門診') : visit.encounterClass === 'IMP' ? (en ? 'Admission' : '住院') : (en ? 'Emergency' : '急診')} · #{diagnosisVisits.findIndex(item => item.reference === visit.reference) + 1}{visit.reference === current.baseInput.indexEncounterReference ? (en ? ' · Index visit' : ' · 基準就診') : ''}</span>
+                    </label>
+                    {draft?.encounters.includes(visit.reference) && <label className="block space-y-1 pb-2 text-sm">{en ? `Diagnosis rank for ${visit.date}` : `${visit.date} 診斷順位`}
+                      <input type="number" min={1} max={50} step={1} className={control} value={draft.ranks[visit.reference] || ''} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, confirmed: false, ranks: { ...current.diagnosisDraft.ranks, [visit.reference]: Number(event.target.value) } })} />
+                    </label>}
+                  </div>)}
+                </div>
+              </fieldset>
+              {visibleMessage === 'physician-diagnosis-rank-conflict' && <p className="text-xs font-medium" role="alert">{text(ERRORS['physician-diagnosis-rank-conflict'])}</p>}
+              {invalidDiagnosisRank && <p className="text-xs font-medium" role="status" aria-live="polite">{en ? 'Enter an integer diagnosis rank from 1 to 50 for every selected visit. Incomplete supplementation is not applied.' : '每次所選就診的診斷順位須為 1–50 的整數；補充資料未完整前不會套用。'}</p>}
             </div>
           </details>
-        </div>
-      </section>
-      {current.input.physicianDiagnosis && <p className="text-sm" role="note">{en ? 'Physician confirmation (user attestation)' : '醫師確認（使用者聲明）'}：I50.9 · {current.input.physicianDiagnosis.visits.map(visit => `${visit.date} (${en ? 'rank' : '順位'} ${visit.rank})`).join('、')}<span className="block text-xs text-muted-foreground">{en ? 'Confirmed at' : '確認時間'}：{current.input.physicianDiagnosis.confirmedAt} · {en ? 'This request only' : '僅本次請求'}</span></p>}
-      <p className="text-xs text-muted-foreground">{en ? 'Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded.' : '執行檢查會將整理後的生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。'}</p>
-      <div className="sticky top-0 z-10 space-y-1 border-y border-border bg-background py-2" data-testid="hf-model-actions">
-      <button type="button" className={button + ' w-full min-w-0 px-2 bg-primary text-primary-foreground'} disabled={busy || !configured || missingIndexDiagnosis} onClick={predict}>
-        {busy ? (en ? 'Checking inputs and predicting…' : '檢查資料與預測中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
-      </button>
-      {missingIndexDiagnosis && <p className="text-xs font-medium" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in diagnosis settings, or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在診斷設定補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
-      </div>
-      {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Inputs are checked before prediction. Missing or incompatible data will be reported.' : '執行時會先檢查資料；若有缺漏或不符合條件，會顯示提醒。'}</p>}
-      <details className="border-t border-border pt-2">
-        <summary className="cursor-pointer py-2 text-sm font-medium">{en ? 'Input summary and source gaps' : '本次輸入摘要與來源缺漏'}</summary>
-        <div className="space-y-3 pb-2">
-      <p className="text-xs text-muted-foreground">{en ? 'Record source' : '病歷來源'}：{current.source === 'medcloud' ? (en ? 'NHI cloud bridge' : '雲端懷爾抓抓') : current.source === 'health-bank' ? (en ? 'Health-bank bridge' : '健康懷爾抓抓') : (en ? 'TVGH EHR bridge' : '北榮懷爾抓抓')}</p>
+        </div>}
+        {confirmed && <p className="text-xs" role="note">{attestation}<span className="block text-muted-foreground">{en ? 'Confirmed at' : '確認時間'}：{confirmed.confirmedAt} · {en ? 'This request only; the source record is unchanged' : '僅本次請求，不改原始病歷'}</span></p>}
+      </Step>
 
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-        <dt>{en ? 'Hospital' : '院所'}</dt><dd className="min-w-0 break-words">{current.visits.find(visit => visit.reference === current.selection.encounter)?.providerName ?? current.selection.provider}</dd>
-        <dt>{en ? 'Index date' : '門診基準日'}</dt><dd className="tabular-nums">{current.input.indexDate}</dd>
-        <dt>{en ? 'Collection dates' : '採檢日期'}</dt><dd className="min-w-0 break-words tabular-nums">{summary?.dates.length ? `${summary.dates[0]} – ${summary.dates.at(-1)} · ${summary.dates.length} ${en ? 'days' : '天'}` : (en ? 'No usable labs' : '沒有可用檢驗')}</dd>
-      </dl>
-      <p className="text-xs text-muted-foreground">{en ? 'Outcome: death during hospitalization at TVGH; deaths outside TVGH are not included.' : '結局定義為北榮院內死亡，不包含院外或他院死亡；這份病歷來源適用性尚待驗證。'}</p>
-      <p className="text-sm tabular-nums">{en ? 'Prepared inputs' : '整理後資料'}：{en ? 'visits' : '就診'} {current.input.counts.Encounter ?? 0} · {en ? 'diagnoses' : '診斷'} {current.input.counts.Condition ?? 0} · {en ? 'labs' : '檢驗'} {current.input.counts.Observation ?? 0} · {en ? 'procedures' : '處置'} {current.input.counts.Procedure ?? 0}</p>
-      {summary && summary.missingLabs.length > 0 && <details className="text-xs text-muted-foreground"><summary className="cursor-pointer py-2">{en ? 'Missing model lab items' : '未提供的模型檢驗項目'} · {summary.missingLabs.length}</summary><p className="break-words">{summary.missingLabs.map(key => key === 'BNP' ? 'NT-proBNP' : key).join('、')}</p><p>{en ? 'Missing tests are not treated as normal or zero. The model may accept inputs with warnings.' : '缺值不當作正常或零值；模型可能接受輸入並回傳缺漏警告。'}</p></details>}
-      <h4 className="text-sm font-semibold">{en ? 'Source checks and gaps' : '來源檢查與缺漏'}</h4>
-      <ul className="space-y-1 text-xs text-muted-foreground">{current.input.gaps.map(gap => {
-        const [code, moduleName] = gap.code.split(':')
-        return <li key={gap.code}>{text(GAP[code] ?? [code, code])}{moduleName ? ' (' + text(MODULE[moduleName] ?? [moduleName, moduleName]) + ')' : ''}{gap.count > 1 ? ' · ' + gap.count : ''}</li>
-      })}</ul>
-        </div>
-      </details>
+      {!runs && summary && (summary.missingLabs.includes('BNP') || summary.missingLabs.length > 0) && <section aria-label={en ? 'Before running' : '執行前提醒'} className="space-y-1.5">
+        {summary.missingLabs.includes('BNP') && <p className="rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"><span className="font-semibold">{en ? 'No NT-proBNP in this record.' : '本次資料沒有 NT-proBNP。'}</span>{en ? ' The estimate may be affected; the model reports this with the result.' : '仍可計算，但可能影響估計；模型會在結果中提示。'}</p>}
+        {summary.missingLabs.filter(key => key !== 'BNP').length > 0 && <p className="text-xs text-muted-foreground">{en ? `${summary.missingLabs.filter(key => key !== 'BNP').length} other model lab items are not provided; missing values are not treated as normal. See “Data used” below.` : `另有 ${summary.missingLabs.filter(key => key !== 'BNP').length} 項模型檢驗未提供；缺值不當作正常。明細見下方「本次使用的資料」。`}</p>}
+      </section>}
+
+      <div className="sticky top-0 z-10 space-y-1.5 rounded-lg border border-border bg-background p-3" data-testid="hf-model-actions">
+        <button type="button" className={button + ' w-full min-w-0 border-primary bg-primary px-2 text-base text-primary-foreground'} disabled={busy || !configured || missingIndexDiagnosis} onClick={() => { setDiagnosisOpen(false); void predict() }}>
+          {busy ? (en ? 'Checking inputs and predicting…' : '檢查資料與預測中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
+        </button>
+        {missingIndexDiagnosis && <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-200" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in step 2 (custom visits), or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在步驟 2「自訂就診」補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
+        <p className="text-xs text-muted-foreground">{en ? 'Inputs are checked before prediction. Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded. You can switch views while it runs.' : '執行時先檢查資料再計算，將生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。執行中可切到其他畫面。'}</p>
+      </div>
     </>}
-    {!configured && <p className="text-xs text-muted-foreground">{text(ERRORS['gateway-config'])}</p>}
-    <div role="status" aria-live="polite" className="space-y-1 text-sm">
-      {visibleMessage && <p>{visibleMessage === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(ERRORS[visibleMessage] ?? ['無法完成檢查，請確認院內連線後重試', 'Unable to validate; check the intranet connection and retry'])}</p>}
-      {visibleResult && <>
-        <h4 className="pt-3 text-sm font-semibold">{en ? 'Input-check result' : '輸入檢查結果'}</h4>
-        <p className="text-xs text-muted-foreground">{en ? 'This input-check result confirms only format and eligibility; it is not a risk estimate. Model prediction is displayed separately below.' : '下列輸入檢查結果僅確認格式與評分條件，不是風險估計；模型預測另列於下方。'}</p>
-        <p className="font-medium">{visibleResult.verdict === 'accepted'
-          ? (hasWarnings ? (en ? 'Input check passed with warnings; review the gaps below.' : '輸入檢查通過，但有資料警告；請核對下列缺漏。') : (en ? 'Input check passed; source applicability still requires validation.' : '輸入檢查通過；資料來源適用性仍待驗證。'))
-          : (en ? 'Input check refused; review missing or incompatible data.' : '輸入檢查未通過；請核對缺漏或不相容資料。')}</p>
-        <p className="text-xs text-muted-foreground">{en ? 'Index date' : '基準日'}：{current?.input.indexDate} · {current?.input.claim === 'P1_CD_mortality_1m' ? (en ? '1 month' : '1 個月') : (en ? '3 months' : '3 個月')}</p>
-        <ul className="space-y-1 text-xs text-muted-foreground">{visibleResult.issues.map((issue, index) => <li key={index}><span className="font-medium">{issue.severity === 'warning' ? (en ? 'Warning: ' : '警告：') : ['error', 'fatal'].includes(issue.severity) ? (en ? 'Error: ' : '錯誤：') : ''}</span>{issue.text}</li>)}</ul>
-        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer py-2">{en ? 'Validation provenance' : '檢查紀錄與版本'}</summary>
-          <p>{en ? 'Checked at' : '檢查時間'}：{visibleResult.checkedAt ?? (en ? 'Not provided' : '未提供')}</p>
-          <p>{en ? 'Adapter version' : '串接版本'}：{visibleResult.adapterVersion ?? (en ? 'Not provided' : '未提供')}</p>
-          <p>{en ? 'Model version and calibration: not established by dry-run.' : '模型版本與校正：dry-run 未確認，不能以串接版本替代。'}</p>
-          {visibleResult.requestId && <p className="break-all">Request ID：{visibleResult.requestId}</p>}
-        </details>
-      </>}
-      {prediction && <HfPredictionResultView result={prediction} locale={locale} />}
+
+    <div role="status" aria-live="polite" className="space-y-2 text-sm">
+      {visibleMessage && visibleMessage !== 'physician-diagnosis-rank-conflict' && <p className="font-medium">{describeError(visibleMessage)}</p>}
+      {runs && current && <section aria-label={en ? 'HF model prediction' : 'HF 模型預測結果'} className="space-y-3 rounded-lg border border-border bg-background p-3">
+        <div className="space-y-0.5">
+          <h4 className="text-base font-semibold">{en ? 'TVGH in-hospital death risk' : '北榮院內死亡風險'}</h4>
+          <p className="text-xs text-muted-foreground tabular-nums">{en ? 'Index visit' : '基準門診'} {current.input.indexDate} · {hospital}</p>
+        </div>
+        <HfResultsView runs={runs} busy={busy} locale={locale} describeError={describeError} />
+        {hasScore && <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={button + ' border-primary text-primary'} onClick={async () => setCopyFailed(!await copy(hfResultText(runs, { indexDate: current.input.indexDate, hospital, attestation, locale })))}>{copied ? (en ? 'Copied' : '已複製') : (en ? 'Copy results for the note' : '複製結果到病歷')}</button>
+          {copyFailed && <span className="text-xs">{en ? 'Copy failed; select the text manually.' : '無法複製，請手動選取文字。'}</span>}
+        </div>}
+      </section>}
     </div>
+
+    {current && <details className="group rounded-lg border border-border bg-background">
+      <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 py-2 [&::-webkit-details-marker]:hidden">{chevron}<span className="text-sm font-semibold">{en ? 'Data used' : '本次使用的資料'}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">{en ? 'visits' : '就診'} {current.input.counts.Encounter ?? 0} · {en ? 'diagnoses' : '診斷'} {current.input.counts.Condition ?? 0} · {en ? 'labs' : '檢驗'} {summary?.presentLabs.length ?? 0}／{(summary?.presentLabs.length ?? 0) + (summary?.missingLabs.length ?? 0)} {en ? 'items' : '項'} · {en ? 'procedures' : '處置'} {current.input.counts.Procedure ?? 0}</span>
+      </summary>
+      <div className="space-y-4 px-3 pb-3 text-sm">
+        <p className="text-xs text-muted-foreground">{hospital} · {en ? `records on or before ${current.input.indexDate}` : `${current.input.indexDate} 當天及以前的全部紀錄`} · {en ? 'Record source' : '病歷來源'}：{current.source === 'medcloud' ? (en ? 'NHI cloud bridge' : '雲端懷爾抓抓') : current.source === 'health-bank' ? (en ? 'Health-bank bridge' : '健康懷爾抓抓') : (en ? 'TVGH EHR bridge' : '北榮懷爾抓抓')}</p>
+        <div className="space-y-1">
+          <h5 className="text-sm font-semibold">{en ? 'Sent to the model' : '送給模型'}</h5>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">{en ? 'Patient' : '病人'}</dt><dd>{en ? 'Birth date (full date), sex' : '生日（完整年月日）、性別'}</dd>
+            <dt className="text-muted-foreground">{en ? 'Visits' : '就診'}</dt><dd className="tabular-nums">{current.input.counts.Encounter ?? 0}{summary && ` · ${[['AMB', en ? 'outpatient' : '門診'], ['EMER', en ? 'emergency' : '急診'], ['IMP', en ? 'admission' : '住院']].filter(([code]) => summary.encounterClasses[code]).map(([code, name]) => `${name} ${summary.encounterClasses[code]}`).join(' · ')}`}</dd>
+            <dt className="text-muted-foreground">{en ? 'Diagnoses' : '診斷'}</dt><dd className="tabular-nums">{current.input.counts.Condition ?? 0} · ICD-10-CM／ICD-9-CM{confirmed ? (en ? ` · includes physician-supplied I50.9 × ${confirmed.visits.length}` : ` · 含醫師補充 I50.9 × ${confirmed.visits.length}`) : ''}</dd>
+            <dt className="text-muted-foreground">{en ? 'Labs' : '檢驗'}</dt><dd className="tabular-nums">{current.input.counts.Observation ?? 0} {en ? 'results' : '筆'}{summary?.dates.length ? ` · ${summary.dates[0]} – ${summary.dates.at(-1)}` : (en ? ' · No usable labs' : ' · 沒有可用檢驗')}</dd>
+            <dt className="text-muted-foreground">{en ? 'Procedures' : '處置'}</dt><dd className="tabular-nums">{current.input.counts.Procedure ?? 0}</dd>
+          </dl>
+        </div>
+        {summary && <div className="space-y-2">
+          <h5 className="text-sm font-semibold">{en ? `Model lab items · ${summary.presentLabs.length} of ${summary.presentLabs.length + summary.missingLabs.length}` : `模型檢驗 ${summary.presentLabs.length + summary.missingLabs.length} 項 · 有 ${summary.presentLabs.length} · 缺 ${summary.missingLabs.length}`}</h5>
+          <div className="grid gap-3 @md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">{en ? 'Sent' : '有送出'} · {summary.presentLabs.length}</p>
+              <p className="break-words text-xs">{summary.presentLabs.length ? summary.presentLabs.map(key => LAB_NAMES[key] ?? key).join('、') : (en ? 'None' : '無')}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{en ? 'Missing model lab items' : '未提供的模型檢驗項目'} · {summary.missingLabs.length}</p>
+              <p className="break-words text-xs">{summary.missingLabs.map(key => LAB_NAMES[key] ?? key).join('、')}</p>
+              <p className="text-xs text-muted-foreground">{en ? 'Missing tests are not treated as normal or zero. The model may accept inputs with warnings.' : '缺值不當作正常或零值；模型可能接受輸入並回傳缺漏警告。'}</p>
+            </div>
+          </div>
+        </div>}
+        <div className="space-y-1">
+          <h5 className="text-sm font-semibold">{en ? 'Not sent' : '不送給模型'}</h5>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>{en ? 'Medications, vital signs and free text: not used by this model' : '用藥、生命徵象、自由文字：此模型不使用'}</li>
+            <li>{en ? 'Name, ID number and chart number: removed and replaced with one-time identifiers' : '姓名、身分證、病歷號：去除，改用一次性編號'}</li>
+          </ul>
+        </div>
+        <div className="space-y-1">
+          <h5 className="text-sm font-semibold">{en ? 'Source checks and gaps' : '來源檢查與缺漏'}</h5>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">{current.input.gaps.map(gap => {
+            const [code, moduleName] = gap.code.split(':')
+            return <li key={gap.code}>{text(GAP[code] ?? [code, code])}{moduleName ? ' (' + text(MODULE[moduleName] ?? [moduleName, moduleName]) + ')' : ''}{gap.count > 1 ? ' · ' + gap.count : ''}</li>
+          })}</ul>
+          <p className="text-xs text-muted-foreground">{en ? 'Outcome: death during hospitalization at TVGH; deaths outside TVGH are not included.' : '結局定義為北榮院內死亡，不包含院外或他院死亡；這份病歷來源適用性尚待驗證。'}</p>
+        </div>
+      </div>
+    </details>}
+
+    {runs && <details className="group rounded-lg border border-border bg-background">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">{chevron}{en ? 'Attestation and calculation record' : '醫師聲明與計算紀錄'}</summary>
+      <div className="space-y-2 px-3 pb-3 text-xs text-muted-foreground">
+        {attestation && <p>{attestation}</p>}
+        <p>{en ? 'Model version and calibration are established only by a scored prediction, not by the input check.' : '模型版本與校正以預測結果為準；dry-run 不確認模型版本。'}</p>
+        <HfProvenance runs={runs} locale={locale} />
+      </div>
+    </details>}
   </section>
 }
