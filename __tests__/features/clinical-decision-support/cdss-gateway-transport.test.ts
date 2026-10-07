@@ -3,6 +3,7 @@ import { createHash, webcrypto } from 'node:crypto'
 import { cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
+import { parseStoredCdssSaveV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
 
 const mockGetToken = jest.fn()
 const mockIsCurrent = jest.fn(() => true)
@@ -205,6 +206,32 @@ test('does not transmit when complete identity inputs are missing', async () => 
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
     identifier: [{ system: 'https://example.org/national-id', value: 'X123456789' }],
   } })).rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each(['source-medcloud-patient-id', 'masked-medcloud-patient-id'])('accepts the bridge namespace %s only for partially masked national IDs', async namespace => {
+  const canonical = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
+  const patient = { ...input.patient, name: [{ text: '王小*' }],
+    identifier: [{ system: `https://cloud-wildcatch.invalid/fhir/IdentifierSystem/${namespace}`, value: 'B123***789' }] }
+  await saveCdssSnapshot({ ...input, patient })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(body.patient_identity.identifier_system).toBe(canonical)
+  expect(body.patient_identity.identifier_masked).toBe('B123***789')
+  expect(() => parseStoredCdssSaveV2(body)).not.toThrow()
+  expect(body.patient_key_sha256).toBe((await cdssPatientIdentity({ ...patient,
+    identifier: [{ system: canonical, value: 'B123***789' }] })).patient_key_sha256)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+})
+
+test.each([
+  ['source-medcloud-patient-id', 'B123456789'],
+  ['source-medcloud-patient-id', 'B823***789'],
+  ['source-medcloud-patient-id', '123***789'],
+  ['unrecognized-system', 'B123***789'],
+])('rejects unsupported bridge identifier %s / %s', async (namespace, value) => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
+    identifier: [{ system: `https://cloud-wildcatch.invalid/fhir/IdentifierSystem/${namespace}`, value }] } }))
+    .rejects.toThrow('cdss_identity_unavailable')
   expect(fetch).not.toHaveBeenCalled()
 })
 

@@ -4,6 +4,11 @@ const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const NAME_MASK = /[Xx○〇●Ｏ◯]/u
 const MASKED_NATIONAL_ID = /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u
 const NATIONAL_ID_SYSTEM = /national[-_]?id/i
+const MEDCLOUD_IDENTIFIER_SYSTEMS = new Set([
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id',
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id',
+])
+const MEDCLOUD_NATIONAL_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function normalizedName(patient: PatientEntity): string {
@@ -31,7 +36,8 @@ function maskedName(name: string): string {
 
 function nationalId(patient: PatientEntity): { system: string; value: string } {
   const matches = (patient.identifier ?? [])
-    .filter((identifier) => NATIONAL_ID_SYSTEM.test(identifier.system ?? ''))
+    .filter((identifier) => NATIONAL_ID_SYSTEM.test(identifier.system ?? '')
+      || MEDCLOUD_IDENTIFIER_SYSTEMS.has(identifier.system ?? ''))
     .map((identifier) => ({
       system: identifier.system!.normalize('NFKC').trim(),
       value: identifier.value?.normalize('NFKC').trim().toUpperCase() ?? '',
@@ -40,7 +46,16 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
     || !MASK.test(matches[0].value.slice(1))) {
     throw new Error('cdss_identity_unavailable')
   }
-  return matches[0]
+  const identifier = matches[0]
+  if (MEDCLOUD_IDENTIFIER_SYSTEMS.has(identifier.system)) {
+    // The bridge uses a generic namespace for unmasked-name exports. Only a
+    // partially masked TW national-ID shape can enter the existing ID tuple.
+    if (!/^[A-Z][12][0-9X*＊○〇●Ｏ◯]{8}$/u.test(identifier.value)) {
+      throw new Error('cdss_identity_unavailable')
+    }
+    return { ...identifier, system: MEDCLOUD_NATIONAL_ID_SYSTEM }
+  }
+  return identifier
 }
 
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
