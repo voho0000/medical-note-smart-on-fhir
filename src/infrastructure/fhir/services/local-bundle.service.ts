@@ -24,6 +24,7 @@
 
 import {
   FhirMapper,
+  groupSpecialMaterialsByProcedure,
   isMedicationRemainingSummaryBasic,
 } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
@@ -1392,6 +1393,8 @@ export const LocalBundleService = {
         }),
     ).values()]
 
+    const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
+
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
 
@@ -1416,7 +1419,7 @@ export const LocalBundleService = {
       vitalSigns,
       diagnosticReports: processedReports,
       imagingStudies:    imagingStudies.map((r: any) => FhirMapper.toImagingStudy(r)),
-      procedures:       procs.map((r: any) => FhirMapper.toProcedure(r)),
+      procedures:       procs.map((r: any) => FhirMapper.toProcedure(r, specialMaterialsByProcedure)),
       encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
       documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
       compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
