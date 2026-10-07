@@ -28,6 +28,7 @@ const GAP: Record<string, [string, string]> = {
   'diagnosis-unmapped': ['診斷碼系統或格式無法確認，未送出', 'Unrecognized diagnosis system or code format; excluded'],
   'diagnosis-rank-missing': ['住院診斷未提供主次序，不自行推定', 'Inpatient diagnosis rank missing; no rank inferred'],
   'lab-status': ['檢驗尚未確認完成，未送出', 'Unconfirmed laboratory results excluded'],
+  'lab-status-unreported': ['雲端／健康來源未提供檢驗完成狀態；有數值與採檢日期者照常送出', 'Cloud/health-bank source gives no result status; results with a value and collection date are sent'],
   'lab-unmapped': ['檢驗項目無已核對的 LOINC 對照，或不在模型項目中，未送出', 'Lab not in the audited model mapping; excluded'],
   'lab-date': ['檢驗未提供有效採檢日期，未送出', 'Valid collection date missing; excluded'],
   'lab-value-unit': ['檢驗數值或單位無法確認／換算，未送出', 'Lab value or unit cannot be validated/converted; excluded'],
@@ -35,6 +36,8 @@ const GAP: Record<string, [string, string]> = {
   'procedure-date': ['處置執行日期不明，未送出', 'Procedure date unknown; excluded'],
   'procedure-unmapped': ['處置缺少模型接受的 ICD 碼或住院關聯，未送出', 'Procedure lacks a supported ICD code or inpatient link; excluded'],
 }
+/** Reasons a laboratory result was not sent, shown when no model lab reaches the model. */
+const LAB_GAPS = ['lab-status', 'lab-unmapped', 'lab-date', 'lab-value-unit']
 const MODULE: Record<string, [string, string]> = {
   imue0008: ['用藥與就診', 'Medication and visits'], imue0060: ['檢驗', 'Laboratory'],
   imue0070: ['住院', 'Admissions'], imue0020: ['手術', 'Surgery'],
@@ -222,8 +225,12 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </Step>
 
       {!runs && summary && (summary.missingLabs.includes('BNP') || summary.missingLabs.length > 0) && <section aria-label={en ? 'Before running' : '執行前提醒'} className="space-y-1.5">
-        {summary.missingLabs.includes('BNP') && <p className="rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"><span className="font-semibold">{en ? 'No NT-proBNP in this record.' : '本次資料沒有 NT-proBNP。'}</span>{en ? ' The estimate may be affected; the model reports this with the result.' : '仍可計算，但可能影響估計；模型會在結果中提示。'}</p>}
-        {summary.missingLabs.filter(key => key !== 'BNP').length > 0 && <p className="text-xs text-muted-foreground">{en ? `${summary.missingLabs.filter(key => key !== 'BNP').length} other model lab items are not provided; missing values are not treated as normal. See “Data used” below.` : `另有 ${summary.missingLabs.filter(key => key !== 'BNP').length} 項模型檢驗未提供；缺值不當作正常。明細見下方「本次使用的資料」。`}</p>}
+        {summary.presentLabs.length === 0 && <div className="space-y-1 rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200" role="note">
+          <p className="font-semibold">{en ? 'No model laboratory result will be sent.' : '本次沒有任何模型檢驗會送出。'}{en ? ' The model will treat every lab as untested, which may underestimate risk.' : '模型會視所有檢驗為未測，結果可能低估。'}</p>
+          {current.input.gaps.some(gap => LAB_GAPS.includes(gap.code)) && <ul className="list-disc pl-5 text-xs">{current.input.gaps.filter(gap => LAB_GAPS.includes(gap.code)).map(gap => <li key={gap.code}>{text(GAP[gap.code])} · {gap.count}</li>)}</ul>}
+        </div>}
+        {summary.presentLabs.length > 0 && summary.missingLabs.includes('BNP') && <p className="rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"><span className="font-semibold">{en ? 'No NT-proBNP in this record.' : '本次資料沒有 NT-proBNP。'}</span>{en ? ' The estimate may be affected; the model reports this with the result.' : '仍可計算，但可能影響估計；模型會在結果中提示。'}</p>}
+        {summary.presentLabs.length > 0 && summary.missingLabs.filter(key => key !== 'BNP').length > 0 && <p className="text-xs text-muted-foreground">{en ? `${summary.missingLabs.filter(key => key !== 'BNP').length} other model lab items are not provided; missing values are not treated as normal. See “Data used” below.` : `另有 ${summary.missingLabs.filter(key => key !== 'BNP').length} 項模型檢驗未提供；缺值不當作正常。明細見下方「本次使用的資料」。`}</p>}
       </section>}
 
       <div className="sticky top-0 z-10 space-y-1.5 rounded-lg border border-border bg-background p-3" data-testid="hf-model-actions">
