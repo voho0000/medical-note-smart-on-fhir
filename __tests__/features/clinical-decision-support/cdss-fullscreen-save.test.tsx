@@ -262,3 +262,21 @@ test('switching the same patient to de-identified cancels a pending history look
   expect(screen.queryByText('尚無儲存紀錄。')).not.toBeInTheDocument()
   view.unmount()
 })
+
+test('三區塊 does not offer saving or records, and switching to it neither cancels a pending save nor unmounts the controller', async () => {
+  mockAccount.user = { uid: 'owner-a' }; mockAccount.loading = false
+  jest.clearAllMocks()
+  let complete!: () => void
+  jest.mocked(saveCdssSnapshot).mockImplementation(() => new Promise<void>(resolve => { complete = resolve }))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} offered={false} />)
+  expect(screen.queryByTestId('cdss-save-record')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('cdss-history-records')).not.toBeInTheDocument()
+  expect(cancelCdssGatewayRequests).not.toHaveBeenCalled()
+  await act(async () => complete())
+  expect(toast.success).toHaveBeenCalledWith('CDSS 紀錄已儲存。')
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} />)
+  expect(screen.getByTestId('cdss-history-records')).toBeVisible()
+  view.unmount()
+})

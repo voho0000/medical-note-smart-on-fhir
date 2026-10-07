@@ -185,3 +185,17 @@ test('an earlier day’s NYHA grade replaced by a carry is counted and marked as
   expect(carriedFrom(marks, 'nyha', 'IV')).toBe('2026-09-01')
   expect(count).toBeGreaterThan(0)
 })
+
+test('an earlier day’s sign the record does not carry stays as it was', () => {
+  const yesterday = new Date(Date.now() - 86_400_000)
+  useClinicVitalsStore.getState().setVitals('p', { signAnswers: { rales: 'present' } }, yesterday)
+  carryForwardCdss('p', record(), 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false })
+  expect(useClinicVitalsStore.getState().byPatientId.p.signAnswers.rales).toMatchObject({ value: 'present', examinedOn: todayIsoDate(yesterday) })
+})
+
+test('no carry while the carried-answer marks are still being read back', () => {
+  useCarriedAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  expect(() => carryForwardCdss('p', record(), 'synthetic', '1', { id: 'p', facts: {} }, { inputs: false, decisions: true }))
+    .toThrow('cdss_carry_forward_unavailable')
+  expect(usePhysicianDecisionsStore.getState().byPatientId.p).toBeUndefined()
+})

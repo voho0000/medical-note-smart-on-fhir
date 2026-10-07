@@ -83,7 +83,9 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
   const before = carryableAnswers(patientId, now)
   const today = todayIsoDate(now)
   // Validate every touched store before the first write, including pending hydration.
-  if ((choices.decisions && !usePhysicianDecisionsStore.getState().canCarryForward(patientId))
+  // Marks still decrypting would be overwritten by this carry's own marks.
+  if (!useCarriedAnswersStore.getState().hydratedPatientIds[patientId]
+    || (choices.decisions && !usePhysicianDecisionsStore.getState().canCarryForward(patientId))
     || (choices.inputs && (!useClinicVitalsStore.getState().canCarryForward(patientId)
       || !useHfpefInputsStore.getState().canCarryForward(patientId)
       || !usePhenotypeAnswerStore.getState().canCarryForward(patientId)

@@ -139,6 +139,11 @@ type StorageProps = {
   onCarryForward?: (record: CdssHistoryRecord, choices: CarryForwardChoices) => number
   /** Clinician-facing disease name for a stored pack id. */
   packLabel?: (packId: string) => string | undefined
+  /**
+   * Whether this layout offers saving and records (owner decision 2026-10-07: not on 三區塊).
+   * Kept mounted when not offered, so switching layouts neither cancels a save nor drops the FHIR grant.
+   */
+  offered?: boolean
   input: Omit<Parameters<typeof saveCdssSnapshot>[0], 'sourceRecords'>
   sourceRecords: () => Parameters<typeof saveCdssSnapshot>[0]['sourceRecords']; english?: boolean
 }
@@ -150,7 +155,7 @@ export function CdssStorageActions(props: StorageProps) {
   return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
 }
 
-function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, packLabel }: StorageProps & { ownerUid?: string }) {
+function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, packLabel, offered = true }: StorageProps & { ownerUid?: string }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
   const authorized = useSyncExternalStore(subscribeFhirAuth, () => fhirAuthStatus(ownerUid), () => false)
   const [authorizing, setAuthorizing] = useState(false)
@@ -475,8 +480,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   </div>
 
   return <div className="flex min-w-0 flex-wrap items-center gap-1" data-testid="cdss-record-toolbar">
-    {saveTarget ? createPortal(controls, saveTarget) : controls}
-    <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) { controller.current?.abort(); setApplying(false); setConfirming(false) } }}>
+    {!offered ? null : saveTarget ? createPortal(controls, saveTarget) : controls}
+    <Dialog open={open && offered} onOpenChange={value => { setOpen(value); if (!value) { controller.current?.abort(); setApplying(false); setConfirming(false) } }}>
       {/* Above the full-window handbook (its layer is 60), where the buttons also live. */}
       <DialogContent className="z-[70] flex h-[min(90dvh,780px)] max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl" overlayClassName="z-[70]" showCloseButton={false}
         // Opened from the full-window handbook, focus can land back on its header button;
@@ -496,7 +501,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
           : <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[300px_minmax(0,1fr)]">{list}{preview}</div>}
       </DialogContent>
     </Dialog>
-    <AlertDialog open={deleteAsked && Boolean(selected)} onOpenChange={value => { if (!deleting) setDeleteAsked(value) }}>
+    <AlertDialog open={deleteAsked && Boolean(selected) && offered} onOpenChange={value => { if (!deleting) setDeleteAsked(value) }}>
       <AlertDialogContent data-testid="cdss-history-delete-confirm" className="z-[80]" overlayClassName="z-[80]" onEscapeKeyDown={event => event.stopPropagation()}>
         <AlertDialogHeader>
           <AlertDialogTitle>{english ? 'Delete this record?' : '確定要刪除這筆紀錄嗎？'}</AlertDialogTitle>

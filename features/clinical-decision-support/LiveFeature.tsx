@@ -799,6 +799,8 @@ export default function LiveClinicalDecisionSupportFeature({
           />
           {/* Beside the diseases, so the layout switch keeps the row's right end (owner request 2026-10-07). */}
           <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
+            // Saving and records are offered on the decision map and the NHI table, not on 三區塊 (owner decision 2026-10-07).
+            offered={isMap || isNhiTable}
             packLabel={(packId) => guidelinePacks.find((pack) => pack.id === packId)?.label[cdssLocale === 'en' ? 'en' : 'zh']}
             onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
             packId: result.packId, profile, result,

@@ -510,7 +510,8 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
         const carriedSigns = Object.fromEntries(Object.entries(old.signAnswers)
           .filter(([term]) => !todaysSigns[term])
           .map(([term, sign]) => [term, { value: sign.value, modifiedAt, examinedOn: today }]))
-        next.signAnswers = { ...carriedSigns, ...todaysSigns }
+        // An earlier day's sign the record does not carry stays as it was (not today's answer, not deleted).
+        next.signAnswers = { ...current.signAnswers, ...carriedSigns, ...todaysSigns }
         if (old.nyhaClass && !(current.nyhaClass && (current.nyhaClass.assessedOn ?? calendarDayOf(current.nyhaClass.modifiedAt)) >= today)) {
           next.nyhaClass = { value: old.nyhaClass.value, modifiedAt, assessedOn: today }
         }

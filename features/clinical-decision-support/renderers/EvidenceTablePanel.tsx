@@ -83,6 +83,7 @@ function SignAnswerControl({
   )
 }
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   leftTabForResourceType,
@@ -425,6 +426,8 @@ function EvidenceRow({
 }) {
   const physicianEntered = item.derivability === 'physician-entered'
   const label = pick(item.label, isEnglish)
+  // A switch brought in from a saved record says so (its key in `carried-answers.store`).
+  const carriedFrom = useCarriedLookup()(`evidence:${item.id}`)
   const value = item.value ?? (isEnglish ? 'Not recorded' : '紀錄中沒有這一項')
 
   return (
@@ -489,6 +492,12 @@ function EvidenceRow({
       <div className="min-w-0 flex-1 @min-[46rem]:flex @min-[46rem]:items-start @min-[46rem]:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 @min-[46rem]:w-[13rem] @min-[46rem]:shrink-0">
           <span className="text-xs font-medium text-foreground">{label}</span>
+          {carriedFrom ? (
+            <span className="inline-flex h-5 items-center rounded border border-primary/25 bg-primary/5 px-1.5 text-[11px] tabular-nums text-primary"
+              data-carried-from={carriedFrom} data-testid={`cdss-evidence-carried-${item.id}`}>
+              {carriedLabel(carriedFrom, isEnglish)}
+            </span>
+          ) : null}
           {physicianEntered ? (
             <Tooltip>
               <TooltipTrigger asChild>
