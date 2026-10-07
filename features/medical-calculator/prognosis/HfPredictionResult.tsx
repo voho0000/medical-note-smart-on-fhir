@@ -90,7 +90,7 @@ export function HfResultsView({ runs, busy, locale, describeError }: { runs: HfC
   return <div className="space-y-3">
     {verdict && <p className="text-xs text-muted-foreground">{verdict}</p>}
     <div className="flex flex-wrap gap-2">{HF_DRY_RUN_CLAIMS.map(claim => <ClaimColumn key={claim} claim={claim} run={runs[claim]} busy={busy} locale={locale} describeError={describeError} />)}</div>
-    {anyScored && <p className="text-xs text-muted-foreground">{en ? 'Research pilot; no medical device license. NHI cloud applicability remains unvalidated. Deaths outside TVGH are not included. A physician must interpret the result; do not use it as the sole basis for treatment.' : '研究試辦版本，尚未取得醫療器材許可證；健保雲端來源適用性尚未驗證。不含院外或他院死亡；須由醫師綜合判讀，不可單獨作為處置依據。'}</p>}
+    {anyScored && <p className="text-xs text-muted-foreground">{en ? 'Research pilot; no medical device license. NHI cloud applicability remains unvalidated. Deaths are ascertained from TVGH records; deaths outside TVGH may be missed. A physician must interpret the result; do not use it as the sole basis for treatment.' : '研究試辦版本，尚未取得醫療器材許可證；健保雲端來源適用性尚未驗證。死亡事件依北榮資料認定，院外或他院死亡可能未納入；須由醫師綜合判讀，不可單獨作為處置依據。'}</p>}
     {(anyScored || groups.length > 0) && <section aria-label={en ? 'Notes to read before interpreting' : '判讀前先看'} className="space-y-2 border-t border-border pt-3">
       <h4 className="text-sm font-semibold">{en ? 'Read before interpreting' : '判讀前先看'}</h4>
       {groups.length ? groups.map(group => {
@@ -115,11 +115,11 @@ export function hfResultText(runs: HfClaimRuns, { indexDate, hospital, attestati
   const lines = [en ? `TVGH HF outpatient prognosis (research pilot) · index visit ${indexDate} ${hospital}` : `北榮 HF 門診預後模型（研究試辦）· 基準門診 ${indexDate} ${hospital}`]
   for (const claim of HF_DRY_RUN_CLAIMS) {
     const score = scoredRun(runs[claim])
-    const outcome = en ? `TVGH in-hospital death within ${hfHorizon(claim, en)}` : `就診後 ${hfHorizon(claim, en)}內北榮院內死亡`
+    const outcome = en ? `Death within ${hfHorizon(claim, en)} of the visit` : `就診後 ${hfHorizon(claim, en)}內死亡`
     lines.push(`${outcome}：${score ? `${hfPercentage(score.probability, locale)}（${en ? `${tierLabel(score.tier, en)} risk tier` : `${tierLabel(score.tier, en)}風險層`}）` : (en ? 'not assessed' : '無法評估')}`)
   }
   if (attestation) lines.push(attestation)
-  lines.push(en ? 'Excludes deaths outside TVGH; for physician interpretation only.' : '不含院外或他院死亡；須由醫師綜合判讀。')
+  lines.push(en ? 'Deaths are ascertained from TVGH records; deaths outside TVGH may be missed; for physician interpretation only.' : '死亡事件依北榮資料認定，院外或他院死亡可能未納入；須由醫師綜合判讀。')
   return lines.join('\n')
 }
 

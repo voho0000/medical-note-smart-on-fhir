@@ -5,7 +5,7 @@ Manual input checks and a separate manual prediction action are implemented. No 
 
 ## Clinical meaning
 
-The upstream service is a research pilot without a medical device license. Its outcome is death during hospitalization at TVGH; outside-hospital and other-hospital deaths are not included. Applicability to medcloud2 and other institutions remains unvalidated. Results require physician interpretation and cannot be the sole basis for treatment.
+The upstream service is a research pilot without a medical device license. Its outcome is death within 1 or 3 months after the index outpatient visit (owner correction, 2026-10-07: not in-hospital death). Deaths are ascertained from TVGH records, so deaths outside TVGH may be missed. Applicability to medcloud2 and other institutions remains unvalidated. Results require physician interpretation and cannot be the sole basis for treatment.
 
 An accepted input check is not a risk result and does not establish complete history. Missing labs and coverage warnings remain visible. A 422 refusal says unable to assess, never low risk. Prediction shows the returned calibrated probability, risk tier, notes, index date and model horizon. Optional observed incidence is labelled a group rate, not individual probability. Model name, versions, calibration, model/manifest hashes, computation time, adapter version and matching request ID remain available with the result. Three-month model hashes can be a two-member m1/m2 ensemble.
 
