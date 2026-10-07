@@ -5,7 +5,7 @@ Manual input checks and a separate manual prediction action are implemented. No 
 
 ## Clinical meaning
 
-The upstream service is a research pilot without a medical device license. Its outcome is death during hospitalization at TVGH; outside-hospital and other-hospital deaths are not included. Applicability to medcloud2 and other institutions remains unvalidated. Results require physician interpretation and cannot be the sole basis for treatment.
+The upstream service is a research pilot without a medical device license. Its outcome is death within 1 or 3 months after the index outpatient visit (owner correction, 2026-10-07: not in-hospital death). Deaths are ascertained from TVGH records, so deaths outside TVGH may be missed. Applicability to medcloud2 and other institutions remains unvalidated. Results require physician interpretation and cannot be the sole basis for treatment.
 
 An accepted input check is not a risk result and does not establish complete history. Missing labs and coverage warnings remain visible. A 422 refusal says unable to assess, never low risk. Prediction shows the returned calibrated probability, risk tier, notes, index date and model horizon. Optional observed incidence is labelled a group rate, not individual probability. Model name, versions, calibration, model/manifest hashes, computation time, adapter version and matching request ID remain available with the result. Three-month model hashes can be a two-member m1/m2 ensemble.
 
@@ -107,3 +107,15 @@ Review hardening: case-type 08 records cannot receive supplemental HF diagnoses.
 Unavailable diagnosis shortcuts explain their reasons beside the controls. Same-day selected encounters display distinct visit numbers, matching advanced settings, and a note to verify them individually. Privacy explanation and general hints remain visible outside the compact sticky actions.
 
 Owner-approved display naming (2026-10-06): badge 北榮研究試用; calculator HF 門診預後模型; detail heading 北榮 HF 研究試用. English and accessible labels use TVGH research trial. No visible SaMD/AI-SaMD labels remain. Internal module identifiers, endpoint paths and model contracts are unchanged; this is a presentation change, not a regulatory status claim.
+
+## Three-step layout and both horizons (2026-10-07)
+
+The detail is laid out as 步驟 1 基準門診, 步驟 2 確認心衰病史 and 步驟 3 執行預測. Opening the detail prepares the active import locally, with no network request; 「重新整理」 prepares it again. The horizon selector is gone: one 「執行 HF 模型預測」 sends, for each of P1_CD_mortality_1m and P1_CD_mortality_3m in parallel, the dry-run and, only when accepted, the prediction, all from the same prepared input. Each horizon keeps its own check, score, refusal or error. A failure shared by both horizons is shown once; an authorization failure in either clears both. The card in the calculator list shows both probabilities.
+
+Results show probability, risk tier (the active tier is highlighted; no cut-points are drawn because the browser does not receive them as data), and optional observed incidence per horizon. Server notes and dry-run warnings are merged across horizons, de-duplicated, and grouped as possible underestimation, outside the development data range, or other; a note from only one horizon is labelled with it. 「複製結果到病歷」 copies both horizons with the out-of-hospital-death caveat and the physician attestation.
+
+After running, step 2 collapses to one line with 「修改」 (owner approval in chat, 2026-10-07). The usage guide can be dismissed; the preference lives in this browser only. 「本次使用的資料」 lists what is sent (patient, visits by class, diagnoses including physician-supplied codes, model lab items present and missing, procedures), what is never sent (medications, vital signs, free text, identifiers), and the source gaps.
+
+## Cloud laboratory status (2026-10-07)
+
+The medcloud2 and health-bank bridges mark every laboratory Observation `status: unknown`, because NHI cloud data carries no workflow status. The projection required final/amended/corrected, so every cloud lab was dropped and the model received none (a real v0.13.6 export: 315 labs, 0 sent; the model then reported hemoglobin and creatinine as untested). Owner decision in chat: from the medcloud and health-bank sources, an `unknown` result with a numeric value, a supported unit and a collection date is sent and counted as `lab-status-unreported`; preliminary, registered, cancelled and entered-in-error stay excluded, and the TVGH EHR bridge keeps the strict rule. Unit matching ignores whitespace (`g /dL`). When no model lab will be sent, the pre-run box says so with the reasons and counts. A separate bridge task proposes emitting `final` at the source.

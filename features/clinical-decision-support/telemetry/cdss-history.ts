@@ -55,6 +55,16 @@ async function request(patient: PatientEntity, path: string, saveId: string | un
 export async function listCdssHistory(patient: PatientEntity, signal: AbortSignal, ownerUid?: string): Promise<CdssHistoryList> {
   return list.parse((await request(patient, '/cdss/v1/history', undefined, signal, ownerUid)).data)
 }
+const deleted = z.object({ status: z.literal('deleted'), save_id: storedUuidV2 }).strict()
+/**
+ * Retracts one of the signed-in clinician's own snapshots. The server marks it
+ * entered-in-error and keeps it with its audit trail; it leaves the history
+ * list and can no longer be read or carried forward.
+ */
+export async function deleteCdssHistory(patient: PatientEntity, saveId: string, signal: AbortSignal, ownerUid?: string): Promise<void> {
+  const { data } = await request(patient, '/cdss/v1/history/delete', saveId, signal, ownerUid)
+  if (deleted.parse(data).save_id !== saveId) throw new Error('cdss_history_unavailable')
+}
 export async function readCdssHistory(patient: PatientEntity, saveId: string, signal: AbortSignal, ownerUid?: string): Promise<CdssHistoryRecord> {
   const { data, key } = await request(patient, '/cdss/v1/history/read', saveId, signal, ownerUid)
   const parsed = record.parse(data)

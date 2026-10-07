@@ -162,7 +162,10 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
     if (provider(resource) !== selection.provider) { gap('source-omitted'); continue }
     if (voided(resource)) { gap('void-omitted'); continue }
     if (resource.resourceType === 'Observation') {
-      if (!['final', 'amended', 'corrected'].includes(resource.status)) { gap('lab-status'); continue }
+      // NHI cloud and health-bank results carry no workflow status; the bridges mark them unknown.
+      // A reported value with a collection date is accepted from those sources; anything else stays strict.
+      const unreported = resource.status === 'unknown' && (source === 'medcloud' || source === 'health-bank')
+      if (!['final', 'amended', 'corrected'].includes(resource.status) && !unreported) { gap('lab-status'); continue }
       const lab = HF_LABS.find(lab => coding(resource.code).some(code => code.system === 'http://loinc.org' && lab.loinc.includes(code.code)))
       if (!lab) { gap('lab-unmapped'); continue }
       // issued/report/visit dates are not replacements for the collection date.
@@ -171,6 +174,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
       if (date > indexDate) { gap('future-omitted'); continue }
       const quantity = resource.valueQuantity && normalizeHfLab(lab, resource.valueQuantity)
       if (!quantity) { gap('lab-value-unit'); continue }
+      if (unreported) gap('lab-status-unreported')
       add({ resourceType: 'Observation', id: uuid(), subject, status: 'final',
         category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
         code: { coding: [{ system: HF_NAMESPACE + '/CodeSystem/hf-source-lab-item', code: lab.key }, { system: 'http://loinc.org', code: lab.loinc[0] }] },

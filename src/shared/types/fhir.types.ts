@@ -51,6 +51,7 @@ export interface FhirExtension {
   valueCodeableConcept?: CodeableConcept
   valueReference?: Reference
   valueInteger?: number
+  valueDecimal?: number
   valueCode?: string
   valueString?: string
   valueDate?: string

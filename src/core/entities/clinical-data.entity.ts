@@ -731,9 +731,36 @@ export interface ProcedureEntity {
    * collapse them under one title with the lead. FHIR Procedure.partOf.
    */
   partOf?: Array<{ reference?: string; display?: string }>
+  /**
+   * MediCloud IMUE0200 special materials (特材) whose record points at this
+   * Procedure through its `relatedProcedure` extension. Re-attached by the
+   * data layer, the way DiagnosticReport carries `_observations`.
+   */
+  specialMaterials?: ProcedureSpecialMaterialEntity[]
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
+}
+
+/**
+ * One MediCloud special-material claim line linked to a surgery. The source
+ * does not record which operation used the material; when
+ * `relationshipStatus` is `inferred`, the bridge matched it by patient,
+ * facility, date and diagnosis, and `relationshipBasis` says how.
+ */
+export interface ProcedureSpecialMaterialEntity {
+  id: string
+  procedureReference: string
+  materialCode?: string
+  nameZh?: string
+  nameEn?: string
+  materialType?: string
+  quantity?: number
+  visitDate?: string
+  licenseNumbers: string[]
+  dataSource?: string
+  relationshipStatus?: string
+  relationshipBasis?: string
 }
 
 export interface EncounterEntity {

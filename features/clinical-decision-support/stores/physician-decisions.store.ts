@@ -234,11 +234,28 @@ interface PhysicianDecisionsState {
   ) => void
   clearDecision: (patientId: string, moduleId: string) => void
   clearDecisions: (patientId: string) => void
+  /** Fill unanswered decisions from a confirmed snapshot, retaining the original date. */
+  carryForward: (patientId: string, saved: unknown, packVersion: string) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved, packVersion) => {
+    if (!patientId) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const valid = Object.fromEntries(Object.entries(toDecisions(saved))
+      .filter(([key, decision]) => !['__proto__', 'constructor', 'prototype'].includes(key)
+        && decision.packVersion === packVersion && Number.isFinite(Date.parse(decision.recordedAt))))
+    set(state => {
+      const next = { ...valid, ...state.byPatientId[patientId] }
+      writeStoredDecisions(patientId, next)
+      return { byPatientId: { ...state.byPatientId, [patientId]: next } }
+    })
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return

@@ -120,21 +120,26 @@
 
 /* ------------------------------- header ------------------------------- */
 
-/* Only the explicit save moves here; its controller remains in the CDSS panel. */
+/* Record controls move here; their controller remains in the CDSS panel. */
+.saveRecord { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; }
 .saveRecord:empty { display: none; }
 .saveRecord :global(button) {
-  min-height: 44px;
-  padding: 6px 12px;
+  height: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
   border: 1px solid var(--blue);
   border-radius: 8px;
   background: var(--sheet);
   color: var(--blue-ink);
-  font: 500 13px/1.4 var(--sans);
+  font: 500 12px/1.4 var(--sans);
   box-shadow: none;
 }
 .saveRecord :global(button:hover:not(:disabled)) { background: var(--blue-soft); }
 .saveRecord :global(button:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
 .saveRecord :global(button:disabled) { cursor: wait; }
+@media (max-width: 767px) {
+  .saveRecord :global(button) { height: 44px; min-height: 44px; }
+}
 
 
 .head {
@@ -729,6 +734,10 @@
 @container (max-width: 640px) { .moreGroups { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
 .moreFoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 13px; color: var(--ink-3); }
 .questionDetail { display: block; font-size: 12px; color: var(--ink-4); }
+/* An answer brought in from a saved record (owner decision 2026-10-07): its source day, until the clinician changes it. */
+.carriedNote { display: inline-flex; align-items: center; width: fit-content; margin-top: 2px; padding: 1px 6px; border: 1px solid var(--blue-line); border-radius: 4px; background: var(--blue-soft); color: var(--blue-ink); font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.questionRow > span > .carriedNote { display: flex; }
+.askRow > .carriedNote { grid-column: 2; }
 /* In the fold the answers stay right of their row at any width, the label wrapping
    beside them, so nine rows read as one column rather than alternating. */
 .moreGroups .questionRow { flex-wrap: nowrap; }

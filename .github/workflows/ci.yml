@@ -81,7 +81,7 @@ jobs:
           java-version: 21
       - uses: actions/checkout@v7
         with:
-          repository: voho0000/firebase-smart-on-fhir
+          repository: MediPrisma/mediprisma-firebase-backend
           ref: e3af56253c816acf3fb704b8d9b25e0f98f4374c
           path: .gallery-backend
       - run: npm ci --prefix .gallery-backend
@@ -145,7 +145,7 @@ jobs:
         # deploy build would also fail.
         env:
           GITHUB_PAGES: "true"
-          NEXT_PUBLIC_BASE_PATH: "/medical-note-smart-on-fhir"
+          NEXT_PUBLIC_BASE_PATH: "/mediprisma-app"
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}

@@ -130,7 +130,7 @@ jobs:
       - name: Checkout mediprisma.tw site
         uses: actions/checkout@v7
         with:
-          repository: voho0000/mediprisma-site
+          repository: MediPrisma/mediprisma-site
           ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
           path: docs-site
           ref: main

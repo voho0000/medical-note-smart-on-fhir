@@ -38,6 +38,7 @@ export type PatientAnswerKind =
   | 'hfpef-inputs'
   | 'physician-decisions'
   | 'evidence-overrides'
+  | 'carried-answers'
 
 /**
  * The key prefix each kind has always been stored under. Unchanged, so what an
@@ -55,6 +56,7 @@ const STORAGE_PREFIXES: Readonly<Record<PatientAnswerKind, string>> = {
   'hfpef-inputs': 'cdss-hfpef-inputs:',
   'physician-decisions': 'cdss-physician-decisions:',
   'evidence-overrides': 'cdss-evidence-row-overrides:',
+  'carried-answers': 'cdss-carried-answers:',
 }
 
 /** The browser key one patient's answers of one kind are kept under. */
