@@ -235,6 +235,24 @@ test.each([
   expect(fetch).not.toHaveBeenCalled()
 })
 
+test('different bridge masking layouts remain distinct instead of guessing patient linkage', async () => {
+  const prefix = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/'
+  const source = await cdssPatientIdentity({ ...input.patient,
+    identifier: [{ system: `${prefix}source-medcloud-patient-id`, value: 'B123***789' }] })
+  // Bridge maskMediCloudIdentifier normalizes placeholders and masks the last four characters.
+  const masked = await cdssPatientIdentity({ ...input.patient,
+    identifier: [{ system: `${prefix}masked-tw-national-id`, value: 'B123XXXXXX' }] })
+  expect(source.patient_key_sha256).not.toBe(masked.patient_key_sha256)
+})
+
+test('bridge and national-ID candidates remain ambiguous and do not transmit', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [
+    ...input.patient.identifier,
+    { system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id', value: 'B123***789' },
+  ] } })).rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 test.each([
   ['王小*', '王○*'], ['王小＊', '王○*'],
   ['王*明', '王○明'], ['*小明', '*○明'],
