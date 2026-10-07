@@ -2,6 +2,7 @@ import type { CdssPatientProfile, CdssResult } from '@voho0000/personalized-care
 import { createHash, webcrypto } from 'node:crypto'
 import { cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
+import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
 
 const mockGetToken = jest.fn()
 const mockIsCurrent = jest.fn(() => true)
@@ -204,6 +205,34 @@ test('does not transmit when complete identity inputs are missing', async () => 
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
     identifier: [{ system: 'https://example.org/national-id', value: 'X123456789' }],
   } })).rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each(['王小*', '王小＊'])('saves an unrecognized source name %s without sending its raw text', async name => {
+  const patient = { ...input.patient, name: [{ text: name }] }
+  await saveCdssSnapshot({ ...input, patient,
+    physicianDecisions: { module: { decision: 'reviewed', note: `source ${name}` } } })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.patient_identity.name_masked).toBe('王○*')
+  expect(body.physician_decisions.module.note).toBe('source [已遮蔽]')
+  expect(JSON.stringify(body)).not.toContain(name)
+  expect(body.patient_key_sha256).toBe((await cdssPatientIdentity(patient)).patient_key_sha256)
+  const tuple = JSON.stringify([1, 'vghtpe', '王小*', '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
+  expect(body.patient_key_sha256).toBe(createHash('sha256').update(tuple).digest('hex'))
+  expect(body.patient_key_sha256).not.toBe((await cdssPatientIdentity({ ...patient, name: [{ text: '王小明' }] })).patient_key_sha256)
+  expect(body.patient_key_sha256).not.toBe((await cdssPatientIdentity({ ...patient, name: [{ text: '王小' }] })).patient_key_sha256)
+})
+
+test.each(['***', '王**', '王○明'])('still rejects insufficient or explicitly masked name %s', async name => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] } }))
+    .rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('an unrecognized character does not bypass an explicit de-identification flag', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
+    name: [{ text: '王小*' }], deidentified: true } })).rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
 })
 
