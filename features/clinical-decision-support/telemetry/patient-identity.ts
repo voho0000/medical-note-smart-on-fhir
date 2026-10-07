@@ -4,10 +4,8 @@ const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const NAME_MASK = /[Xx○〇●Ｏ◯]/u
 const MASKED_NATIONAL_ID = /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u
 const NATIONAL_ID_SYSTEM = /national[-_]?id/i
-const MEDCLOUD_IDENTIFIER_SYSTEMS = new Set([
-  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id',
-  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id',
-])
+const MEDCLOUD_SOURCE_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id'
+const MEDCLOUD_MASKED_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id'
 const MEDCLOUD_NATIONAL_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -37,7 +35,7 @@ function maskedName(name: string): string {
 function nationalId(patient: PatientEntity): { system: string; value: string } {
   const matches = (patient.identifier ?? [])
     .filter((identifier) => NATIONAL_ID_SYSTEM.test(identifier.system ?? '')
-      || MEDCLOUD_IDENTIFIER_SYSTEMS.has(identifier.system ?? ''))
+      || identifier.system === MEDCLOUD_SOURCE_ID_SYSTEM)
     .map((identifier) => ({
       system: identifier.system!.normalize('NFKC').trim(),
       value: identifier.value?.normalize('NFKC').trim().toUpperCase() ?? '',
@@ -47,7 +45,7 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
     throw new Error('cdss_identity_unavailable')
   }
   const identifier = matches[0]
-  if (MEDCLOUD_IDENTIFIER_SYSTEMS.has(identifier.system)) {
+  if (identifier.system === MEDCLOUD_SOURCE_ID_SYSTEM) {
     // The bridge uses a generic namespace for unmasked-name exports. Only a
     // partially masked TW national-ID shape can enter the existing ID tuple.
     if (!/^[A-Z][12][0-9X*＊○〇●Ｏ◯]{8}$/u.test(identifier.value)) {
@@ -60,7 +58,17 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
 
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
 export async function cdssPatientIdentity(patient: PatientEntity) {
-  if (isDeidentifiedPatient(patient)) throw new Error('cdss_patient_deidentified')
+  const remaskedMedcloudId = (patient.identifier ?? []).some(identifier => {
+    const system = identifier.system ?? ''
+    const value = identifier.value?.normalize('NFKC').trim().toUpperCase() ?? ''
+    // The bridge's second masking pass hides the final four characters.
+    // Detect it before name/date validation so even legacy exports get the
+    // instruction to turn off de-identification and reimport.
+    return system === MEDCLOUD_MASKED_ID_SYSTEM ||
+      ((system === MEDCLOUD_SOURCE_ID_SYSTEM || system === MEDCLOUD_NATIONAL_ID_SYSTEM)
+        && /[X*○〇●Ｏ◯]{4}$/u.test(value))
+  })
+  if (isDeidentifiedPatient(patient) || remaskedMedcloudId) throw new Error('cdss_patient_deidentified')
   const name = normalizedName(patient)
   const birthDate = patient.birthDate?.trim() ?? ''
   const parsedBirthDate = Date.parse(birthDate)
