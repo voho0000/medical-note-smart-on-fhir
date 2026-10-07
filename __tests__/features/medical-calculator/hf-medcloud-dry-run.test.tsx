@@ -514,7 +514,7 @@ it('aborts pending validation on an import event without a parent rerender', asy
   expect(result.current.current).toBeNull()
 })
 
-it('invalidates accepted checks when adding, editing or removing a physician diagnosis and clears it on visit changes', async () => {
+it('needs an HF diagnosis to submit, invalidates results when the physician diagnosis changes, and clears it on visit changes', async () => {
   const bundle = hfMedcloudFixture()
   const visit = bundle.entry.find((e: any) => e.resource.resourceType === 'Encounter').resource
   visit.reasonCode[0].coding[0].code = 'I10'
@@ -522,7 +522,8 @@ it('invalidates accepted checks when adding, editing or removing a physician dia
   const { result } = renderHook(() => useMedcloudHfDryRun())
   await act(async () => { await result.current.prepare(); })
   await act(async () => { await result.current.validate(); })
-  expect(result.current.runs?.P1_CD_mortality_1m?.check?.verdict).toBe('accepted')
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+  expect(result.current.runs).toBeNull()
   const reference = result.current.current!.baseInput.indexEncounterReference!
   act(() => result.current.supplementDiagnosis({ code: 'I50.9', ranks: { [reference]: 2 }, encounters: [reference], confirmed: true }))
   expect(result.current.runs).toBeNull()
@@ -704,4 +705,26 @@ it('warns before running when no model laboratory result will be sent, with the 
   expect(reminder).toHaveTextContent('本次沒有任何模型檢驗會送出')
   expect(reminder).toHaveTextContent('檢驗尚未確認完成，未送出 · 1')
   expect(requestHfDryRun).not.toHaveBeenCalled()
+})
+
+it('keeps the run button off until step 2 supplies an HF diagnosis when the record has none', async () => {
+  const bundle = hfMedcloudFixture()
+  const visit = bundle.entry.find((entry: any) => entry.resource.resourceType === 'Encounter').resource
+  visit.reasonCode[0].coding[0].code = 'I10'
+  const past = JSON.parse(JSON.stringify(visit)); past.id = 'past'; past.period.start = '2026-09-01'
+  bundle.entry.push({ fullUrl: 'Encounter/past', resource: past })
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeDisabled()
+  expect(screen.getByTestId('hf-model-actions')).toHaveTextContent('未偵測到心衰診斷，請先在步驟 2 確認心衰病史')
+  fireEvent.click(screen.getByLabelText('最近兩次門診皆有心衰診斷'))
+  expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeEnabled()
+  expect(screen.getByTestId('hf-model-actions')).not.toHaveTextContent('未偵測到心衰診斷')
+})
+it('leaves step 2 optional when the record already has an HF diagnosis', async () => {
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeEnabled()
+  expect(screen.getByTestId('hf-model-actions')).not.toHaveTextContent('未偵測到心衰診斷')
 })

@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { useMedcloudHfDryRun } from '@/src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook'
 import { hfDiagnosisVisits, suggestHfDiagnosis, type HfPhysicianDiagnosisDraft } from '@/src/core/hf-risk/physician-diagnosis'
-import { summarizeHfInput } from '@/src/core/hf-risk/input-summary'
+import { hasHfDiagnosis, summarizeHfInput } from '@/src/core/hf-risk/input-summary'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { HfProvenance, HfResultsView, hfResultText } from './HfPredictionResult'
 
@@ -99,6 +99,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
   useEffect(() => { if (!current && !busy) void prepare() }, [recordKey])
   const summary = current ? summarizeHfInput(current.input) : null
   const missingIndexDiagnosis = current?.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')
+  // The model only applies to patients with heart failure; without any HF code, step 2 must be answered first.
+  const missingHfDiagnosis = !!current && !hasHfDiagnosis(current.input)
   const diagnosisVisits = current ? hfDiagnosisVisits(current.baseInput) : []
   const draft = current?.diagnosisDraft
   const invalidDiagnosisRank = !!draft?.encounters.some(reference => !Number.isInteger(draft.ranks[reference]) || draft.ranks[reference] < 1 || draft.ranks[reference] > 50)
@@ -234,9 +236,10 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </section>}
 
       <div className="sticky top-0 z-10 space-y-1.5 rounded-lg border border-border bg-background p-3" data-testid="hf-model-actions">
-        <button type="button" className={button + ' w-full min-w-0 border-primary bg-primary px-2 text-base text-primary-foreground'} disabled={busy || !configured || missingIndexDiagnosis} onClick={() => { setDiagnosisOpen(false); void predict() }}>
+        <button type="button" className={button + ' w-full min-w-0 border-primary bg-primary px-2 text-base text-primary-foreground'} disabled={busy || !configured || missingIndexDiagnosis || missingHfDiagnosis} onClick={() => { setDiagnosisOpen(false); void predict() }}>
           {busy ? (en ? 'Checking inputs and predicting…' : '檢查資料與預測中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
         </button>
+        {missingHfDiagnosis && !missingIndexDiagnosis && <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-200" role="note">{en ? 'No heart-failure diagnosis was found in this record. Confirm the HF history in step 2 first; the model applies only to patients with heart failure.' : '未偵測到心衰診斷，請先在步驟 2 確認心衰病史；模型只適用於心衰病人。'}</p>}
         {missingIndexDiagnosis && <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-200" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in step 2 (custom visits), or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在步驟 2「自訂就診」補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
         <p className="text-xs text-muted-foreground">{en ? 'Inputs are checked before prediction. Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded. You can switch views while it runs.' : '執行時先檢查資料再計算，將生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。執行中可切到其他畫面。'}</p>
       </div>

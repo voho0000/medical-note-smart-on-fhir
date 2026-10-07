@@ -9,6 +9,7 @@ import { hfRecordSource, type HfRecordSource } from '@/src/core/hf-risk/record-s
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
 import { HF_DRY_RUN_CLAIMS, type HfInput, type HfSelection, type HfDryRunResult, type HfDryRunClaim } from '@/src/core/hf-risk/contract'
 import { emptyHfDiagnosisDraft, withPhysicianHfDiagnosis, type HfPhysicianDiagnosisDraft } from '@/src/core/hf-risk/physician-diagnosis'
+import { hasHfDiagnosis } from '@/src/core/hf-risk/input-summary'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction, type HfRequestOptions } from '@/src/infrastructure/hf-risk/dry-run-client'
 
@@ -117,7 +118,7 @@ export function useMedcloudHfDryRun() {
   }
   /** Checks, then scores, every outpatient horizon in parallel from the same prepared input. */
   async function submit(operation: 'dry-run' | 'predict') {
-    if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')) return
+    if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing') || !hasHfDiagnosis(current.input)) return
     const snapshot = current
     const abort = new AbortController()
     controller.current?.abort()
