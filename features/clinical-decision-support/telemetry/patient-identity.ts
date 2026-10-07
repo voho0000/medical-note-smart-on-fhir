@@ -9,6 +9,10 @@ const MEDCLOUD_MASKED_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/Identifi
 const MEDCLOUD_NATIONAL_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
 
+function normalizedIdentifierSystem(system?: string): string {
+  return system?.normalize('NFKC').trim() ?? ''
+}
+
 function normalizedName(patient: PatientEntity): string {
   const names = (patient.name ?? [])
     .map((name) => name.text?.normalize('NFKC').trim().replace(/\s+/gu, ' '))
@@ -34,12 +38,12 @@ function maskedName(name: string): string {
 
 function nationalId(patient: PatientEntity): { system: string; value: string } {
   const matches = (patient.identifier ?? [])
-    .filter((identifier) => NATIONAL_ID_SYSTEM.test(identifier.system ?? '')
-      || identifier.system === MEDCLOUD_SOURCE_ID_SYSTEM)
     .map((identifier) => ({
-      system: identifier.system!.normalize('NFKC').trim(),
+      system: normalizedIdentifierSystem(identifier.system),
       value: identifier.value?.normalize('NFKC').trim().toUpperCase() ?? '',
     }))
+    .filter(identifier => NATIONAL_ID_SYSTEM.test(identifier.system)
+      || identifier.system === MEDCLOUD_SOURCE_ID_SYSTEM)
   if (matches.length !== 1 || !MASKED_NATIONAL_ID.test(matches[0].value)
     || !MASK.test(matches[0].value.slice(1))) {
     throw new Error('cdss_identity_unavailable')
@@ -59,7 +63,7 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
 export async function cdssPatientIdentity(patient: PatientEntity) {
   const remaskedMedcloudId = (patient.identifier ?? []).some(identifier => {
-    const system = identifier.system ?? ''
+    const system = normalizedIdentifierSystem(identifier.system)
     const value = identifier.value?.normalize('NFKC').trim().toUpperCase() ?? ''
     // The bridge's second masking pass hides the final four characters.
     // Detect it before name/date validation so even legacy exports get the

@@ -209,10 +209,13 @@ test('does not transmit when complete identity inputs are missing', async () => 
   expect(fetch).not.toHaveBeenCalled()
 })
 
-test('accepts the source bridge namespace only for partially masked national IDs', async () => {
+test.each([
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id',
+  ' https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id ',
+])('accepts the normalized source bridge namespace %s only for partially masked national IDs', async system => {
   const canonical = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
   const patient = { ...input.patient, name: [{ text: '王小*' }],
-    identifier: [{ system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id', value: 'B123***789' }] }
+    identifier: [{ system, value: 'B123***789' }] }
   await saveCdssSnapshot({ ...input, patient })
   const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
   expect(body.patient_identity.identifier_system).toBe(canonical)
@@ -251,6 +254,20 @@ test('a masked bridge namespace never becomes a second storage identity', async 
   }] } })).rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test.each([
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id ',
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-ｔｗ-national-id',
+  ' https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id ',
+  ' https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id ',
+])(
+  'namespace normalization does not bypass the remasking guard: %s', async system => {
+    await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [{
+      system, value: 'B123XXXXXX',
+    }] } })).rejects.toThrow('cdss_patient_deidentified')
+    expect(fetch).not.toHaveBeenCalled()
+  },
+)
 
 test('bridge and national-ID candidates remain ambiguous and do not transmit', async () => {
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [
