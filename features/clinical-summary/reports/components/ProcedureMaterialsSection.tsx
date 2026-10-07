@@ -9,9 +9,11 @@ import type { ProcedureSpecialMaterialEntity } from '@/src/core/entities/clinica
 
 interface ProcedureMaterialsSectionProps {
   materials: readonly ProcedureSpecialMaterialEntity[]
+  /** Set when the materials belong to a grouped sub-procedure, not the lead. */
+  procedureTitle?: string
 }
 
-export function ProcedureMaterialsSection({ materials }: ProcedureMaterialsSectionProps) {
+export function ProcedureMaterialsSection({ materials, procedureTitle }: ProcedureMaterialsSectionProps) {
   const { t, locale } = useLanguage()
   const tt = t.procedures.materials
   const isZh = locale.startsWith('zh')
@@ -20,11 +22,14 @@ export function ProcedureMaterialsSection({ materials }: ProcedureMaterialsSecti
   return (
     <section
       data-testid="procedure-materials"
-      aria-label={tt.heading}
+      aria-label={procedureTitle ? `${tt.heading} · ${procedureTitle}` : tt.heading}
       className="mt-1 flex min-w-0 basis-full flex-col gap-2 border-t pt-2"
     >
-      <div className="flex items-baseline gap-2">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         <h4 className="m-0 text-[0.8125rem] font-semibold text-foreground">{tt.heading}</h4>
+        {procedureTitle && (
+          <span className="min-w-0 break-words text-xs text-foreground">{procedureTitle}</span>
+        )}
         <span className="text-xs tabular-nums text-muted-foreground">
           {fill(tt.countDetail, materials.length)}
         </span>

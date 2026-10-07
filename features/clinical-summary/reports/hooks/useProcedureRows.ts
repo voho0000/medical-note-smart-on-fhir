@@ -194,6 +194,8 @@ export function useProcedureRows(procedures: any[]) {
       arr.push(p)
       childrenByParent.set(pid, arr)
     }
+    const materialsOf = (p: any): ProcedureSpecialMaterialEntity[] =>
+      Array.isArray(p?.specialMaterials) ? p.specialMaterials : []
     // Mains = standalone procedures + session leads (+ orphan children).
     const mains = procedures.filter((p: any) => !parentIdOf(p))
 
@@ -212,21 +214,28 @@ export function useProcedureRows(procedures: any[]) {
             facts.pcsCoding ? 0 : facts.nhiCoding ? 1 : 2
           return rank(a.facts) - rank(b.facts) || a.index - b.index
         })
-      for (const { facts: cf } of childFacts) {
-        components.push(buildChildComponent(cf))
-      }
-      const specialMaterials: ProcedureSpecialMaterialEntity[] = Array.isArray(procedure?.specialMaterials)
-        ? procedure.specialMaterials
-        : []
-      if (specialMaterials.length > 0) {
+      // A material belongs to the Procedure its record names: the lead's sit
+      // under the lead's details, a grouped child's directly under that child,
+      // and the header counts both.
+      let specialMaterialCount = 0
+      const pushMaterials = (source: any, procedureTitle?: string) => {
+        const materials = materialsOf(source)
+        if (materials.length === 0) return
+        specialMaterialCount += materials.length
         components.push({
           code: { text: t.procedures.materials.heading },
-          valueString: specialMaterials
+          valueString: materials
             .map((m) => [m.materialCode, m.nameZh, m.nameEn].filter(Boolean).join(' '))
             .join('; '),
           _isProcedureMaterials: true,
-          _materials: specialMaterials,
+          _materials: materials,
+          _materialsProcedureTitle: procedureTitle,
         })
+      }
+      pushMaterials(procedure)
+      for (const { facts: cf, index } of childFacts) {
+        components.push(buildChildComponent(cf))
+        pushMaterials(children[index], cf.originalTitle)
       }
 
       const observation: Observation = {
@@ -261,7 +270,7 @@ export function useProcedureRows(procedures: any[]) {
         procedureCategory: f.procedureCategory,
         // Number of sub-procedures grouped under this session (0 = standalone).
         relatedCount: children.length,
-        specialMaterialCount: specialMaterials.length,
+        specialMaterialCount,
       }
     })
   }, [procedures, t, isZh])

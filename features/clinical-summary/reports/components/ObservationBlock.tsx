@@ -237,9 +237,16 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
           const materialSection = component as typeof component & {
             _isProcedureMaterials?: boolean
             _materials?: ProcedureSpecialMaterialEntity[]
+            _materialsProcedureTitle?: string
           }
           if (materialSection._isProcedureMaterials && materialSection._materials?.length) {
-            return <ProcedureMaterialsSection key={idx} materials={materialSection._materials} />
+            return (
+              <ProcedureMaterialsSection
+                key={idx}
+                materials={materialSection._materials}
+                procedureTitle={materialSection._materialsProcedureTitle}
+              />
+            )
           }
           if ((component as { _isSubHeader?: boolean })._isSubHeader) {
             const heading = getCodeableConceptText(component.code) || '—'
