@@ -51,6 +51,7 @@ export function useMedcloudHfDryRun() {
   const busy = busyImportId !== null && busyImportId === activeImportId
   const controller = useRef<AbortController | null>(null)
   const unsubscribeAuth = useRef<(() => void) | null>(null)
+  const preparation = useRef(0)
   const [observedSnapshot, setObservedSnapshot] = useState(snapshot)
   // Reset during a scope-changing render so old attestations cannot reappear on a return to the same import.
   if (observedSnapshot !== snapshot) {
@@ -75,10 +76,13 @@ export function useMedcloudHfDryRun() {
   async function prepare() {
     cancel()
     setBusyImportId(null)
+    // Only the latest preparation may write; an older one finishing late must not clear a newer record.
+    const generation = ++preparation.current
     const importId = LocalBundleService.getActiveImportId()
     try {
       if (!shouldUseLocalBundle() || !importId) throw new Error('source-unsupported')
       const bundle = await LocalBundleService.load()
+      if (generation !== preparation.current) return
       if (LocalBundleService.getActiveImportId() !== importId || !shouldUseLocalBundle()) throw new Error('source-changed')
       const visits = medcloudHfVisits(bundle)
       if (!visits.length) throw new Error('no-visit')
@@ -86,6 +90,7 @@ export function useMedcloudHfDryRun() {
       const input = buildMedcloudHfInput(bundle, selection)
       setContext({ importId, source: hfRecordSource(bundle!), bundle: bundle!, visits, selection, input, baseInput: input, diagnosisDraft: emptyHfDiagnosisDraft() })
     } catch (error) {
+      if (generation !== preparation.current) return
       setContext(null)
       setMessage({ importId, code: error instanceof Error ? error.message : 'bundle-invalid' })
     }

@@ -113,7 +113,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
   const suggestionDates = (suggestion: HfPhysicianDiagnosisDraft | null) => suggestion ? diagnosisVisits.filter(visit => suggestion.encounters.includes(visit.reference))
     .map(visit => visit.date + (visit.reference === current?.baseInput.indexEncounterReference ? (en ? ' (index)' : '（基準）') : '')).join('、') : ''
   const attestation = confirmed ? `${en ? 'Physician confirmation (user attestation)' : '醫師確認（使用者聲明）'}：I50.9 · ${confirmed.visits.map(visit => `${visit.date} (${en ? 'rank' : '順位'} ${visit.rank})`).join('、')}` : undefined
-  const hasScore = !!runs && Object.values(runs).some(run => run?.prediction?.verdict === 'scored')
+  // Copy only once every horizon has settled, so a pending horizon is never pasted as not assessed.
+  const hasScore = !busy && !!runs && Object.values(runs).some(run => run?.prediction?.verdict === 'scored')
   const button = 'min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   const link = 'min-h-8 rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   const control = 'min-h-11 w-full rounded-md border border-border bg-background px-2 text-sm'

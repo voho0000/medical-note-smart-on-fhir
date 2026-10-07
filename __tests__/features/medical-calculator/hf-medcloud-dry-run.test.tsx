@@ -624,3 +624,31 @@ it('uses a refreshed caller token for prediction after input validation', async 
   expect(jest.mocked(requestHfDryRun).mock.calls.every(call => call[1].token === 'SYNTHETIC-FIRST')).toBe(true)
   expect(jest.mocked(requestHfPrediction).mock.calls.every(call => call[1].token === 'SYNTHETIC-REFRESHED')).toBe(true)
 })
+
+it('offers copying only after every horizon settles', async () => {
+  const finish: (() => void)[] = []
+  jest.mocked(requestHfPrediction).mockImplementation(input => input.claim === 'P1_CD_mortality_3m'
+    ? new Promise(resolve => { finish.push(() => resolve(scoreFor(input))) })
+    : Promise.resolve(scoreFor(input)))
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  run()
+  expect(await within(await screen.findByTestId('hf-result-P1_CD_mortality_1m')).findByText('12.34%')).toBeVisible()
+  expect(screen.queryByRole('button', { name: '複製結果到病歷' })).toBeNull()
+  await act(async () => finish.forEach(resolve => resolve()))
+  expect(await screen.findByRole('button', { name: '複製結果到病歷' })).toBeEnabled()
+})
+it('keeps the newer record when an older preparation finishes late', async () => {
+  let finishFirst!: (value: ReturnType<typeof hfMedcloudFixture>) => void
+  jest.mocked(LocalBundleService.load)
+    .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve }))
+    .mockResolvedValue(hfMedcloudFixture())
+  const view = render(<HfMedcloudDryRun locale="zh-TW" />)
+  await waitFor(() => expect(LocalBundleService.load).toHaveBeenCalledTimes(1))
+  importId = 'synthetic-import-2'
+  view.rerender(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  await act(async () => finishFirst(hfMedcloudFixture()))
+  expect(screen.getByRole('combobox', { name: '門診基準日／院所' })).toBeVisible()
+  expect(screen.queryByText('資料已切換，請重新整理輸入')).toBeNull()
+})
