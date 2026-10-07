@@ -27,7 +27,9 @@ export const HF_LABS: HfLab[] = [
 ]
 export function normalizeHfLab(lab: HfLab, quantity: Record<string, any>): Record<string, any> | null {
   if (typeof quantity.value !== 'number' || !Number.isFinite(quantity.value)) return null
-  const unit = quantity.code || quantity.unit
+  // Source units sometimes carry spaces ("g /dL"); spacing never changes a unit's meaning.
+  const raw = quantity.code || quantity.unit
+  const unit = typeof raw === 'string' ? raw.replace(/\s+/g, '') : raw
   const alternative = lab.alternatives?.find(item => item.units.includes(unit))
   if (!lab.units.includes(unit) && !alternative) return null
   const value = alternative ? (alternative.convert ? alternative.convert(quantity.value) : quantity.value * (alternative.factor ?? 1)) : quantity.value

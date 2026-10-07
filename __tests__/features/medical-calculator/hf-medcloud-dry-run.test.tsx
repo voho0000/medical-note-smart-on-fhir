@@ -687,3 +687,15 @@ it('keeps completed checks when both predictions fail the same way', async () =>
   expect(screen.getByText('輸入檢查通過，但有資料警告；請核對下列缺漏。')).toBeVisible()
   expect(screen.getByText('Synthetic check warning')).toBeVisible()
 })
+
+it('warns before running when no model laboratory result will be sent, with the reason', async () => {
+  const bundle = hfMedcloudFixture()
+  bundle.entry.find((entry: any) => entry.resource.resourceType === 'Observation').resource.status = 'preliminary'
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  const reminder = screen.getByRole('region', { name: '執行前提醒' })
+  expect(reminder).toHaveTextContent('本次沒有任何模型檢驗會送出')
+  expect(reminder).toHaveTextContent('檢驗尚未確認完成，未送出 · 1')
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+})
