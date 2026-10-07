@@ -199,3 +199,12 @@ test('no carry while the carried-answer marks are still being read back', () => 
     .toThrow('cdss_carry_forward_unavailable')
   expect(usePhysicianDecisionsStore.getState().byPatientId.p).toBeUndefined()
 })
+
+test('an every-visit answer held from yesterday with the same value is carried as today’s, counted and marked', () => {
+  const yesterday = new Date(Date.now() - 86_400_000)
+  useVisitAnswersStore.getState().answer('p', 'trigger-infection', 'yes', yesterday)
+  const count = carryForwardCdss('p', record(), 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false })
+  expect(new Date(useVisitAnswersStore.getState().byPatientId.p['trigger-infection']!.answeredAt).toDateString()).toBe(new Date().toDateString())
+  expect(carriedFrom(useCarriedAnswersStore.getState().byPatientId.p, 'visit:trigger-infection', 'yes')).toBe('2026-09-01')
+  expect(count).toBeGreaterThan(0)
+})

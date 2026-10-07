@@ -86,7 +86,7 @@ import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
 import { CdssStorageActions } from './renderers/CdssStorageActions'
 import { carryableAnswers, carryForwardCdss } from './telemetry/cdss-carry-forward'
-import { carriedFrom, useCarriedAnswers, useCarriedAnswersStore } from './stores/carried-answers.store'
+import { carriedFrom, staleCarriedKeys, useCarriedAnswers, useCarriedAnswersStore } from './stores/carried-answers.store'
 import { CarriedAnswerContext, type CarriedLookup } from './renderers/visit/carried-answer-context'
 import { cdssSourceRecords } from './telemetry/source-records'
 import { useCdssGateway } from './telemetry/use-cdss-gateway'
@@ -396,6 +396,15 @@ export default function LiveClinicalDecisionSupportFeature({
     useAfAnswersHydrated(patientId),
     useEvidenceOverridesHydrated(patientId),
   ].every(Boolean)
+  // A carried answer the clinician changed or cleared is theirs from then on: its mark goes
+  // for good, so putting the same value back does not bring 「帶入」 back. Only once every
+  // answer has been read back, so an answer still decrypting is not taken for a cleared one.
+  const carriedHydrated = useCarriedAnswersStore((state) => !patientId || Boolean(state.hydratedPatientIds[patientId]))
+  useEffect(() => {
+    if (!patientId || !answersHydrated || !carriedHydrated || !Object.keys(carriedAnswers.marks).length) return
+    const stale = staleCarriedKeys(carriedAnswers, carryableAnswers(patientId))
+    if (stale.length) useCarriedAnswersStore.getState().unmark(patientId, stale)
+  }, [patientId, answersHydrated, carriedHydrated, carriedAnswers, carriedLookup])
 
   // The switches this physician set on this chart survive a reload of the tab,
   // so they are read back before the cards are shown rather than after.

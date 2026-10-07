@@ -158,8 +158,13 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
     const visit = useVisitAnswersStore.getState()
     const answeredToday = visitAnswersOf(visit.byPatientId[patientId], today) as Record<string, string | undefined>
     for (const [id, value] of Object.entries(object(inputs.visitAnswers))) {
-      if (typeof value === 'string' && !EVERY_VISIT_ASK_IDS.includes(id) && answeredToday[id] === undefined)
-        visit.answer(patientId, id as Parameters<typeof visit.answer>[1], value, now, { packId })
+      if (typeof value === 'string' && !EVERY_VISIT_ASK_IDS.includes(id) && answeredToday[id] === undefined) {
+        const askId = id as Parameters<typeof visit.answer>[1]
+        // An earlier day's identical answer, still held in a tab left open overnight, would make
+        // `answer` a no-op; withdraw it first so the carried answer is dated today.
+        if (useVisitAnswersStore.getState().byPatientId[patientId]?.[askId]) visit.answer(patientId, askId, null, now)
+        visit.answer(patientId, askId, value, now, { packId })
+      }
     }
     const evidence = useEvidenceOverridesStore.getState()
     const switchedToday = evidence.byPatientId[patientId] ?? {}
