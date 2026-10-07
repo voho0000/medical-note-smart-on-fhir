@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
+jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }))
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
 import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
@@ -16,6 +16,19 @@ jest.mock('@/features/clinical-decision-support/telemetry/cdss-gateway', () => (
 jest.mock('@/features/clinical-decision-support/telemetry/cdss-history', () => ({
   listCdssHistory: jest.fn(), readCdssHistory: jest.fn(),
 }))
+
+test('carry-forward moves into the full-window header without duplicating or unmounting the controller', () => {
+  const target = document.createElement('div'); document.body.append(target)
+  const onCarryForward = jest.fn(() => 1)
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} />)
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} saveTarget={target} />)
+  expect(within(target).getByTestId('cdss-carry-forward-latest')).toBeVisible()
+  expect(screen.getAllByTestId('cdss-carry-forward-latest')).toHaveLength(1)
+  view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={onCarryForward} />)
+  expect(target).toBeEmptyDOMElement()
+  expect(screen.getByTestId('cdss-carry-forward-latest')).toBeVisible()
+  view.unmount(); target.remove()
+})
 
 const input: Parameters<typeof CdssStorageActions>[0]['input'] = {
   patient: { id: 'synthetic', resourceType: 'Patient' }, packId: 'synthetic',

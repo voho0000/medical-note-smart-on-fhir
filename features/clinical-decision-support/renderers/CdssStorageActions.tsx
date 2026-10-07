@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { storedTimestampForDisplay } from '@/src/shared/contracts/cdss-stored-save-v2'
 import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '../telemetry/cdss-gateway'
 import { listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
-import { authorizeFhir, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
+import { authorizeFhir, captureFhirRequestAuth, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
+import { cdssPatientIdentity } from '../telemetry/patient-identity'
+import type { CarryForwardChoices } from '../telemetry/cdss-carry-forward'
 
 const isDeidentifiedFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_patient_deidentified'
 const isIdentityFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_identity_unavailable'
@@ -66,6 +68,7 @@ function SavedRecommendation({ value, english }: { value: unknown; english: bool
 type StorageProps = {
   /** Keep the save controller mounted when its button moves into the full-window header. */
   saveTarget?: HTMLElement | null
+  onCarryForward?: (record: CdssHistoryRecord, choices: CarryForwardChoices) => number
   input: Omit<Parameters<typeof saveCdssSnapshot>[0], 'sourceRecords'>
   sourceRecords: () => Parameters<typeof saveCdssSnapshot>[0]['sourceRecords']; english?: boolean
 }
@@ -77,7 +80,7 @@ export function CdssStorageActions(props: StorageProps) {
   return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
 }
 
-function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid }: StorageProps & { ownerUid?: string }) {
+function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward }: StorageProps & { ownerUid?: string }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
   const authorized = useSyncExternalStore(subscribeFhirAuth, () => fhirAuthStatus(ownerUid), () => false)
   const [authorizing, setAuthorizing] = useState(false)
@@ -87,8 +90,22 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const [error, setError] = useState<'identity' | 'deidentified' | 'unavailable' | null>(null)
   const [history, setHistory] = useState<CdssHistoryList | null>(null)
   const [selected, setSelected] = useState<CdssHistoryRecord | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [choices, setChoices] = useState<CarryForwardChoices>({ inputs: true, decisions: true })
+  const [noLatest, setNoLatest] = useState(false)
+  const [appliedFrom, setAppliedFrom] = useState<string | null>(null)
   const controller = useRef<AbortController | null>(null)
   const mounted = useRef(true)
+  const current = useRef({ input, onCarryForward })
+  useEffect(() => { current.current = { input, onCarryForward } }, [input, onCarryForward])
+  const context = JSON.stringify([input.patient.name, input.patient.birthDate, input.patient.identifier, input.packId, input.result.packVersion])
+  useEffect(() => {
+    // Invalidate patient/pack-scoped history without disconnecting the patient-scoped FHIR grant or cancelling saves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    controller.current?.abort(); setOpen(false); setHistory(null); setSelected(null); setConfirming(false); setAppliedFrom(null)
+    setNoLatest(false); setLoading(false); setApplying(false); setError(null)
+  }, [context])
   useEffect(() => { mounted.current = true; return () => {
     mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
   } }, [])
@@ -98,12 +115,12 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const identityHelp = english
     ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a partially masked national ID. Then reimport the data and try again.'
     : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
-  const run = async (saveId?: string) => {
+  const run = async (saveId?: string, latest = false) => {
     if (!ownerUid) return
     controller.current?.abort()
     const request = new AbortController()
     controller.current = request
-    setLoading(true); setError(null); setSelected(null)
+    setLoading(true); setError(null); setSelected(null); setConfirming(false); setNoLatest(false); setApplying(false)
     if (!saveId) setHistory(null)
     try {
       if (saveId) {
@@ -111,7 +128,17 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
         if (!request.signal.aborted) setSelected(result)
       } else {
         const result = await listCdssHistory(input.patient, request.signal, ownerUid)
-        if (!request.signal.aborted) setHistory(result)
+        if (!request.signal.aborted) {
+          setHistory(result)
+          if (latest) {
+            const item = [...result.records].filter(item => item.packId === input.packId)
+              .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0]
+            if (item) {
+              const detail = await readCdssHistory(input.patient, item.saveId, request.signal, ownerUid)
+              if (!request.signal.aborted) setSelected(detail)
+            } else setNoLatest(true)
+          }
+        }
       }
     } catch (failure) {
       if (!request.signal.aborted) setError(isDeidentifiedFailure(failure) ? 'deidentified' : isIdentityFailure(failure) ? 'identity' : 'unavailable')
@@ -139,6 +166,26 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
     }
     finally { if (mounted.current) setSaving(false) }
   }
+  const apply = async () => {
+    if (!selected || !ownerUid || !onCarryForward || applying || (!choices.inputs && !choices.decisions)) return
+    const request = new AbortController()
+    controller.current?.abort(); controller.current = request
+    setApplying(true)
+    try {
+      const [auth, identity] = await Promise.all([captureFhirRequestAuth(ownerUid), cdssPatientIdentity(input.patient)])
+      if (request.signal.aborted || !mounted.current || !cdssGatewayStatus().enabled || !auth.isCurrent()
+        || identity.patient_key_sha256 !== selected.save.patient_key_sha256
+        || selected.save.pack_id !== input.packId || selected.save.result.packVersion !== input.result.packVersion) throw new Error('cdss_carry_forward_unavailable')
+      const latest = current.current
+      if (latest.input.packId !== input.packId || latest.input.result.packVersion !== input.result.packVersion) throw new Error('cdss_carry_forward_unavailable')
+      const count = latest.onCarryForward?.(selected, choices) ?? 0
+      if (!count) { setConfirming(false); toast.info(english ? 'No eligible empty fields. Current entries were kept.' : '沒有可補入的空白欄位，已保留目前內容。'); return }
+      setAppliedFrom(selected.savedAt); setOpen(false); setConfirming(false)
+      toast.success(english ? 'Previous inputs carried forward. Review the recalculated guidance.' : '已帶入上次紀錄，請確認重新計算的建議。')
+    } catch {
+      if (!request.signal.aborted && mounted.current) toast.error(english ? 'Could not carry forward this record. Reopen history and try again.' : '未能帶入此紀錄，請重新開啟歷史紀錄後再試。')
+    } finally { if (mounted.current && controller.current === request) setApplying(false) }
+  }
   if (!enabled) return null
   const label = english ? 'Saved CDSS records' : 'CDSS 歷史紀錄'
   const result = object(selected?.save.result)
@@ -146,6 +193,11 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const saveButton = <Button type="button" variant="outline" className="min-h-[44px] shadow-none" onClick={() => void save()} disabled={!ownerUid || saving || (fhirOAuthEnabled() && !authorized)} aria-busy={saving} data-testid="cdss-save-record">
       {!ownerUid ? english ? 'Sign in to save' : '請先登入後儲存' : saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save CDSS record' : '儲存 CDSS 紀錄'}
     </Button>
+  const compatible = selected?.save.pack_id === input.packId && selected?.save.result.packVersion === input.result.packVersion
+  const carryButton = onCarryForward && <Button type="button" variant="outline" className="min-h-[44px] shadow-none"
+    disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)} data-testid="cdss-carry-forward-latest"
+    onClick={() => { setOpen(true); void run(undefined, true) }}>{english ? 'Bring in last record' : '帶入上次紀錄'}</Button>
+  const sourceNotice = appliedFrom && <p role="status" className="w-full break-words text-sm text-muted-foreground">{english ? 'Carried forward from: ' : '帶入來源：'}{new Date(storedTimestampForDisplay(appliedFrom)).toLocaleString(english ? 'en' : 'zh-TW')}{english ? '. Existing entries kept; guidance recalculated.' : '；保留當次已填內容，建議已重新計算。'}</p>
   return <div className="flex flex-wrap gap-2">
     {fhirOAuthEnabled() && <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || authorizing}
       data-testid="cdss-fhir-authorize" onClick={() => {
@@ -154,10 +206,10 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
         void authorizeFhir(ownerUid).catch(() => { if (mounted.current) toast.error(english ? 'FHIR authorization failed. Please try again.' : 'FHIR 授權未完成，請重試。') })
           .finally(() => { if (mounted.current) setAuthorizing(false) })
       }}>{authorizing ? english ? 'Authorizing…' : '授權中…' : authorized ? english ? 'Disconnect FHIR' : '斷開 FHIR 授權' : english ? 'Authorize FHIR' : '登入 FHIR 授權'}</Button>}
-    {saveTarget ? createPortal(saveButton, saveTarget) : saveButton}
+    {saveTarget ? createPortal(<>{saveButton}{carryButton}{sourceNotice}</>, saveTarget) : <>{saveButton}{carryButton}{sourceNotice}</>}
     <Button type="button" variant="outline" className="min-h-[44px] shadow-none" disabled={!ownerUid || (fhirOAuthEnabled() && !authorized)}
       onClick={() => { setOpen(true); void run() }} data-testid="cdss-history-records">{label}</Button>
-    <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) controller.current?.abort() }}>
+    <Dialog open={open} onOpenChange={value => { setOpen(value); if (!value) { controller.current?.abort(); setApplying(false); setConfirming(false) } }}>
       <DialogContent className="sm:max-w-3xl" showCloseButton={false}>
         <DialogHeader><DialogTitle>{label}</DialogTitle>
           <DialogDescription>{english ? 'Your saved snapshots for this patient. Viewing leaves the current assessment unchanged.' : '您為此病人儲存的快照；調閱時保留目前的評估。'}</DialogDescription>
@@ -172,16 +224,29 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
           {error === 'identity' && <p className="mt-2 break-words">{identityHelp}</p>}
           <Button type="button" variant="outline" className="mt-2 min-h-[44px]" onClick={() => void run()}>{english ? 'Retry' : '重試'}</Button></div>}
         {!loading && !error && !selected && history && <div className="space-y-2">
+          {noLatest && <p role="status">{english ? 'No record for this disease in the latest 10 saves. Choose a record below to view it.' : '最近 10 筆儲存中沒有此疾病的紀錄；可選下方紀錄調閱。'}</p>}
           {history.records.length === 0 && <p>{english ? 'No saved records.' : '尚無儲存紀錄。'}</p>}
           {history.records.map(item => <Button key={item.saveId} type="button" variant="outline" className="h-auto min-h-[44px] w-full justify-start whitespace-normal text-left shadow-none"
             onClick={() => void run(item.saveId)}><span className="min-w-0 break-words">{new Date(item.receivedAt).toLocaleString(english ? 'en' : 'zh-TW')} · {item.packId}</span></Button>)}
           {history.hasMore && <p className="text-muted-foreground">{english ? 'Showing the 10 most recently received records.' : '目前顯示最近收到的 10 筆紀錄。'}</p>}
         </div>}
         {!loading && !error && selected && <article className="space-y-4 text-sm">
-          <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setSelected(null)}>{english ? 'Back to records' : '返回清單'}</Button>
+          <Button type="button" variant="outline" className="min-h-[44px]" disabled={applying} onClick={() => { setSelected(null); setConfirming(false) }}>{english ? 'Back to records' : '返回清單'}</Button>
           <header><h3 className="font-semibold">{text(result.title) || selected.packId}</h3>
             <p>{english ? 'Saved at: ' : '儲存時間：'}{new Date(storedTimestampForDisplay(selected.savedAt)).toLocaleString(english ? 'en' : 'zh-TW')}</p>
             <p className="text-muted-foreground">{english ? 'Historical snapshot · clinician identity unverified' : '歷史快照・醫師身分尚未驗證'}</p></header>
+          {onCarryForward && <section className="space-y-2 border-y border-border py-3">
+            {!compatible ? <p role="status">{english ? 'Different disease or rules version. View this record for reference; it cannot be applied.' : '疾病或指引版本不同，此紀錄僅供調閱，無法帶入。'}</p>
+              : !confirming ? <Button type="button" variant="outline" className="min-h-[44px]" data-testid="cdss-carry-forward-review"
+                onClick={() => { setChoices({ inputs: true, decisions: true }); setConfirming(true) }}>{english ? 'Review carry-forward' : '確認帶入內容'}</Button>
+              : <>
+                <p>{english ? 'Confirm the previous answers still apply. Only empty fields are filled. Measurement and decision dates stay unchanged; current record measurements take precedence. Visit symptoms, examination findings, evidence selections, PREVENT values and AI answers must be reviewed again.' : '請確認上次回答仍適用。只補入空白欄位；量測與決策保留原日期，新匯入的量測優先。本次症狀、理學檢查、證據勾選、PREVENT 數值與 AI 回答需重新確認。'}</p>
+                <label className="flex min-h-[44px] items-center gap-2"><input type="checkbox" checked={choices.inputs} onChange={event => setChoices(current => ({ ...current, inputs: event.target.checked }))} />{english ? 'Manual inputs (dated measurements, diagnosis, AF and manual lipid answers)' : '人工輸入（有日期的量測、疾病分型、AF 與人工血脂回答）'}</label>
+                <label className="flex min-h-[44px] items-center gap-2"><input type="checkbox" checked={choices.decisions} onChange={event => setChoices(current => ({ ...current, decisions: event.target.checked }))} />{english ? 'Previous decisions, reasons and notes (original dates)' : '上次決策、理由與備註（保留原日期）'}</label>
+                <div className="flex flex-wrap gap-2"><Button type="button" className="min-h-[44px]" disabled={applying || (!choices.inputs && !choices.decisions)} data-testid="cdss-carry-forward-confirm" onClick={() => void apply()}>{applying ? english ? 'Applying…' : '帶入中…' : english ? 'Confirm and bring in' : '確認並帶入'}</Button>
+                  <Button type="button" variant="outline" className="min-h-[44px]" disabled={applying} onClick={() => setConfirming(false)}>{english ? 'Cancel' : '取消'}</Button></div>
+              </>}
+          </section>}
           <p className="whitespace-pre-wrap break-words">{text(result.summary)}</p>
           {recommendations.map((item, index) => <SavedRecommendation key={index} value={item} english={english} />)}
           <details><summary className="min-h-[44px] cursor-pointer py-3 font-medium">{english ? 'Clinician inputs' : '人工輸入'}</summary><SavedFields value={selected.save.physician_inputs} /></details>

@@ -85,6 +85,7 @@ import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
 import { CdssStorageActions } from './renderers/CdssStorageActions'
+import { carryForwardCdss } from './telemetry/cdss-carry-forward'
 import { cdssSourceRecords } from './telemetry/source-records'
 import { useCdssGateway } from './telemetry/use-cdss-gateway'
 import { recordCdssEvent } from './telemetry/cdss-gateway'
@@ -821,7 +822,8 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
-      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget} input={{ patient,
+      <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
+        onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
         packId: result.packId, profile, result,
         physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
           nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },

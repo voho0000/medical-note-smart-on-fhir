@@ -296,11 +296,23 @@ interface PhenotypeAnswerState {
   hydrate: (patientId: string) => void
   setAnswer: (patientId: string, answer: PhenotypeAnswer, now?: Date) => void
   clearAnswer: (patientId: string) => void
+  carryForward: (patientId: string, saved: unknown) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved) => {
+    if (!patientId || get().byPatientId[patientId]) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const answer = parseStoredAnswer(saved)
+    if (!answer) return
+    set(state => ({ byPatientId: { ...state.byPatientId, [patientId]: answer } }))
+    void repository.save(patientId, answer).catch(() => {})
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return

@@ -39,6 +39,73 @@ beforeEach(() => {
 })
 afterEach(() => { delete process.env.NEXT_PUBLIC_CDSS_ADMISSION })
 
+const currentInput: Parameters<typeof CdssStorageActions>[0]['input'] = { patient, packId: 'synthetic',
+  profile: { id: patient.id, facts: {} }, result: { packId: 'synthetic', packVersion: '1', title: 'Current', summary: '',
+    recommendations: [], notEvaluated: [], disclaimer: '' }, physicianInputs: {}, physicianDecisions: {} }
+
+test('last record is read and applied only after explicit confirmation; it does not save or mutate the snapshot', async () => {
+  const stored = await detail()
+  const original = JSON.stringify(stored)
+  const onCarryForward = jest.fn(() => 2)
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} />)
+  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
+  expect(onCarryForward).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('checkbox', { name: /人工輸入/ }))
+  fireEvent.click(screen.getByTestId('cdss-carry-forward-confirm'))
+  await waitFor(() => expect(onCarryForward).toHaveBeenCalledWith(stored, { inputs: false, decisions: true }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByText(/帶入來源/)).toBeVisible()
+  expect(JSON.stringify(stored)).toBe(original)
+  expect(jest.mocked(fetch).mock.calls).toHaveLength(2)
+})
+
+test('old rule versions stay viewable but cannot be carried forward', async () => {
+  const stored = await detail({ result: { ...result, packVersion: 'old' } })
+  const apply = jest.fn(() => 1)
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={apply} />)
+  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  expect(await screen.findByText(/疾病或指引版本不同/)).toBeVisible()
+  expect(screen.queryByTestId('cdss-carry-forward-review')).not.toBeInTheDocument()
+  expect(apply).not.toHaveBeenCalled()
+})
+
+test('closing confirmation or changing patients never applies a record', async () => {
+  const stored = await detail()
+  const apply = jest.fn(() => 1)
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
+  const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={apply} />)
+  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
+  fireEvent.click(screen.getByRole('button', { name: '取消' }))
+  expect(screen.queryByTestId('cdss-carry-forward-confirm')).not.toBeInTheDocument()
+  view.rerender(<CdssStorageActions input={{ ...currentInput, patient: { ...patient, id: 'other' } }} sourceRecords={() => []} onCarryForward={apply} />)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(apply).not.toHaveBeenCalled()
+})
+
+test('last record does not choose a different disease', async () => {
+  jest.mocked(fetch).mockResolvedValue(response({ records: [{ ...index, packId: 'other' }], hasMore: false }))
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1} />)
+  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  expect(await screen.findByText(/最近 10 筆儲存中沒有此疾病/)).toBeVisible()
+  expect(jest.mocked(fetch).mock.calls).toHaveLength(1)
+})
+
+test('a rules change clears a selected confirmation without disconnecting authorization', async () => {
+  const stored = await detail()
+  const apply = jest.fn(() => 1)
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
+  const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={apply} />)
+  fireEvent.click(screen.getByTestId('cdss-carry-forward-latest'))
+  fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
+  view.rerender(<CdssStorageActions input={{ ...currentInput, result: { ...currentInput.result, packVersion: '2' } }} sourceRecords={() => []} onCarryForward={apply} />)
+  expect(screen.queryByTestId('cdss-carry-forward-confirm')).not.toBeInTheDocument()
+  expect(apply).not.toHaveBeenCalled()
+})
+
 test.each([
   ['legacy UUID', { patient_session_id: 'ABCDEFAB-1234-0000-0000-ABCDEFABCDEF' }],
   ['compact time offset', { saved_at: '2026-10-03T12:34+0800' }],
