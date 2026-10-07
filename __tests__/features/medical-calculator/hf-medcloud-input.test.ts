@@ -34,7 +34,7 @@ describe('NHI cloud HF input preparation', () => {
     expect(fhirDay('2024-02-29')).toBe('2024-02-29')
     const bundle = hfMedcloudFixture()
     delete bundle.meta
-    expect(() => build(bundle)).toThrow('source-not-medcloud')
+    expect(() => build(bundle)).toThrow('source-unsupported')
     const multiple = hfMedcloudFixture()
     add(multiple, { resourceType: 'Patient', id: 'other-patient' })
     expect(() => build(multiple)).toThrow('patient-count')
@@ -156,4 +156,51 @@ it('deduplicates one diagnosis across recognized code-system aliases and edition
   fixture.entry.find((e: any) => e.resource.resourceType==='Encounter').resource.reasonCode[0].coding.push({system:'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw',code:'I50.9'})
   const result=build(fixture)
   expect(result.counts.Condition).toBe(1)
+})
+
+describe('cloud laboratory results without a source status', () => {
+  const lab = (bundle: FhirRecord) => resources(bundle, 'Observation')[0]
+  it('sends an unknown-status cloud result that has a value and collection date, and says so', () => {
+    const bundle = hfMedcloudFixture()
+    lab(bundle).status = 'unknown'
+    const result = build(bundle)
+    expect(result.counts.Observation).toBe(1)
+    expect(resources(result.bundle, 'Observation')[0].status).toBe('final')
+    expect(result.gaps).toContainEqual({ code: 'lab-status-unreported', count: 1 })
+    expect(result.gaps.map(gap => gap.code)).not.toContain('lab-status')
+    expect(validateHfTransportBundle(result.bundle, result.indexDate)).toBe(true)
+  })
+  it('still excludes preliminary or registered results', () => {
+    for (const status of ['preliminary', 'registered']) {
+      const bundle = hfMedcloudFixture()
+      lab(bundle).status = status
+      const result = build(bundle)
+      expect(result.counts.Observation ?? 0).toBe(0)
+      expect(result.gaps).toContainEqual({ code: 'lab-status', count: 1 })
+    }
+  })
+  it('does not count an unknown-status result that is dropped for its unit', () => {
+    const bundle = hfMedcloudFixture()
+    lab(bundle).status = 'unknown'
+    lab(bundle).valueQuantity = { value: 1, unit: 'furlong' }
+    const result = build(bundle)
+    expect(result.gaps.map(gap => gap.code)).toEqual(expect.arrayContaining(['lab-value-unit']))
+    expect(result.gaps.map(gap => gap.code)).not.toContain('lab-status-unreported')
+  })
+  it('accepts a unit written with spaces, such as "g /dL" for hemoglobin', () => {
+    const bundle = hfMedcloudFixture()
+    Object.assign(lab(bundle), { code: { coding: [{ system: 'http://loinc.org', code: '718-7' }] }, valueQuantity: { value: 11.2, unit: 'g /dL' } })
+    const result = build(bundle)
+    expect(resources(result.bundle, 'Observation')[0].valueQuantity).toMatchObject({ value: 11.2, code: 'g/dL' })
+  })
+})
+
+describe('HF diagnosis presence', () => {
+  it('recognizes ICD-10-CM I50.x and rejects unrelated codes', () => {
+    const { hasHfDiagnosis } = jest.requireActual('@/src/core/hf-risk/input-summary')
+    const withCode = (code: string) => { const bundle = hfMedcloudFixture(); resources(bundle, 'Encounter')[0].reasonCode[0].coding[0].code = code; return build(bundle) }
+    expect(hasHfDiagnosis(withCode('I50.9'))).toBe(true)
+    expect(hasHfDiagnosis(withCode('I50.22'))).toBe(true)
+    expect(hasHfDiagnosis(withCode('I10'))).toBe(false)
+  })
 })

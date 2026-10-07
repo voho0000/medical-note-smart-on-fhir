@@ -1,3 +1,4 @@
+import { normalizeHfRecordSource, type HfRecordSource } from './record-source'
 import { fhirDay, taipeiToday, HF_DRY_RUN_CLAIMS, HF_NAMESPACE, MEDCLOUD_PROVIDER_SYSTEM, type FhirRecord, type HfInput, type HfSelection } from './contract'
 import { HF_LABS, normalizeHfLab } from './labs'
 
@@ -10,15 +11,13 @@ const VOID = ['entered-in-error', 'cancelled', 'not-done', 'refuted']
 function coding(concept: FhirRecord | undefined): FhirRecord[] {
   return Array.isArray(concept?.coding) ? concept.coding.filter((item: unknown) => !!item && typeof item === 'object') : []
 }
-function records(input: unknown): { entry: FhirRecord[]; bundle: FhirRecord } {
+function records(input: unknown): { entry: FhirRecord[]; bundle: FhirRecord; source: HfRecordSource } {
   const bundle = input as FhirRecord | null
   if (!bundle || bundle.resourceType !== 'Bundle' || !Array.isArray(bundle.entry)) throw new Error('bundle-invalid')
   const entry = bundle.entry.filter((item: FhirRecord) => item?.resource && typeof item.resource === 'object')
   if (entry.filter((item: FhirRecord) => item.resource.resourceType === 'Patient').length !== 1) throw new Error('patient-count')
-  const medcloud = bundle.meta?.source === 'https://medcloud2.nhi.gov.tw/'
-    || (bundle.meta?.tag ?? []).some((tag: FhirRecord) => tag.code === 'MEDCLOUD')
-  if (!medcloud) throw new Error('source-not-medcloud')
-  return { entry, bundle }
+  const normalized = normalizeHfRecordSource(bundle)
+  return { entry: normalized.bundle.entry.filter((item: FhirRecord) => item?.resource), bundle: normalized.bundle, source: normalized.source }
 }
 function lookup(entry: FhirRecord[]) {
   const index = new Map<string, FhirRecord>()
@@ -69,15 +68,14 @@ export function medcloudHfVisits(input: unknown, today = taipeiToday()): HfVisit
     if (resource.resourceType !== 'Encounter' || resource.class?.code !== 'AMB'
       || VOID.includes(resource.status) || !date || date > today || !provider
       || resolve(resource.subject?.reference) !== patient
-      || (resource.type ?? []).some((type: FhirRecord) => coding(type).some(code => code.code === '08' && /case-type/.test(code.system ?? '')))
-      || !diagnoses(resource, resolve, date).length) return []
+      || (resource.type ?? []).some((type: FhirRecord) => coding(type).some(code => code.code === '08' && /case-type/.test(code.system ?? '')))) return []
     const providerName = resolve(resource.serviceProvider?.reference)?.name
     return [{ reference: item.fullUrl ?? 'Encounter/' + resource.id, provider, ...(typeof providerName === 'string' ? { providerName } : {}), date }]
   }).sort((a, b) => b.date.localeCompare(a.date))
 }
 /** A fresh UUID namespace per preparation; no names, identifiers, raw IDs or narrative leave the browser. */
 export function buildMedcloudHfInput(input: unknown, selection: HfSelection, options: { today?: string; uuid?: () => string } = {}): HfInput {
-  const { entry, bundle: original } = records(input)
+  const { entry, bundle: original, source } = records(input)
   const resolve = lookup(entry)
   const selected = medcloudHfVisits(input, options.today).find(item => item.reference === selection.encounter && item.provider === selection.provider)
   if (!selected || !HF_DRY_RUN_CLAIMS.includes(selection.claim)) throw new Error('index-encounter-invalid')
@@ -98,8 +96,9 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   // A capture-complete flag does not establish feature/time/facility coverage.
   gap('source-validation-pending')
   gap('history-coverage-unverified')
+  if (source === 'health-bank') gap('hospital-name-only')
   const tags = Array.isArray(original.meta?.tag) ? original.meta.tag : []
-  for (const moduleName of ['imue0008', 'imue0060', 'imue0070', 'imue0020']) {
+  for (const moduleName of source === 'medcloud' ? ['imue0008', 'imue0060', 'imue0070', 'imue0020'] : []) {
     const statuses = tags.filter((tag: FhirRecord) => /\/module-completeness$/.test(tag.system ?? '') && typeof tag.code === 'string' && tag.code.startsWith(moduleName + '-')).map((tag: FhirRecord) => tag.code.slice(moduleName.length + 1))
     if (!statuses.length) gap('module-unknown:' + moduleName)
     else if (statuses.some((status: string) => !['complete', 'empty'].includes(status))) gap('module-incomplete:' + moduleName)
@@ -163,7 +162,10 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
     if (provider(resource) !== selection.provider) { gap('source-omitted'); continue }
     if (voided(resource)) { gap('void-omitted'); continue }
     if (resource.resourceType === 'Observation') {
-      if (!['final', 'amended', 'corrected'].includes(resource.status)) { gap('lab-status'); continue }
+      // NHI cloud and health-bank results carry no workflow status; the bridges mark them unknown.
+      // A reported value with a collection date is accepted from those sources; anything else stays strict.
+      const unreported = resource.status === 'unknown' && (source === 'medcloud' || source === 'health-bank')
+      if (!['final', 'amended', 'corrected'].includes(resource.status) && !unreported) { gap('lab-status'); continue }
       const lab = HF_LABS.find(lab => coding(resource.code).some(code => code.system === 'http://loinc.org' && lab.loinc.includes(code.code)))
       if (!lab) { gap('lab-unmapped'); continue }
       // issued/report/visit dates are not replacements for the collection date.
@@ -172,6 +174,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
       if (date > indexDate) { gap('future-omitted'); continue }
       const quantity = resource.valueQuantity && normalizeHfLab(lab, resource.valueQuantity)
       if (!quantity) { gap('lab-value-unit'); continue }
+      if (unreported) gap('lab-status-unreported')
       add({ resourceType: 'Observation', id: uuid(), subject, status: 'final',
         category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
         code: { coding: [{ system: HF_NAMESPACE + '/CodeSystem/hf-source-lab-item', code: lab.key }, { system: 'http://loinc.org', code: lab.loinc[0] }] },
@@ -192,6 +195,8 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   const counts: Record<string, number> = {}
   for (const item of output) counts[item.resource.resourceType] = (counts[item.resource.resourceType] ?? 0) + 1
   if (!counts.Observation) gap('lab-none')
-  return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, claim: selection.claim,
+  const indexEncounter = output.find(item => item.resource.id === encounterIds.get(resolve(selection.encounter)!))?.resource
+  if (!indexEncounter?.diagnosis?.length) gap('index-diagnosis-missing')
+  return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, indexEncounterReference: indexEncounter ? 'urn:uuid:' + indexEncounter.id : undefined, claim: selection.claim,
     gaps: [...gaps].map(([code, count]) => ({ code, count })), counts }
 }

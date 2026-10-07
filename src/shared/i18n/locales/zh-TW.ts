@@ -1711,6 +1711,18 @@ export const zhTW = {
     reports: '報告',
     notes: '註記',
     summary: '處置摘要',
+    materials: {
+      heading: '使用醫材',
+      count: '使用醫材 {count}',
+      countDetail: '{count} 項 · 特材申報',
+      quantity: '數量 {count}',
+      licenses: '許可證 {count} 張',
+      inferred: '推定關聯',
+      whyLinked: '為何連到此手術？',
+      inferredExplanation: '雲端病歷沒有寫明醫材用在哪一台手術。系統依同一醫事機構、醫材使用日等於手術日、相同申報診斷，且當日只有一台已完成手術，推定為此手術所用。',
+      sourceBasis: '來源說明',
+      licenseList: '許可證字號',
+    },
   },
 
   clinicalNotes: {

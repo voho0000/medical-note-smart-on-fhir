@@ -90,3 +90,12 @@ test('account changes while receiving history suppress the old account result', 
   })
   await expect(listCdssHistory(patient, new AbortController().signal)).rejects.toThrow('cdss_site_changed')
 })
+
+
+test('de-identified source patients never request history list or detail', async () => {
+  await expect(listCdssHistory({ ...patient, deidentified: true }, new AbortController().signal))
+    .rejects.toThrow('cdss_patient_deidentified')
+  await expect(readCdssHistory({ ...patient, deidentified: true }, saveId, new AbortController().signal))
+    .rejects.toThrow('cdss_patient_deidentified')
+  expect(fetch).not.toHaveBeenCalled()
+})

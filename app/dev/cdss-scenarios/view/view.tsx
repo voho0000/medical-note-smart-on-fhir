@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/src/application/providers/theme.provider'
 import { FontSizeProvider } from '@/src/application/providers/font-size.provider'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
+import { AuthProvider } from '@/src/application/providers/auth.provider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useEffect, useSyncExternalStore } from 'react'
 import { installMeasure } from './measure'
@@ -96,6 +97,7 @@ export default function View() {
         <FontSizeProvider>
           <LanguageProvider>
             <AudienceProvider>
+              <AuthProvider>
               <TooltipProvider>
               <DataSelectionProvider>
                 <div className="flex min-h-screen justify-end bg-muted/30">
@@ -118,6 +120,7 @@ export default function View() {
                 </div>
               </DataSelectionProvider>
               </TooltipProvider>
+              </AuthProvider>
             </AudienceProvider>
           </LanguageProvider>
         </FontSizeProvider>

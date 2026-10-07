@@ -1703,6 +1703,18 @@ export const en = {
     reports: 'Reports',
     notes: 'Notes',
     summary: 'Procedure Summary',
+    materials: {
+      heading: 'Materials used',
+      count: '{count} materials used',
+      countDetail: '{count} · special-material claims',
+      quantity: 'Qty {count}',
+      licenses: '{count} licences',
+      inferred: 'Inferred link',
+      whyLinked: 'Why this surgery?',
+      inferredExplanation: 'The cloud record does not say which operation used the material. It was linked because the facility matches, the material date equals the surgery date, the claim diagnosis matches, and only one completed surgery was recorded that day.',
+      sourceBasis: 'Source basis',
+      licenseList: 'Licence numbers',
+    },
   },
 
   clinicalNotes: {

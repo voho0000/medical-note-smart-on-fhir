@@ -4,7 +4,7 @@ name: Sync app to mediprisma.tw/app
 # After CI passes on master, build the static export with basePath /app — using
 # the SAME NEXT_PUBLIC_* secrets as the gh-pages build, so the mirror is feature-
 # identical (AI, Firebase, etc.) — then push it into the docs site repo
-# (voho0000/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
+# (MediPrisma/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
 # to redeploy mediprisma.tw/app automatically.
 # Publishing uses a write-enabled deploy key stored only in the
 # mediprisma-site-publish environment. That environment accepts protected
@@ -81,7 +81,7 @@ jobs:
       - name: Checkout docs site (mediprisma-site)
         uses: actions/checkout@v7
         with:
-          repository: voho0000/mediprisma-site
+          repository: MediPrisma/mediprisma-site
           ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
           path: docs-site
           ref: main
@@ -103,7 +103,7 @@ jobs:
             exit 0
           fi
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          git commit -m "chore: sync /app from medical-note-smart-on-fhir@${SHA:0:7}"
+          git commit -m "chore: sync /app from mediprisma-app@${SHA:0:7}"
 
           # The HMC preview publishes to this same branch from its own
           # concurrency group, so the two can be in flight together and this

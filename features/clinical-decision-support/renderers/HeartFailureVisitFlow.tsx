@@ -82,6 +82,7 @@ import { HfDiagnosisConfirmation } from './HfDiagnosisConfirmation'
 import { HfFollowUpPriorities } from './HfFollowUpPriorities'
 import type { HfFollowUpHistory } from '../utils/hf-follow-up'
 import { diagnosisContextOf } from './cdss-sections'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
 
 /** The element a step's 「前往」 button scrolls to. */
@@ -881,6 +882,7 @@ function SignItemRows({
   onAnswerAll?: (answers: Record<string, SignAnswerValue | null>) => void
 }) {
   const [moreOpen, setMoreOpen] = useState(false)
+  const carriedLookup = useCarriedLookup()
   // What the rows held before 全部皆無 was pressed, so a second press restores it.
   const [beforeNone, setBeforeNone] = useState<Record<string, SignAnswerValue | null> | null>(null)
   const common = items.filter((item) => item.common)
@@ -963,9 +965,17 @@ function SignItemRows({
   )
   const row = (item: VisitSignItem) => {
     const visibleLabel = isEnglish ? item.en : item.zh
+    const carried = carriedLookup(`sign:${item.term}`)
     return <div key={item.term} className="flex flex-wrap items-center gap-2">
       <SideTag side={item.side} isEnglish={isEnglish} />
-      <span className="min-w-0 flex-1 text-xs text-foreground">{visibleLabel}</span>
+      <span className="min-w-0 flex-1 text-xs text-foreground">
+        {visibleLabel}
+        {carried ? (
+          <span className="ml-1.5 inline-flex items-center rounded border border-primary/25 bg-primary/5 px-1 text-[11px] tabular-nums text-primary" data-carried-from={carried}>
+            {carriedLabel(carried, isEnglish)}
+          </span>
+        ) : null}
+      </span>
       <SegmentedControl<SignAnswerValue>
         label={visibleLabel}
         options={[
@@ -1213,6 +1223,13 @@ function ListQuestionShell({
   const stamp = formatStamp(question.modifiedAt, now, isEnglish)
   const open = question.state === 'open'
   const answered = question.state === 'answered'
+  // An answer brought in from a saved record says so instead of 「最後修改」 today.
+  const carriedLookup = useCarriedLookup()
+  const carried = !answered ? null
+    : question.id === 'nyha' || question.id === 'compensation' ? carriedLookup(question.id)
+      : question.id === 'symptoms' || question.id === 'signs'
+        ? (question.items ?? []).map((item) => carriedLookup(`sign:${item.term}`)).find(Boolean) ?? null
+        : null
   const sideBySide = ['hf-suspicion', 'lvef-phenotype', 'nyha', 'compensation'].includes(question.id)
   const editingInline = sideBySide && Boolean(children)
   return (
@@ -1255,7 +1272,12 @@ function ListQuestionShell({
             </span>
           ) : null}
           {answered && answerBadge ? answerBadge : null}
-          {answered && stamp ? (
+          {carried ? (
+            <span className="inline-flex items-center rounded border border-primary/25 bg-primary/5 px-1.5 text-[11px] tabular-nums text-primary"
+              data-carried-from={carried}>
+              {carriedLabel(carried, isEnglish)}
+            </span>
+          ) : answered && stamp ? (
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {isEnglish ? `last changed ${stamp}` : `最後修改 ${stamp}`}
             </span>

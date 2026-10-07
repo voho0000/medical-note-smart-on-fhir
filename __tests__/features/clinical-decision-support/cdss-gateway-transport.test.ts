@@ -2,6 +2,8 @@ import type { CdssPatientProfile, CdssResult } from '@voho0000/personalized-care
 import { createHash, webcrypto } from 'node:crypto'
 import { cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
+import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
+import { parseStoredCdssSaveV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
 
 const mockGetToken = jest.fn()
 const mockIsCurrent = jest.fn(() => true)
@@ -207,6 +209,159 @@ test('does not transmit when complete identity inputs are missing', async () => 
   expect(fetch).not.toHaveBeenCalled()
 })
 
+test.each([
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id',
+  ' https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id ',
+  'https://Cloud-Wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id',
+])('accepts the normalized source bridge namespace %s only for partially masked national IDs', async system => {
+  const canonical = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
+  const patient = { ...input.patient, name: [{ text: '王小*' }],
+    identifier: [{ system, value: 'B123***789' }] }
+  await saveCdssSnapshot({ ...input, patient })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(body.patient_identity.identifier_system).toBe(canonical)
+  expect(body.patient_identity.identifier_masked).toBe('B123***789')
+  expect(() => parseStoredCdssSaveV2(body)).not.toThrow()
+  expect(body.patient_key_sha256).toBe((await cdssPatientIdentity({ ...patient,
+    identifier: [{ system: canonical, value: 'B123***789' }] })).patient_key_sha256)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+})
+
+test.each([
+  ['source-medcloud-patient-id', 'B123456789'],
+  ['source-medcloud-patient-id', 'B823***789'],
+  ['source-medcloud-patient-id', '123***789'],
+  ['unrecognized-system', 'B123***789'],
+])('rejects unsupported bridge identifier %s / %s', async (namespace, value) => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
+    identifier: [{ system: `https://cloud-wildcatch.invalid/fhir/IdentifierSystem/${namespace}`, value }] } }))
+    .rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each(['source-medcloud-patient-id', 'masked-medcloud-patient-id', 'masked-tw-national-id'])(
+  'remasked bridge ID in %s requires turning off de-identification even without a source flag', async namespace => {
+    await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
+      birthDate: '1968', identifier: [{
+        system: `https://cloud-wildcatch.invalid/fhir/IdentifierSystem/${namespace}`, value: 'B123XXXXXX',
+      }] } })).rejects.toThrow('cdss_patient_deidentified')
+    expect(fetch).not.toHaveBeenCalled()
+  },
+)
+
+test('a masked bridge namespace never becomes a second storage identity', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [{
+    system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id', value: 'B123***789',
+  }] } })).rejects.toThrow('cdss_patient_deidentified')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each([
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id ',
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-ｔｗ-national-id',
+  ' https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id ',
+  ' https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id ',
+  'https://Cloud-Wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id',
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/MASKED-MEDCLOUD-PATIENT-ID',
+  'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id?unknown=1',
+  'https://cloud-wildcatch.invalid:443/fhir/IdentifierSystem/masked-tw-national-id',
+])(
+  'namespace normalization does not bypass the remasking guard: %s', async system => {
+    await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [{
+      system, value: 'B123XXXXXX',
+    }] } })).rejects.toThrow('cdss_patient_deidentified')
+    expect(fetch).not.toHaveBeenCalled()
+  },
+)
+
+test('unknown bridge namespace cannot enter through the generic national-ID matcher', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [{
+    system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/national-id-unknown', value: 'B123***789',
+  }] } })).rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('bridge and national-ID candidates remain ambiguous and do not transmit', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, identifier: [
+    ...input.patient.identifier,
+    { system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id', value: 'B123***789' },
+  ] } })).rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each([
+  ['王小*', '王○*'], ['王小＊', '王○*'],
+  ['王*明', '王○明'], ['*小明', '*○明'],
+])('saves an unrecognized source name %s without sending its raw text', async (name, masked) => {
+  const patient = { ...input.patient, name: [{ text: name }] }
+  await saveCdssSnapshot({ ...input, patient,
+    physicianDecisions: { module: { decision: 'reviewed', note: `source ${name}` } } })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.patient_identity.name_masked).toBe(masked)
+  expect(body.physician_decisions.module.note).toBe('source [已遮蔽]')
+  expect(JSON.stringify(body)).not.toContain(name)
+  expect(body.patient_key_sha256).toBe((await cdssPatientIdentity(patient)).patient_key_sha256)
+  const tuple = JSON.stringify([1, 'vghtpe', name.normalize('NFKC'), '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
+  expect(body.patient_key_sha256).toBe(createHash('sha256').update(tuple).digest('hex'))
+  expect(body.patient_key_sha256).not.toBe((await cdssPatientIdentity({ ...patient, name: [{ text: '王小明' }] })).patient_key_sha256)
+  expect(body.patient_key_sha256).not.toBe((await cdssPatientIdentity({ ...patient, name: [{ text: '王小' }] })).patient_key_sha256)
+})
+
+test.each(['王\uE000', '王\uFFFD', '王?'])('preserves the existing identity hash for a source name %s without asterisks', async name => {
+  const patient = { ...input.patient, name: [{ text: name }] }
+  await saveCdssSnapshot({ ...input, patient })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.patient_identity.name_masked).toBe('王○')
+  const tuple = JSON.stringify([1, 'vghtpe', name, '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
+  expect(body.patient_key_sha256).toBe(createHash('sha256').update(tuple).digest('hex'))
+})
+
+test.each(['王小*', '王小＊'])('scrubs alternative source glyphs for %s from outbound free text', async name => {
+  await saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] },
+    physicianDecisions: { module: { decision: 'reviewed', note: '王小明 王小𠀋 王小? 王小□ 王小* 王小＊ LDL 92' } } })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(body.physician_decisions.module.note).toBe('[已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] LDL 92')
+})
+
+test('Latin source placeholders preserve structural keys and clinical words', async () => {
+  recordCdssEvent(input.patient.id, 'lip', { kind: 'interaction', action: 'evidence_toggled', target: 'lip' })
+  await saveCdssSnapshot({ ...input, packId: 'lip', patient: { ...input.patient, name: [{ text: 'Li*' }] },
+    physicianDecisions: { module: { decision: 'reviewed', note: 'Lin clinical lipid' } } })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.pack_id).toBe('lip')
+  expect(body.events[0].pack_id).toBe('lip')
+  expect(body.events[0].target).toBe('lip')
+  expect(body.physician_decisions.module.note).toBe('[已遮蔽] clinical lipid')
+})
+
+test('name patterns preserve session UUIDs but scrub narrative keys at any depth', async () => {
+  const uuid = '12345678-abed-4abc-8def-123456789abc'
+  const random = jest.spyOn(crypto, 'randomUUID').mockReturnValue(uuid)
+  try {
+    await saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: 'Abe*' }] },
+      physicianInputs: { action: 'Abel', nested: { id: 'Abel', target: 'Abel' } } })
+    const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+    expect(body.patient_session_id).toBe(uuid)
+    expect(body.physician_inputs).toEqual({ action: '[已遮蔽]', nested: { id: '[已遮蔽]', target: '[已遮蔽]' } })
+    expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  } finally { random.mockRestore() }
+})
+
+test.each(['***', '王**', '王○明'])('still rejects insufficient or explicitly masked name %s', async name => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] } }))
+    .rejects.toThrow('cdss_identity_unavailable')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('an unrecognized character does not bypass an explicit de-identification flag', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient,
+    name: [{ text: '王小*' }], deidentified: true } })).rejects.toThrow('cdss_patient_deidentified')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 
 test('account switch during a save never confirms the old account response', async () => {
   jest.mocked(fetch).mockImplementation(async (_url, init) => {
@@ -214,4 +369,11 @@ test('account switch during a save never confirms the old account response', asy
     return { status: 201, json: async () => ({ status: 'stored', save_id: JSON.parse(init!.body as string).save_id }) } as Response
   })
   await expect(saveCdssSnapshot({ ...input, ownerUid: 'owner-a' })).rejects.toThrow('cdss_site_changed')
+})
+
+
+test('de-identified source patients never transmit a CDSS save', async () => {
+  await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, deidentified: true } }))
+    .rejects.toThrow('cdss_patient_deidentified')
+  expect(fetch).not.toHaveBeenCalled()
 })
