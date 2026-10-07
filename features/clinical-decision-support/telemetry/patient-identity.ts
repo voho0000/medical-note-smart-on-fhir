@@ -13,6 +13,16 @@ function normalizedIdentifierSystem(system?: string): string {
   return system?.normalize('NFKC').trim() ?? ''
 }
 
+function isMedcloudSystem(system: string, expected: string): boolean {
+  return system.toLowerCase() === expected.toLowerCase()
+}
+
+function isMedcloudNamespace(system: string): boolean {
+  try {
+    return new URL(system).hostname.toLowerCase().replace(/\.$/, '') === 'cloud-wildcatch.invalid'
+  } catch { return false }
+}
+
 function normalizedName(patient: PatientEntity): string {
   const names = (patient.name ?? [])
     .map((name) => name.text?.normalize('NFKC').trim().replace(/\s+/gu, ' '))
@@ -42,14 +52,15 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
       system: normalizedIdentifierSystem(identifier.system),
       value: identifier.value?.normalize('NFKC').trim().toUpperCase() ?? '',
     }))
-    .filter(identifier => NATIONAL_ID_SYSTEM.test(identifier.system)
-      || identifier.system === MEDCLOUD_SOURCE_ID_SYSTEM)
+    .filter(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
+      || isMedcloudSystem(identifier.system, MEDCLOUD_NATIONAL_ID_SYSTEM)
+      || (!isMedcloudNamespace(identifier.system) && NATIONAL_ID_SYSTEM.test(identifier.system)))
   if (matches.length !== 1 || !MASKED_NATIONAL_ID.test(matches[0].value)
     || !MASK.test(matches[0].value.slice(1))) {
     throw new Error('cdss_identity_unavailable')
   }
   const identifier = matches[0]
-  if (identifier.system === MEDCLOUD_SOURCE_ID_SYSTEM) {
+  if (isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)) {
     // The bridge uses a generic namespace for unmasked-name exports. Only a
     // partially masked TW national-ID shape can enter the existing ID tuple.
     if (!/^[A-Z][12][0-9X*＊○〇●Ｏ◯]{8}$/u.test(identifier.value)) {
@@ -68,9 +79,8 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
     // The bridge's second masking pass hides the final four characters.
     // Detect it before name/date validation so even legacy exports get the
     // instruction to turn off de-identification and reimport.
-    return system === MEDCLOUD_MASKED_ID_SYSTEM ||
-      ((system === MEDCLOUD_SOURCE_ID_SYSTEM || system === MEDCLOUD_NATIONAL_ID_SYSTEM)
-        && /[X*○〇●Ｏ◯]{4}$/u.test(value))
+    return isMedcloudSystem(system, MEDCLOUD_MASKED_ID_SYSTEM) ||
+      (isMedcloudNamespace(system) && /[X*○〇●Ｏ◯]{4}$/u.test(value))
   })
   if (isDeidentifiedPatient(patient) || remaskedMedcloudId) throw new Error('cdss_patient_deidentified')
   const name = normalizedName(patient)
