@@ -48,19 +48,21 @@ export const PREVENT_CARRIED_KEYS: readonly string[] = ['smoking', 'genetic']
  * Every answer a carry can fill, keyed the way `carried-answers.store` marks it
  * and the screen looks it up. What is new after a carry is what was carried.
  */
-export function carryableAnswers(patientId: string, now: Date = new Date()): Record<string, unknown> {
+export function carryableAnswers(patientId: string, now: Date = new Date(), scope: 'today' | 'held' = 'today'): Record<string, unknown> {
   const answers: Record<string, unknown> = {}
   const put = (prefix: string, values: object | undefined, pick = (value: unknown) => value) => {
     for (const [key, value] of Object.entries(values ?? {})) if (value !== undefined && value !== null) answers[prefix + key] = pick(value)
   }
   const vitals = useClinicVitalsStore.getState().byPatientId[patientId]
   const today = todayIsoDate(now)
+  const held = scope === 'held'
   put('vital:', vitals?.entries, entry => (entry as { value: number }).value)
-  // Only today's examination is an answer today; an earlier day's grade or sign is
-  // replaced by a carry, and has to count (and be marked) as carried when it is.
-  put('sign:', Object.fromEntries(Object.entries(vitals?.signAnswers ?? {}).filter(([, sign]) => sign.examinedOn >= today)),
+  // 'today': before a carry, only today's examination counts as answered — an earlier day's
+  // grade or sign is replaced by the carry and has to count (and be marked) as carried.
+  // 'held': what the stores hold now, which 三區塊 shows on any day; a mark is checked against it.
+  put('sign:', Object.fromEntries(Object.entries(vitals?.signAnswers ?? {}).filter(([, sign]) => held || sign.examinedOn >= today)),
     sign => (sign as { value: string }).value)
-  if (vitals?.nyhaClass && (vitals.nyhaClass.assessedOn ?? calendarDayOf(vitals.nyhaClass.modifiedAt)) >= today) answers.nyha = vitals.nyhaClass.value
+  if (vitals?.nyhaClass && (held || (vitals.nyhaClass.assessedOn ?? calendarDayOf(vitals.nyhaClass.modifiedAt)) >= today)) answers.nyha = vitals.nyhaClass.value
   if (vitals?.compensationStatus) answers.compensation = vitals.compensationStatus.value
   put('echo:', useHfpefInputsStore.getState().byPatientId[patientId]?.entries, entry => (entry as { value: string }).value)
   if (usePhenotypeAnswerStore.getState().byPatientId[patientId]) answers.phenotype = true

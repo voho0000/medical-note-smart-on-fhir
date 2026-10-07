@@ -32,9 +32,9 @@ test('a mark whose answer left the carried value is stale and goes for good, so 
 test('read back the next day, only the every-visit marks are dropped', async () => {
   const backing = createMemoryPatientAnswerBacking()
   setPatientAnswerBacking(backing)
-  useCarriedAnswersStore.getState().mark('p', { 'sign:rales': 'present', 'prevent:smoking': 'yes' }, '2026-09-01', today)
+  useCarriedAnswersStore.getState().mark('p', { 'visit:trigger-infection': 'yes', 'sign:rales': 'present', 'prevent:smoking': 'yes' }, '2026-09-01', today)
   useCarriedAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useCarriedAnswersStore.getState().hydrate('p', tomorrow)
   await new Promise(resolve => setTimeout(resolve, 0))
-  expect(Object.keys(useCarriedAnswersStore.getState().byPatientId.p.marks)).toEqual(['prevent:smoking'])
+  expect(Object.keys(useCarriedAnswersStore.getState().byPatientId.p.marks)).toEqual(['sign:rales', 'prevent:smoking'])
 })

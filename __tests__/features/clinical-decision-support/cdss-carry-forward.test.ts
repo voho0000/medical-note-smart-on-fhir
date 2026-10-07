@@ -1,4 +1,4 @@
-import { carryForwardCdss } from '@/features/clinical-decision-support/telemetry/cdss-carry-forward'
+import { carryableAnswers, carryForwardCdss } from '@/features/clinical-decision-support/telemetry/cdss-carry-forward'
 import { createMemoryPatientAnswerBacking, setPatientAnswerBacking } from '@/features/clinical-decision-support/stores/patient-answer-backing'
 import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
@@ -9,7 +9,7 @@ import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/sto
 import { useVisitAnswersStore } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { usePreventStore } from '@/features/clinical-decision-support/stores/prevent-inputs.store'
 import { useEvidenceOverridesStore } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
-import { carriedFrom, useCarriedAnswersStore } from '@/features/clinical-decision-support/stores/carried-answers.store'
+import { carriedFrom, staleCarriedKeys, useCarriedAnswersStore } from '@/features/clinical-decision-support/stores/carried-answers.store'
 import { todayIsoDate } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { CdssHistoryRecord } from '@/features/clinical-decision-support/telemetry/cdss-history'
 
@@ -207,4 +207,18 @@ test('an every-visit answer held from yesterday with the same value is carried a
   expect(new Date(useVisitAnswersStore.getState().byPatientId.p['trigger-infection']!.answeredAt).toDateString()).toBe(new Date().toDateString())
   expect(carriedFrom(useCarriedAnswersStore.getState().byPatientId.p, 'visit:trigger-infection', 'yes')).toBe('2026-09-01')
   expect(count).toBeGreaterThan(0)
+})
+
+test('the next day, a carried compensation, NYHA grade or sign still held keeps its mark (三區塊 still shows it)', () => {
+  const saved = record()
+  ;(saved.save.physician_inputs as Record<string, unknown>).clinicVitals = {
+    entries: {}, nyhaClass: { value: 'IV', modifiedAt: at }, compensationStatus: { value: 'decompensated', modifiedAt: at },
+    signAnswers: { orthopnea: { value: 'present', modifiedAt: at, examinedOn: '2026-09-01' } },
+  }
+  carryForwardCdss('p', saved, 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false })
+  const tomorrow = new Date(Date.now() + 86_400_000)
+  const held = carryableAnswers('p', tomorrow, 'held')
+  const marks = useCarriedAnswersStore.getState().byPatientId.p
+  for (const key of ['compensation', 'nyha', 'sign:orthopnea']) expect(carriedFrom(marks, key, held[key], tomorrow)).toBe('2026-09-01')
+  expect(staleCarriedKeys(marks, held, tomorrow)).not.toEqual(expect.arrayContaining(['compensation', 'nyha', 'sign:orthopnea']))
 })

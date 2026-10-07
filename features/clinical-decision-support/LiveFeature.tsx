@@ -376,7 +376,7 @@ export default function LiveClinicalDecisionSupportFeature({
   useEffect(() => { if (patientId) useCarriedAnswersStore.getState().hydrate(patientId) }, [patientId])
   const carriedLookup = useMemo((): CarriedLookup => {
     if (!patientId || !Object.keys(carriedAnswers.marks).length) return () => null
-    const current = carryableAnswers(patientId)
+    const current = carryableAnswers(patientId, new Date(), 'held')
     return (key) => carriedFrom(carriedAnswers, key, current[key])
     // The answers it compares against are read from their stores; these are what change them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -402,7 +402,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const carriedHydrated = useCarriedAnswersStore((state) => !patientId || Boolean(state.hydratedPatientIds[patientId]))
   useEffect(() => {
     if (!patientId || !answersHydrated || !carriedHydrated || !Object.keys(carriedAnswers.marks).length) return
-    const stale = staleCarriedKeys(carriedAnswers, carryableAnswers(patientId))
+    const stale = staleCarriedKeys(carriedAnswers, carryableAnswers(patientId, new Date(), 'held'))
     if (stale.length) useCarriedAnswersStore.getState().unmark(patientId, stale)
   }, [patientId, answersHydrated, carriedHydrated, carriedAnswers, carriedLookup])
 

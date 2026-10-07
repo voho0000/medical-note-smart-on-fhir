@@ -11,7 +11,7 @@
  * answer it describes. A mark goes for good the moment its answer leaves the
  * carried value (changed or cleared — see `unmark`), so typing the same value
  * back is the clinician's own answer, not a carried one. An every-visit answer
- * (`DAY_SCOPED`) ends with the day it was given, and its mark with it; every
+ * (`isDayScoped`) ends with the day it was given, and its mark with it; every
  * other carried answer stays in force across days, and so does its mark.
  *
  * Kept per patient, encrypted under the tab-session key like the answers they
@@ -36,9 +36,13 @@ export interface CarriedAnswers {
 const EMPTY: CarriedAnswers = Object.freeze({ marks: Object.freeze({}) })
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 
-/** Answers that belong to one visit day: today's every-visit answers and today's examination. */
+/**
+ * Answers that end with their day: the every-visit asks, which their store
+ * drops on the next day. The NYHA grade, the signs and the compensation
+ * judgement stay held (三區塊 still shows them), so their marks stay too.
+ */
 export function isDayScoped(key: string): boolean {
-  return key === 'nyha' || key === 'compensation' || key.startsWith('visit:') || key.startsWith('sign:')
+  return key.startsWith('visit:')
 }
 
 /** The comparable form of an answer value, whatever store it lives in. */
