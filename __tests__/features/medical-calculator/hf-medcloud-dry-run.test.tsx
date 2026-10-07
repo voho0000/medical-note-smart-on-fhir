@@ -208,7 +208,7 @@ it('validates and predicts sequentially with one button and keeps warnings with 
   expect(screen.getByText('Synthetic coverage warning')).toBeVisible()
   expect(screen.getByText(/研究試辦版本，尚未取得醫療器材許可證/)).toBeVisible()
   expect(requestHfDryRun).toHaveBeenCalledTimes(1)
-  expect(requestHfDryRun.mock.invocationCallOrder[0]).toBeLessThan(requestHfPrediction.mock.invocationCallOrder[0])
+  expect(jest.mocked(requestHfDryRun).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(requestHfPrediction).mock.invocationCallOrder[0])
   expect(screen.queryByRole('button', { name: '執行院內輸入檢查' })).toBeNull()
   expect(requestHfPrediction).toHaveBeenCalledTimes(1)
   fireEvent.change(screen.getByRole('combobox',{name:'模型期間'}),{target:{value:'P1_CD_mortality_3m'}})
