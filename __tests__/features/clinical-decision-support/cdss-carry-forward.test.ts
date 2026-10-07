@@ -23,7 +23,7 @@ function record() {
       hfpefInputs: { entries: { lavi: { ...measurement, value: '35' }, age: { ...measurement, value: '90' } } },
       phenotypeAnswer: { answeredOn: '2026-09-01', hfSuspicion: 'suspected', choice: 'reduced', lvef: 30, measuredOn: '2026-09-01' },
       nhiLipidReview: { smoking: 'yes', cad: 'yes' }, nhiLipidReviewProvenance: { smoking: { source: 'manual', reviewedAt: at, manualAction: 'selected' }, cad: { source: 'ai' } },
-      preventInputs: { egfr: '15' }, evidenceOverrides: { synthetic: false },
+      preventInputs: { egfr: '15', statin: 'no', smoking: 'yes' }, evidenceOverrides: { synthetic: false },
       visitAnswers: { 'dyspnoea-trend': 'worse', 'weight-trend': 'up', 'dyspnoea-present': 'yes', 'trigger-infection': 'yes' },
     }, physician_decisions: { synthetic: decision } } } as unknown as CdssHistoryRecord
 }
@@ -44,7 +44,7 @@ beforeEach(() => {
 test('confirmed carry-forward retains dates, fills gaps, marks what it carried and never installs the old profile/result or the every-visit questions', () => {
   const saved = record(), original = JSON.stringify(saved)
   const profile = { id: 'p', facts: { current: { zh: 'current', en: 'current' } } }
-  // weight, echo, phenotype, decision, lipid, NYHA, PREVENT, evidence switch, one every-visit trigger
+  // weight, echo, phenotype, decision, lipid, NYHA, PREVENT smoking, evidence switch, one every-visit trigger
   expect(carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: true })).toBe(9)
   expect(useClinicVitalsStore.getState().byPatientId.p.entries).toEqual({ bodyWeight: measurement })
   // Owner decision 2026-10-07: the NYHA grade is carried as today's, marked with the record's day.
@@ -55,7 +55,8 @@ test('confirmed carry-forward retains dates, fills gaps, marks what it carried a
   expect(useNhiLipidReviewStore.getState().provenance.smoking.reviewedAt).toBe(at)
   // Breathlessness and weight since last visit, and breathlessness today, are asked afresh.
   expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p)).toEqual(['trigger-infection'])
-  expect(usePreventStore.getState().inputs).toEqual({ egfr: '15' })
+  // A manual eGFR or statin answer would outrank today's record; only smoking and family history carry.
+  expect(usePreventStore.getState().inputs).toEqual({ smoking: 'yes' })
   expect(useEvidenceOverridesStore.getState().byPatientId.p).toEqual({ synthetic: false })
   const marks = useCarriedAnswersStore.getState().byPatientId.p
   expect(carriedFrom(marks, 'nyha', 'IV')).toBe('2026-09-01')
@@ -172,4 +173,15 @@ test('a cleared but still-pending hydration blocks all stores before a partial w
   expect(backing.kept.size).toBe(baseline)
   expect(useClinicVitalsStore.getState().byPatientId).toEqual({})
   finish(null); await Promise.resolve(); await Promise.resolve()
+})
+
+test('an earlier day’s NYHA grade replaced by a carry is counted and marked as carried', () => {
+  const yesterday = new Date(Date.now() - 86_400_000)
+  useClinicVitalsStore.getState().setVitals('p', { nyhaClass: 'II', signAnswers: { orthopnea: 'absent' } }, yesterday)
+  const count = carryForwardCdss('p', record(), 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false })
+  const vitals = useClinicVitalsStore.getState().byPatientId.p
+  expect(vitals.nyhaClass).toMatchObject({ value: 'IV', assessedOn: todayIsoDate() })
+  const marks = useCarriedAnswersStore.getState().byPatientId.p
+  expect(carriedFrom(marks, 'nyha', 'IV')).toBe('2026-09-01')
+  expect(count).toBeGreaterThan(0)
 })

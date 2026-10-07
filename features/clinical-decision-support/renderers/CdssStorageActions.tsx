@@ -299,7 +299,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const savedInputs = Object.entries(object(selected?.save.physician_inputs))
     .filter(([key, value]) => key !== 'nhiLipidReviewProvenance' && filled(value))
     .map(([key]) => (english ? fieldNamesEn : fieldNames)[key] ?? key)
-  const savedDecisions = Object.values(object(selected?.save.physician_decisions)).filter(filled).length
+  const savedDecisions = Object.values(object(selected?.save.physician_decisions)).filter(value => filled(value)).length
   const chosen = (choices.inputs ? 1 : 0) + (choices.decisions ? 1 : 0)
   const records = [...(history?.records ?? [])].sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
   const packs = [...new Set(records.map(item => item.packId))]
@@ -441,8 +441,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
       <h3 id="cdss-carry-title" className="text-[18px] font-semibold">
         {english ? 'Bring in ' : '帶入 '}{text(result.title) || nameOf(selected.packId)} · {when(storedTimestampForDisplay(selected.savedAt), english)}
       </h3>
-      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-relaxed">{english ? 'Confirm the previous answers still apply. Only empty fields are filled, and each carried answer is marked "Carried · date" until you change it. Measurement and decision dates stay unchanged; current record measurements take precedence. Not carried: dyspnoea and weight since last visit, dyspnoea today (answer these every visit), manually entered lab values and AI answers.' : '請確認上次回答仍適用。只補入目前空白的欄位，帶入的答案會標示「帶入 · 日期」，改答後標示消失；量測與決策保留原日期，今天病歷已有的量測優先。不帶入：喘比上次、體重比上次、今天有沒有喘（每次重新填）、手動輸入的檢驗值與 AI 回答。'}</p>
-      {([['inputs', english ? 'Manual inputs (measurements, NYHA, signs, visit answers, AF, evidence selections, PREVENT)' : '人工輸入（量測、NYHA、徵候、本次問診、AF、證據勾選、PREVENT）',
+      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-relaxed">{english ? 'Confirm the previous answers still apply. Only empty fields are filled, and each carried answer is marked "Carried · date" until you change it. Measurement and decision dates stay unchanged; current record measurements take precedence. Not carried: dyspnoea and weight since last visit, dyspnoea today (answer these every visit), manually entered lab values, PREVENT values other than smoking and family history (today\'s record is used), and AI answers.' : '請確認上次回答仍適用。只補入目前空白的欄位，帶入的答案會標示「帶入 · 日期」，改答後標示消失；量測與決策保留原日期，今天病歷已有的量測優先。不帶入：喘比上次、體重比上次、今天有沒有喘（每次重新填）、手動輸入的檢驗值、吸菸與家族史以外的 PREVENT 數值（改用今天病歷）與 AI 回答。'}</p>
+      {([['inputs', english ? 'Manual inputs (measurements, NYHA, signs, visit answers, AF, evidence selections, PREVENT smoking and family history)' : '人工輸入（量測、NYHA、徵候、本次問診、AF、證據勾選、PREVENT 吸菸與家族史）',
           savedInputs.length ? savedInputs.join(english ? ', ' : '、') : english ? 'Nothing saved' : '當時沒有填寫'],
         ['decisions', english ? 'Previous decisions, reasons and notes (original dates)' : '上次決策、理由與備註（保留原日期）',
           savedDecisions ? english ? `${savedDecisions} decision(s)` : `${savedDecisions} 項決策` : english ? 'Nothing saved' : '當時沒有決策']] as const)

@@ -272,3 +272,13 @@ test('deleting asks first; only a confirmed delete reaches the server, and the r
   expect(calls.filter(path => path === '/cdss/v1/history/delete')).toHaveLength(1)
   expect(screen.getByText('尚無儲存紀錄。')).toBeVisible()
 })
+
+test('the carry confirmation counts every saved decision', async () => {
+  const decision = { decision: 'deferred', reasons: ['synthetic'], recordedAt: '2026-10-03T00:00:00Z', packVersion: '1' }
+  const stored = await detail({ physician_decisions: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`m${i}`, decision])) })
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [index], hasMore: false }))
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
+  expect(screen.getByText('9 項決策')).toBeVisible()
+})
