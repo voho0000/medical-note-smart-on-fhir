@@ -479,11 +479,27 @@ interface ClinicVitalsState {
     now?: Date,
   ) => void
   clearVitals: (patientId: string) => void
+  /** Dated measurements only; never revive an old examination as today's. */
+  carryForward: (patientId: string, saved: unknown) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved) => {
+    if (!patientId) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const old = toClinicVitals(saved)
+    set(state => {
+      const current = state.byPatientId[patientId] ?? EMPTY_CLINIC_VITALS
+      const next = { ...current, entries: { ...old.entries, ...current.entries } }
+      writeStoredVitals(patientId, next)
+      return { byPatientId: { ...state.byPatientId, [patientId]: next } }
+    })
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return

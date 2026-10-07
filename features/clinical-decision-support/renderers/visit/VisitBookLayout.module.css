@@ -120,7 +120,8 @@
 
 /* ------------------------------- header ------------------------------- */
 
-/* Only the explicit save moves here; its controller remains in the CDSS panel. */
+/* Save and carry-forward move here; their controller remains in the CDSS panel. */
+.saveRecord { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
 .saveRecord:empty { display: none; }
 .saveRecord :global(button) {
   min-height: 44px;

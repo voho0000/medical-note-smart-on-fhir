@@ -137,11 +137,25 @@ interface HfpefInputsState {
   hydrate: (patientId: string) => void
   setInputs: (patientId: string, patch: HfpefInputsPatch, now?: Date) => void
   clearInputs: (patientId: string) => void
+  carryForward: (patientId: string, saved: unknown) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved) => {
+    if (!patientId) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const old = toHfpefInputs(saved)
+    set(state => {
+      const next = { entries: { ...old.entries, ...state.byPatientId[patientId]?.entries } }
+      writeStored(patientId, next)
+      return { byPatientId: { ...state.byPatientId, [patientId]: next } }
+    })
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return
