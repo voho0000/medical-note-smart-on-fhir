@@ -30,7 +30,8 @@ function view(lookup: (key: string) => string | null) {
 }
 
 test('the 三區塊 layout says a carried NYHA grade was carried, and from which day, instead of 「最後修改」 today', () => {
-  const { rerender } = render(view(key => (key === 'nyha' ? '2026-09-01' : null)))
+  // The label drops the year only for this year's dates, so the carried day is this year's.
+  const { rerender } = render(view(key => (key === 'nyha' ? `${new Date().getFullYear()}-09-01` : null)))
   const nyha = document.getElementById('cdss-hf-question-nyha')!
   expect(within(nyha).getByText('帶入 · 09/01')).toBeVisible()
   expect(within(nyha).queryByText(/最後修改/)).not.toBeInTheDocument()
