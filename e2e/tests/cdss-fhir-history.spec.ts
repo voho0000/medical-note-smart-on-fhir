@@ -94,28 +94,39 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
   await page.getByTestId('cdss-history-records').click()
   const history = await (await listResponse).json()
   expect(history.records).toHaveLength(1)
-  const dialog = page.getByRole('dialog', { name: 'CDSS 歷史紀錄' })
+  const dialog = page.getByRole('dialog', { name: 'CDSS 紀錄' })
   const detailResponse = page.waitForResponse(response => response.url().endsWith('/cdss/v1/history/read') && response.request().method() === 'POST')
-  await dialog.getByRole('button', { name: new RegExp(history.records[0].packId) }).click()
+  await dialog.getByTestId(`cdss-history-row-${history.records[0].saveId}`).click()
   const detail = await (await detailResponse).json()
   expect(detail.save).toEqual(writes[0])
   expect(detail.versionId).toBe('1')
   await expect(dialog.getByText('歷史快照・醫師身分尚未驗證')).toBeVisible()
   const recommendations = dialog.getByTestId('cdss-history-recommendation')
-  expect(detail.save.result.recommendations.length).toBeGreaterThan(0)
-  await expect(recommendations).toHaveCount(detail.save.result.recommendations.length)
-  for (const [index, recommendation] of detail.save.result.recommendations.entries()) {
+  type Saved = Record<string, unknown> & { status: string; title?: string; moduleName?: string }
+  // Prompts that need nothing wait behind one button, after the rest.
+  const saved: Saved[] = detail.save.result.recommendations
+  const ordered = [...saved.filter(item => item.status !== 'no-action'), ...saved.filter(item => item.status === 'no-action')]
+  expect(ordered.length).toBeGreaterThan(0)
+  const quiet = dialog.getByRole('button', { name: /項不需處理的提示/ })
+  if (await quiet.count()) await quiet.click()
+  await expect(recommendations).toHaveCount(ordered.length)
+  const statusLabels: Record<string, string> = { actionable: '建議處理', review: '需核對', 'needs-data': '需補資料', 'no-action': '不需處理' }
+  for (const [index, recommendation] of ordered.entries()) {
     const section = recommendations.nth(index)
-    await expect(section.getByRole('heading', { level: 4 })).toHaveText(recommendation.title || recommendation.moduleName)
+    await expect(section.getByRole('heading', { level: 4 })).toHaveText(String(recommendation.title || recommendation.moduleName))
+    await expect(section.getByText(statusLabels[recommendation.status] ?? recommendation.status, { exact: true })).toBeVisible()
     if (recommendation.title && recommendation.moduleName)
       await expect(section.getByText(recommendation.moduleName, { exact: true }).first()).toBeVisible()
-    for (const [key, label] of [['status', '當時狀態'], ['recommendation', '建議'], ['rationale', '判斷理由'], ['safetyBoundary', '安全範圍']]) {
-      if (typeof recommendation[key] === 'string')
-        await expect(section.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(recommendation[key])
+    if (typeof recommendation.recommendation === 'string' && recommendation.recommendation)
+      await expect(section.getByText(recommendation.recommendation, { exact: true })).toBeVisible()
+    await section.getByRole('heading', { level: 4 }).click()
+    for (const [key, label] of [['rationale', '判斷理由'], ['safetyBoundary', '安全範圍']]) {
+      if (typeof recommendation[key] === 'string' && recommendation[key])
+        await expect(section.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(recommendation[key] as string)
     }
     for (const [key, label] of [['missingData', '缺少資料'], ['nextActions', '下一步']]) {
       const items = section.getByText(label, { exact: true }).locator('..').locator('dd li')
-      await expect(items).toHaveText(recommendation[key] ?? [])
+      await expect(items).toHaveText((recommendation[key] as string[] | undefined) ?? [])
     }
   }
   for (const width of [320, 390, 430, 768, 1024, 1440]) {
@@ -134,7 +145,9 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
     const bounds = await dialog.boundingBox()
     return bounds !== null && bounds.y >= 0 && bounds.y + bounds.height <= 390
   }).toBe(true)
-  await expect(dialog.getByRole('button', { name: '返回清單', exact: true })).toBeInViewport()
+  // Wide enough for the list and the record side by side; the record's back button is phone-only.
+  await expect(dialog.getByTestId(`cdss-history-row-${history.records[0].saveId}`)).toBeInViewport()
+  await expect(dialog.getByRole('button', { name: '返回清單', exact: true })).toBeHidden()
   await page.screenshot({ path: info.outputPath('history-landscape.png') })
   await dialog.getByRole('button', { name: '關閉', exact: true }).scrollIntoViewIfNeeded()
   await expect(dialog.getByRole('button', { name: '關閉', exact: true })).toBeInViewport()
@@ -168,12 +181,16 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
       } })
       expect(seeded.status()).toBe(201)
       const legacyListResponse = page.waitForResponse(response => response.url().endsWith('/cdss/v1/history') && response.request().method() === 'POST')
+      // Opening also reads the newest record of this disease; on a phone that record replaces the list.
+      const latestReadResponse = page.waitForResponse(response => response.url().endsWith('/cdss/v1/history/read') && response.request().method() === 'POST')
       await page.getByTestId('cdss-history-records').click()
       const legacyHistory = await (await legacyListResponse).json()
       const recordIndex = legacyHistory.records.findIndex((record: { saveId: string }) => record.saveId === legacySave.save_id)
       expect(recordIndex).toBeGreaterThanOrEqual(0)
+      await latestReadResponse
+      await dialog.getByRole('button', { name: '返回清單', exact: true }).click()
       const legacyReadResponse = page.waitForResponse(response => response.url().endsWith('/cdss/v1/history/read') && response.request().method() === 'POST')
-      await dialog.getByRole('button', { name: new RegExp(history.records[0].packId) }).nth(recordIndex).click()
+      await dialog.getByTestId(`cdss-history-row-${legacySave.save_id}`).click()
       const legacyDetail = await (await legacyReadResponse).json()
       expect(legacyDetail.save).toEqual(legacySave)
       await expect(dialog.getByText('歷史快照・醫師身分尚未驗證')).toBeVisible()
@@ -184,7 +201,8 @@ test('App saves and retrieves a synthetic snapshot through the independent FHIR 
         await expect(dialog.getByText(`儲存時間：${displayTime}`, { exact: true })).toBeVisible()
       }
       await expect(dialog.getByTestId('cdss-history-recommendation').first().getByRole('heading', { level: 4 }))
-        .toHaveText(legacyDetail.save.result.recommendations[0].title)
+        .toHaveText(([...legacyDetail.save.result.recommendations].sort((a: { status: string }, b: { status: string }) =>
+          Number(a.status === 'no-action') - Number(b.status === 'no-action'))[0]).title)
       await page.screenshot({ path: info.outputPath(`history-${name}.png`) })
       await page.keyboard.press('Escape')
       await expect(dialog).not.toBeVisible()

@@ -85,7 +85,9 @@ import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
 import { CdssStorageActions } from './renderers/CdssStorageActions'
-import { carryForwardCdss } from './telemetry/cdss-carry-forward'
+import { carryableAnswers, carryForwardCdss } from './telemetry/cdss-carry-forward'
+import { carriedFrom, useCarriedAnswers, useCarriedAnswersStore } from './stores/carried-answers.store'
+import { CarriedAnswerContext, type CarriedLookup } from './renderers/visit/carried-answer-context'
 import { cdssSourceRecords } from './telemetry/source-records'
 import { useCdssGateway } from './telemetry/use-cdss-gateway'
 import { recordCdssEvent } from './telemetry/cdss-gateway'
@@ -369,6 +371,16 @@ export default function LiveClinicalDecisionSupportFeature({
   const hydrateVisitAnswers = useVisitAnswersStore((state) => state.hydrate)
   const answerVisitAsk = useVisitAnswersStore((state) => state.answer)
   const clearVisitAnswers = useVisitAnswersStore((state) => state.clearAnswers)
+  // Answers brought in from a saved record carry 「帶入 · 日期」 while they still hold the carried value.
+  const carriedAnswers = useCarriedAnswers(patientId)
+  useEffect(() => { if (patientId) useCarriedAnswersStore.getState().hydrate(patientId) }, [patientId])
+  const carriedLookup = useMemo((): CarriedLookup => {
+    if (!patientId || !Object.keys(carriedAnswers.marks).length) return () => null
+    const current = carryableAnswers(patientId)
+    return (key) => carriedFrom(carriedAnswers, key, current[key])
+    // The answers it compares against are read from their stores; these are what change them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId, carriedAnswers, clinicVitals, visitAnswers, afAnswers, evidenceOverrides, preventInputs, physicianDecisions, hfpefInputs, nhiLipidReview, today])
 
   // Reading an answer back is a decryption, so it is asynchronous. 「沒作答」
   // and 「還沒讀到」 render identically and mean opposite things, so the
@@ -755,6 +767,7 @@ export default function LiveClinicalDecisionSupportFeature({
     clearPhenotypeAnswer(patientId)
     clearVisitAnswers(patientId)
     useAfAnswersStore.getState().clear(patientId)
+    useCarriedAnswersStore.getState().clear(patientId)
     toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
   }
 
@@ -784,6 +797,15 @@ export default function LiveClinicalDecisionSupportFeature({
             selectedPackId={selectedPack.id}
             onSelect={id => { if (patientId) recordCdssEvent(patientId, id, { kind: 'interaction', action: 'disease_selected' }); setRequestedPackId(id) }}
           />
+          {/* Beside the diseases, so the layout switch keeps the row's right end (owner request 2026-10-07). */}
+          <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
+            packLabel={(packId) => guidelinePacks.find((pack) => pack.id === packId)?.label[cdssLocale === 'en' ? 'en' : 'zh']}
+            onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
+            packId: result.packId, profile, result,
+            physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
+              nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
+            physicianDecisions: { ...physicianDecisions },
+          }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
           {showLayoutSwitcher ? (
             <LayoutSwitcher
               locale={cdssLocale}
@@ -806,13 +828,6 @@ export default function LiveClinicalDecisionSupportFeature({
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
             </Button>
           ) : null}
-          <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
-            onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
-            packId: result.packId, profile, result,
-            physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
-              nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
-            physicianDecisions: { ...physicianDecisions },
-          }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
           {/* The map's 今天待決定 and its rail say what needs the clinician,
               point by point; these two counts would repeat it less exactly,
               so the map leaves them out. */}
@@ -863,6 +878,7 @@ export default function LiveClinicalDecisionSupportFeature({
         // Opened from the panel, it goes back there; opened by `?visit=book`, it leaves by its link.
         ...(urlBookMode ? {} : { onCollapse: () => setBookFullWindow(false) }),
       }}>
+      <CarriedAnswerContext.Provider value={carriedLookup}>
       <ClinicalDecisionSupportView
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
@@ -905,6 +921,7 @@ export default function LiveClinicalDecisionSupportFeature({
           ? (id, value) => answerVisitAsk(patientId, id, value, undefined, { packId: result.packId })
           : undefined}
       />
+      </CarriedAnswerContext.Provider>
       </VisitBookChromeContext.Provider>
       </PreventReadingContext.Provider>
       {/* On the map, the reset sits at the foot, after today's plan: it clears

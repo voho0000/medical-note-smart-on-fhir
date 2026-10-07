@@ -734,6 +734,10 @@
 @container (max-width: 640px) { .moreGroups { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
 .moreFoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 13px; color: var(--ink-3); }
 .questionDetail { display: block; font-size: 12px; color: var(--ink-4); }
+/* An answer brought in from a saved record (owner decision 2026-10-07): its source day, until the clinician changes it. */
+.carriedNote { display: inline-flex; align-items: center; width: fit-content; margin-top: 2px; padding: 1px 6px; border: 1px solid var(--blue-line); border-radius: 4px; background: var(--blue-soft); color: var(--blue-ink); font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.questionRow > span > .carriedNote { display: flex; }
+.askRow > .carriedNote { grid-column: 2; }
 /* In the fold the answers stay right of their row at any width, the label wrapping
    beside them, so nine rows read as one column rather than alternating. */
 .moreGroups .questionRow { flex-wrap: nowrap; }

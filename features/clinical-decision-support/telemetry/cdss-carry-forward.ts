@@ -2,13 +2,17 @@ import { z } from 'zod'
 import { AF_CLINICAL_QUESTIONS } from '@voho0000/personalized-care'
 import type { CdssPatientProfile } from '../types'
 import type { CdssHistoryRecord } from './cdss-history'
-import { storedTimestampV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
+import { storedTimestampForDisplay, storedTimestampV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
 import { CLINIC_VITALS_ENTRY_KEYS, todayIsoDate, useClinicVitalsStore } from '../stores/clinic-vitals.store'
 import { useHfpefInputsStore } from '../stores/hfpef-inputs.store'
 import { usePhenotypeAnswerStore } from '../stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '../stores/physician-decisions.store'
 import { useAfAnswersStore } from '../stores/af-answers.store'
 import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
+import { useVisitAnswersStore, visitAnswersOf } from '../stores/visit-answers.store'
+import { useEvidenceOverridesStore } from '../stores/evidence-overrides.store'
+import { usePreventStore } from '../stores/prevent-inputs.store'
+import { useCarriedAnswersStore } from '../stores/carried-answers.store'
 
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
@@ -31,14 +35,33 @@ const phenotype = z.object({ answeredOn: day,
 
 export type CarryForwardChoices = { inputs: boolean; decisions: boolean }
 
-function filledFields(patientId: string): number {
-  const af = useAfAnswersStore.getState(), lipid = useNhiLipidReviewStore.getState()
-  return Object.keys(useClinicVitalsStore.getState().byPatientId[patientId]?.entries ?? {}).length
-    + Object.keys(useHfpefInputsStore.getState().byPatientId[patientId]?.entries ?? {}).length
-    + (usePhenotypeAnswerStore.getState().byPatientId[patientId] ? 1 : 0)
-    + Object.keys(af.patientId === patientId ? af.answers : {}).length
-    + Object.keys(lipid.patientId === patientId ? lipid.answers : {}).length
-    + Object.keys(usePhysicianDecisionsStore.getState().byPatientId[patientId] ?? {}).length
+/** The every-visit questions a clinician answers afresh at each visit; never carried. */
+export const EVERY_VISIT_ASK_IDS: readonly string[] = ['dyspnoea-trend', 'weight-trend', 'dyspnoea-present']
+
+/**
+ * Every answer a carry can fill, keyed the way `carried-answers.store` marks it
+ * and the screen looks it up. What is new after a carry is what was carried.
+ */
+export function carryableAnswers(patientId: string, now: Date = new Date()): Record<string, unknown> {
+  const answers: Record<string, unknown> = {}
+  const put = (prefix: string, values: object | undefined, pick = (value: unknown) => value) => {
+    for (const [key, value] of Object.entries(values ?? {})) if (value !== undefined && value !== null) answers[prefix + key] = pick(value)
+  }
+  const vitals = useClinicVitalsStore.getState().byPatientId[patientId]
+  put('vital:', vitals?.entries, entry => (entry as { value: number }).value)
+  put('sign:', vitals?.signAnswers, sign => (sign as { value: string }).value)
+  if (vitals?.nyhaClass) answers.nyha = vitals.nyhaClass.value
+  if (vitals?.compensationStatus) answers.compensation = vitals.compensationStatus.value
+  put('echo:', useHfpefInputsStore.getState().byPatientId[patientId]?.entries, entry => (entry as { value: string }).value)
+  if (usePhenotypeAnswerStore.getState().byPatientId[patientId]) answers.phenotype = true
+  put('visit:', visitAnswersOf(useVisitAnswersStore.getState().byPatientId[patientId], todayIsoDate(now)))
+  const af = useAfAnswersStore.getState(), lipid = useNhiLipidReviewStore.getState(), prevent = usePreventStore.getState()
+  put('af:', af.patientId === patientId ? af.answers : undefined)
+  put('lipid:', lipid.patientId === patientId ? lipid.answers : undefined)
+  put('evidence:', useEvidenceOverridesStore.getState().byPatientId[patientId])
+  put('prevent:', prevent.patientId === patientId ? prevent.inputs : undefined)
+  put('decision:', usePhysicianDecisionsStore.getState().byPatientId[patientId], decision => (decision as { decision?: string }).decision)
+  return answers
 }
 
 /** Explicitly confirmed, fill-only carry-forward. Historical results never enter the live evaluation. */
@@ -46,14 +69,17 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
   currentRecordProfile: CdssPatientProfile, choices: CarryForwardChoices): number {
   if (!patientId || record.save.pack_id !== packId || record.save.result.packVersion !== packVersion)
     throw new Error('cdss_carry_forward_incompatible')
-  const before = filledFields(patientId)
-  const today = todayIsoDate()
+  const now = new Date()
+  const before = carryableAnswers(patientId, now)
+  const today = todayIsoDate(now)
   // Validate every touched store before the first write, including pending hydration.
   if ((choices.decisions && !usePhysicianDecisionsStore.getState().canCarryForward(patientId))
     || (choices.inputs && (!useClinicVitalsStore.getState().canCarryForward(patientId)
       || !useHfpefInputsStore.getState().canCarryForward(patientId)
       || !usePhenotypeAnswerStore.getState().canCarryForward(patientId)
       || useAfAnswersStore.getState().hydratedPatientId !== patientId
+      || !useVisitAnswersStore.getState().hydratedPatientIds[patientId]
+      || !useEvidenceOverridesStore.getState().hydratedPatientIds[patientId]
       || useNhiLipidReviewStore.getState().patientId !== patientId))) throw new Error('cdss_carry_forward_unavailable')
   if (choices.inputs) {
     const inputs = record.save.physician_inputs
@@ -71,7 +97,8 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
         && (!['systolic', 'diastolic'].includes(key) || bpPair)
         ? [[key, parsed.data]] : []
     }))
-    useClinicVitalsStore.getState().carryForward(patientId, { entries })
+    // The NYHA grade, the signs and the compensation judgement come too, re-dated to today and marked as carried.
+    useClinicVitalsStore.getState().carryForward(patientId, { ...object(inputs.clinicVitals), entries }, { exam: true, now })
     const oldEcho = object(object(inputs.hfpefInputs).entries)
     // A current echo study is kept whole; do not fill its missing parameters from an older study.
     const recordHasEcho = Boolean(facts.LVEF) || Object.values(echoFacts).some(fact => Boolean(facts[fact]))
@@ -98,8 +125,7 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
     const af = useAfAnswersStore.getState()
     if (af.patientId === patientId && af.hydratedPatientId === patientId) {
       const old = object(inputs.afAnswers)
-      // Adverse effects and follow-up symptoms are every-visit questions.
-      for (const question of AF_CLINICAL_QUESTIONS.filter(question => question.group === 'diagnosis')) {
+      for (const question of AF_CLINICAL_QUESTIONS) {
         if (typeof old[question.id] === 'boolean' && af.answers[question.id] === undefined)
           af.answer(patientId, question.id, old[question.id] as boolean)
       }
@@ -116,7 +142,31 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
               ? { manualAction: provenance.manualAction } : {}) })
       }
     }
+    // Every-visit answers other than breathlessness and weight, given today as carried.
+    const visit = useVisitAnswersStore.getState()
+    const answeredToday = visitAnswersOf(visit.byPatientId[patientId], today) as Record<string, string | undefined>
+    for (const [id, value] of Object.entries(object(inputs.visitAnswers))) {
+      if (typeof value === 'string' && !EVERY_VISIT_ASK_IDS.includes(id) && answeredToday[id] === undefined)
+        visit.answer(patientId, id as Parameters<typeof visit.answer>[1], value, now, { packId })
+    }
+    const evidence = useEvidenceOverridesStore.getState()
+    const switchedToday = evidence.byPatientId[patientId] ?? {}
+    for (const [id, enabled] of Object.entries(object(inputs.evidenceOverrides))) {
+      if (typeof enabled === 'boolean' && switchedToday[id] === undefined && !['__proto__', 'constructor', 'prototype'].includes(id))
+        evidence.setOverride(patientId, id, enabled)
+    }
+    const prevent = usePreventStore.getState()
+    if (prevent.patientId === patientId) {
+      for (const [key, value] of Object.entries(object(inputs.preventInputs))) {
+        if (typeof value === 'string' && value !== '' && prevent.inputs[key] === undefined
+          && !['__proto__', 'constructor', 'prototype'].includes(key)) prevent.setInput(patientId, key, value)
+      }
+    }
   }
   if (choices.decisions) usePhysicianDecisionsStore.getState().carryForward(patientId, record.save.physician_decisions, packVersion)
-  return filledFields(patientId) - before
+  const after = carryableAnswers(patientId, now)
+  const carried = Object.fromEntries(Object.entries(after).filter(([key]) => !(key in before)))
+  // Marked with the saved record's own day, so the screen can say where each answer came from.
+  useCarriedAnswersStore.getState().mark(patientId, carried, todayIsoDate(new Date(storedTimestampForDisplay(record.save.saved_at))), now)
+  return Object.keys(carried).length
 }

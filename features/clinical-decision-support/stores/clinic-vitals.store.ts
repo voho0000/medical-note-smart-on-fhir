@@ -479,8 +479,13 @@ interface ClinicVitalsState {
     now?: Date,
   ) => void
   clearVitals: (patientId: string) => void
-  /** Dated measurements only; never revive an old examination as today's. */
-  carryForward: (patientId: string, saved: unknown) => void
+  /**
+   * Fills what is empty today from a saved record: dated measurements keep
+   * their own dates; the NYHA grade, the signs and the compensation judgement,
+   * when `exam` is set, are re-dated to today so the visit counts them as
+   * answered (the screen marks them as carried, see `carried-answers.store`).
+   */
+  carryForward: (patientId: string, saved: unknown, options?: { exam?: boolean; now?: Date }) => void
   canCarryForward: (patientId: string) => boolean
 }
 
@@ -489,13 +494,30 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
   hydratedPatientIds: {},
   canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
 
-  carryForward: (patientId, saved) => {
+  carryForward: (patientId, saved, options = {}) => {
     if (!patientId) return
     if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
     const old = toClinicVitals(saved)
+    const now = options.now ?? new Date()
+    const today = todayIsoDate(now)
+    const modifiedAt = now.toISOString()
     set(state => {
       const current = state.byPatientId[patientId] ?? EMPTY_CLINIC_VITALS
-      const next = { ...current, entries: { ...old.entries, ...current.entries } }
+      const next: ClinicVitals = { ...current, entries: { ...old.entries, ...current.entries } }
+      if (options.exam) {
+        // Today's own examination stands; only what nobody has answered today is filled.
+        const todaysSigns = Object.fromEntries(Object.entries(current.signAnswers).filter(([, sign]) => sign.examinedOn >= today))
+        const carriedSigns = Object.fromEntries(Object.entries(old.signAnswers)
+          .filter(([term]) => !todaysSigns[term])
+          .map(([term, sign]) => [term, { value: sign.value, modifiedAt, examinedOn: today }]))
+        next.signAnswers = { ...carriedSigns, ...todaysSigns }
+        if (old.nyhaClass && !(current.nyhaClass && (current.nyhaClass.assessedOn ?? calendarDayOf(current.nyhaClass.modifiedAt)) >= today)) {
+          next.nyhaClass = { value: old.nyhaClass.value, modifiedAt, assessedOn: today }
+        }
+        if (old.compensationStatus && !current.compensationStatus) {
+          next.compensationStatus = { value: old.compensationStatus.value, modifiedAt }
+        }
+      }
       writeStoredVitals(patientId, next)
       return { byPatientId: { ...state.byPatientId, [patientId]: next } }
     })

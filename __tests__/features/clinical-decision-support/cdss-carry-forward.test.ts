@@ -8,19 +8,23 @@ import { useAfAnswersStore } from '@/features/clinical-decision-support/stores/a
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
 import { useVisitAnswersStore } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { usePreventStore } from '@/features/clinical-decision-support/stores/prevent-inputs.store'
+import { useEvidenceOverridesStore } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
+import { carriedFrom, useCarriedAnswersStore } from '@/features/clinical-decision-support/stores/carried-answers.store'
+import { todayIsoDate } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { CdssHistoryRecord } from '@/features/clinical-decision-support/telemetry/cdss-history'
 
 const at = '2026-09-01T08:00:00Z'
 const measurement = { value: 80, measuredOn: '2026-09-01', modifiedAt: at }
 const decision = { decision: 'deferred', reasons: ['synthetic'], note: 'Synthetic note', recordedAt: at, packVersion: '1' }
 function record() {
-  return { save: { pack_id: 'synthetic', result: { packVersion: '1' }, profile: { facts: { OLD_RESULT: true } },
+  return { save: { pack_id: 'synthetic', saved_at: at, result: { packVersion: '1' }, profile: { facts: { OLD_RESULT: true } },
     physician_inputs: {
       clinicVitals: { entries: { bodyWeight: measurement, potassium: measurement }, nyhaClass: { value: 'IV', modifiedAt: at } },
       hfpefInputs: { entries: { lavi: { ...measurement, value: '35' }, age: { ...measurement, value: '90' } } },
       phenotypeAnswer: { answeredOn: '2026-09-01', hfSuspicion: 'suspected', choice: 'reduced', lvef: 30, measuredOn: '2026-09-01' },
       nhiLipidReview: { smoking: 'yes', cad: 'yes' }, nhiLipidReviewProvenance: { smoking: { source: 'manual', reviewedAt: at, manualAction: 'selected' }, cad: { source: 'ai' } },
-      preventInputs: { egfr: '15' }, visitAnswers: { breathlessness: 'worse' }, evidenceOverrides: { synthetic: false },
+      preventInputs: { egfr: '15' }, evidenceOverrides: { synthetic: false },
+      visitAnswers: { 'dyspnoea-trend': 'worse', 'weight-trend': 'up', 'dyspnoea-present': 'yes', 'trigger-infection': 'yes' },
     }, physician_decisions: { synthetic: decision } } } as unknown as CdssHistoryRecord
 }
 beforeEach(() => {
@@ -29,24 +33,36 @@ beforeEach(() => {
   useHfpefInputsStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
   usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
   usePhysicianDecisionsStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
-  useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
+  useEvidenceOverridesStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
+  useCarriedAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
   useAfAnswersStore.setState({ patientId: 'p', hydratedPatientId: 'p', answers: {} })
   useNhiLipidReviewStore.setState({ patientId: 'p', answers: {}, provenance: {} })
   usePreventStore.setState({ patientId: 'p', inputs: {} })
 })
 
-test('confirmed carry-forward retains dates, fills gaps and never installs the old profile/result or today-only answers', () => {
+test('confirmed carry-forward retains dates, fills gaps, marks what it carried and never installs the old profile/result or the every-visit questions', () => {
   const saved = record(), original = JSON.stringify(saved)
   const profile = { id: 'p', facts: { current: { zh: 'current', en: 'current' } } }
-  expect(carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: true })).toBe(5)
+  // weight, echo, phenotype, decision, lipid, NYHA, PREVENT, evidence switch, one every-visit trigger
+  expect(carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: true })).toBe(9)
   expect(useClinicVitalsStore.getState().byPatientId.p.entries).toEqual({ bodyWeight: measurement })
-  expect(useClinicVitalsStore.getState().byPatientId.p.nyhaClass).toBeUndefined()
+  // Owner decision 2026-10-07: the NYHA grade is carried as today's, marked with the record's day.
+  expect(useClinicVitalsStore.getState().byPatientId.p.nyhaClass).toMatchObject({ value: 'IV', assessedOn: todayIsoDate() })
   expect(useHfpefInputsStore.getState().byPatientId.p.entries).toEqual({ lavi: { ...measurement, value: '35' } })
   expect(usePhysicianDecisionsStore.getState().byPatientId.p.synthetic).toEqual(decision)
   expect(useNhiLipidReviewStore.getState().answers).toEqual({ smoking: 'yes' })
   expect(useNhiLipidReviewStore.getState().provenance.smoking.reviewedAt).toBe(at)
-  expect(useVisitAnswersStore.getState().byPatientId.p).toBeUndefined()
-  expect(usePreventStore.getState().inputs).toEqual({})
+  // Breathlessness and weight since last visit, and breathlessness today, are asked afresh.
+  expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p)).toEqual(['trigger-infection'])
+  expect(usePreventStore.getState().inputs).toEqual({ egfr: '15' })
+  expect(useEvidenceOverridesStore.getState().byPatientId.p).toEqual({ synthetic: false })
+  const marks = useCarriedAnswersStore.getState().byPatientId.p
+  expect(carriedFrom(marks, 'nyha', 'IV')).toBe('2026-09-01')
+  expect(carriedFrom(marks, 'visit:trigger-infection', 'yes')).toBe('2026-09-01')
+  // A changed answer is no longer the carried one.
+  expect(carriedFrom(marks, 'nyha', 'II')).toBeNull()
+  expect(carriedFrom(marks, 'visit:dyspnoea-trend', 'worse')).toBeNull()
   expect(profile.facts).toEqual({ current: { zh: 'current', en: 'current' } })
   expect(JSON.stringify(saved)).toBe(original)
 })

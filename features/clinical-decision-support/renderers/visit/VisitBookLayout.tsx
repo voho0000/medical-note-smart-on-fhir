@@ -19,6 +19,7 @@ import { displayDate } from './VisitStatusHeader'
 import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
 import { BookChainDone, BookDecisionControls } from './BookDecisionControls'
 import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
+import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import styles from './VisitBookLayout.module.css'
 
 /**
@@ -748,10 +749,19 @@ function BulkNone({ questions, isEnglish, onAnswer }: { questions: QuestionsView
 /** A point's questions, each 有／無 as one segmented control; the chosen one pressed again withdraws it. */
 function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions: QuestionsView; isEnglish: boolean; onAnswer?: AnswerQuestion; titled: boolean }) {
   const idBase = useId()
+  const carriedLookup = useCarriedLookup()
   const options = [
     { value: true, label: questions.labels?.yes ?? (isEnglish ? 'Yes' : '有') },
     { value: false, label: questions.labels?.no ?? (isEnglish ? 'No' : '無') },
   ]
+  /** The day a row's answer was carried from, while it still stands; a sign row is carried when any of its terms is. */
+  const carriedOf = (row: QuestionsView['rows'][number]): string | null => {
+    if (row.answer === undefined) return null
+    if (questions.answers === 'visit') return carriedLookup(`visit:${row.id}`)
+    if (questions.answers === 'af-clinical') return carriedLookup(`af:${row.id}`)
+    if (questions.answers === 'clinic-exam') return (row.terms ?? []).map((term) => carriedLookup(`sign:${term}`)).find(Boolean) ?? null
+    return null
+  }
   return (
     <div className={styles.questions} data-testid="cdss-book-questions">
       {titled ? (
@@ -765,6 +775,9 @@ function PointQuestions({ questions, isEnglish, onAnswer, titled }: { questions:
           <span id={`${idBase}-${row.id}`}>
             {row.label}
             {row.detail ? <span className={styles.questionDetail}>{row.detail}</span> : null}
+            {carriedOf(row) ? (
+              <span className={styles.carriedNote} data-carried-from={carriedOf(row) ?? undefined}>{carriedLabel(carriedOf(row) ?? '', isEnglish)}</span>
+            ) : null}
           </span>
           <div role="group" aria-labelledby={`${idBase}-${row.id}`} className={styles.questionGroup}>
             {options.map((option) => {
