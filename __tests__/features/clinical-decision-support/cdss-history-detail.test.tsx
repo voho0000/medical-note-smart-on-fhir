@@ -282,3 +282,21 @@ test('the carry confirmation counts every saved decision', async () => {
   fireEvent.click(await screen.findByTestId('cdss-carry-forward-review'))
   expect(screen.getByText('9 項決策')).toBeVisible()
 })
+
+test('deleting the last record of a filtered disease falls back to all records', async () => {
+  const stored = await detail()
+  const other = { ...index, saveId: '22222222-2222-4222-8222-222222222222', packId: 'other', receivedAt: '2026-10-02T00:00:00Z' }
+  jest.mocked(fetch).mockImplementation(async url => {
+    const path = String(url)
+    if (path.endsWith('/delete')) return response({ status: 'deleted', save_id: saveId })
+    return response(path.endsWith('/read') ? stored : { records: [index, other], hasMore: false })
+  })
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={() => 1}
+    packLabel={packId => ({ synthetic: '合成疾病', other: '其他疾病' })[packId]} />)
+  fireEvent.click(screen.getByTestId('cdss-history-records'))
+  fireEvent.click(await screen.findByRole('button', { name: '合成疾病', pressed: false }))
+  expect(screen.queryByTestId(`cdss-history-row-${other.saveId}`)).not.toBeInTheDocument()
+  fireEvent.click(await screen.findByTestId('cdss-history-delete'))
+  fireEvent.click(await screen.findByTestId('cdss-history-delete-confirm-button'))
+  expect(await screen.findByTestId(`cdss-history-row-${other.saveId}`)).toBeVisible()
+})

@@ -303,7 +303,9 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const chosen = (choices.inputs ? 1 : 0) + (choices.decisions ? 1 : 0)
   const records = [...(history?.records ?? [])].sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
   const packs = [...new Set(records.map(item => item.packId))]
-  const visible = records.filter(item => !filter || item.packId === filter)
+  // A filter whose disease no longer has a record (its last one deleted) falls back to all records.
+  const activeFilter = filter && packs.length > 1 && packs.includes(filter) ? filter : null
+  const visible = records.filter(item => !activeFilter || item.packId === activeFilter)
   const newest = new Set(packs.map(packId => records.find(item => item.packId === packId)?.saveId))
   const groups = visible.reduce<{ day: string; items: typeof visible }[]>((all, item) => {
     const day = dayOf(item.receivedAt, english)
@@ -358,9 +360,9 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
 
   const list = <nav aria-label={english ? 'Saved snapshots' : '快照清單'} className={cn('flex min-h-0 flex-col border-border bg-muted/40 md:border-r', detailOpen && 'max-md:hidden')}>
     {packs.length > 1 && <div role="group" aria-label={english ? 'Filter by disease' : '依疾病篩選'} className="flex flex-wrap gap-1.5 px-4 pt-3">
-      {[null, ...packs].map(packId => <button key={packId ?? 'all'} type="button" aria-pressed={filter === packId}
+      {[null, ...packs].map(packId => <button key={packId ?? 'all'} type="button" aria-pressed={activeFilter === packId}
         onClick={() => setFilter(packId)} className={cn('h-8 rounded-full border px-3 text-[13px] max-md:h-11',
-          filter === packId ? 'border-foreground bg-foreground text-background' : 'border-border bg-background text-foreground')}>
+          activeFilter === packId ? 'border-foreground bg-foreground text-background' : 'border-border bg-background text-foreground')}>
         {packId ? nameOf(packId) : english ? 'All' : '全部'}
       </button>)}
     </div>}
