@@ -7,7 +7,7 @@ import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-clie
 import { captureHfCallerAuth } from '@/src/infrastructure/hf-risk/caller-auth'
 import { hfRecordSource, type HfRecordSource } from '@/src/core/hf-risk/record-source'
 import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core/hf-risk/medcloud-input'
-import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
+import { HF_DRY_RUN_CLAIMS, type HfInput, type HfSelection, type HfDryRunResult, type HfDryRunClaim } from '@/src/core/hf-risk/contract'
 import { emptyHfDiagnosisDraft, withPhysicianHfDiagnosis, type HfPhysicianDiagnosisDraft } from '@/src/core/hf-risk/physician-diagnosis'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction, type HfRequestOptions } from '@/src/infrastructure/hf-risk/dry-run-client'
@@ -24,6 +24,9 @@ function recordSnapshot() {
   return JSON.stringify([shouldUseLocalBundle(), LocalBundleService.getActiveImportId()])
 }
 const serverRecordSnapshot = () => '[false,null]'
+/** One horizon's outcome: its input check, then its prediction, or the error that stopped it. */
+export interface HfClaimRun { check?: HfDryRunResult; prediction?: HfPredictionResult; error?: string }
+export type HfClaimRuns = Partial<Record<HfDryRunClaim, HfClaimRun>>
 interface Context {
   importId: string
   source: HfRecordSource
@@ -42,61 +45,60 @@ export function useMedcloudHfDryRun() {
   const snapshot = useSyncExternalStore(subscribeToRecordChange, recordSnapshot, serverRecordSnapshot)
   const [localMode, activeImportId] = JSON.parse(snapshot) as [boolean, string | null]
   const [context, setContext] = useState<Context | null>(null)
-  const [result, setResult] = useState<{ importId: string; input: HfInput; value: HfDryRunResult } | null>(null)
-  const [prediction, setPrediction] = useState<{ importId: string; input: HfInput; value: HfPredictionResult } | null>(null)
+  const [run, setRun] = useState<{ importId: string; input: HfInput; claims: HfClaimRuns } | null>(null)
   const [message, setMessage] = useState<{ importId: string | null; code: string } | null>(null)
   const [busyImportId, setBusyImportId] = useState<string | null>(null)
   const busy = busyImportId !== null && busyImportId === activeImportId
   const controller = useRef<AbortController | null>(null)
   const unsubscribeAuth = useRef<(() => void) | null>(null)
+  const preparation = useRef(0)
   const [observedSnapshot, setObservedSnapshot] = useState(snapshot)
   // Reset during a scope-changing render so old attestations cannot reappear on a return to the same import.
   if (observedSnapshot !== snapshot) {
     setObservedSnapshot(snapshot)
     setContext(null)
-    setResult(null)
-    setPrediction(null)
+    setRun(null)
     setMessage(null)
     setBusyImportId(null)
   }
   const current = localMode && context?.importId === activeImportId ? context : null
-  const visibleResult = result?.importId === activeImportId && result.input === current?.input ? result.value : null
-  const visiblePrediction = prediction?.importId === activeImportId && prediction.input === current?.input ? prediction.value : null
+  const visibleRuns = run?.importId === activeImportId && run.input === current?.input ? run.claims : null
   const visibleMessage = (localMode || message?.code === 'source-unsupported') && message && message.importId === activeImportId ? message.code : null
   useEffect(() => () => { controller.current?.abort(); controller.current = null; unsubscribeAuth.current?.(); unsubscribeAuth.current = null }, [activeImportId, localMode])
 
-  async function prepare() {
+  function cancel() {
     controller.current?.abort()
     unsubscribeAuth.current?.()
     unsubscribeAuth.current = null
-    setBusyImportId(null)
-    setResult(null)
-    setPrediction(null)
+    setRun(null)
     setMessage(null)
+  }
+  async function prepare() {
+    cancel()
+    setBusyImportId(null)
+    // Only the latest preparation may write; an older one finishing late must not clear a newer record.
+    const generation = ++preparation.current
     const importId = LocalBundleService.getActiveImportId()
     try {
       if (!shouldUseLocalBundle() || !importId) throw new Error('source-unsupported')
       const bundle = await LocalBundleService.load()
+      if (generation !== preparation.current) return
       if (LocalBundleService.getActiveImportId() !== importId || !shouldUseLocalBundle()) throw new Error('source-changed')
       const visits = medcloudHfVisits(bundle)
       if (!visits.length) throw new Error('no-visit')
-      const selection: HfSelection = { provider: visits[0].provider, encounter: visits[0].reference, claim: 'P1_CD_mortality_1m' }
+      const selection: HfSelection = { provider: visits[0].provider, encounter: visits[0].reference, claim: HF_DRY_RUN_CLAIMS[0] }
       const input = buildMedcloudHfInput(bundle, selection)
       setContext({ importId, source: hfRecordSource(bundle!), bundle: bundle!, visits, selection, input, baseInput: input, diagnosisDraft: emptyHfDiagnosisDraft() })
     } catch (error) {
+      if (generation !== preparation.current) return
       setContext(null)
       setMessage({ importId, code: error instanceof Error ? error.message : 'bundle-invalid' })
     }
   }
   function select(selection: HfSelection) {
     if (!current) return
-    controller.current?.abort()
-    unsubscribeAuth.current?.()
-    unsubscribeAuth.current = null
+    cancel()
     setBusyImportId(null)
-    setResult(null)
-    setPrediction(null)
-    setMessage(null)
     try {
       const input = buildMedcloudHfInput(current.bundle, selection)
       setContext({ ...current, selection, input, baseInput: input, diagnosisDraft: emptyHfDiagnosisDraft() })
@@ -105,12 +107,7 @@ export function useMedcloudHfDryRun() {
   }
   function supplementDiagnosis(draft: HfPhysicianDiagnosisDraft) {
     if (!current || busy) return
-    controller.current?.abort()
-    unsubscribeAuth.current?.()
-    unsubscribeAuth.current = null
-    setResult(null)
-    setPrediction(null)
-    setMessage(null)
+    cancel()
     try {
       setContext({ ...current, diagnosisDraft: draft, input: withPhysicianHfDiagnosis(current.baseInput, draft) })
     } catch (error) {
@@ -118,6 +115,7 @@ export function useMedcloudHfDryRun() {
       setMessage({ importId: current.importId, code: error instanceof Error ? error.message : 'physician-diagnosis-invalid' })
     }
   }
+  /** Checks, then scores, every outpatient horizon in parallel from the same prepared input. */
   async function submit(operation: 'dry-run' | 'predict') {
     if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')) return
     const snapshot = current
@@ -127,28 +125,49 @@ export function useMedcloudHfDryRun() {
     unsubscribeAuth.current = null
     controller.current = abort
     setBusyImportId(snapshot.importId)
-    setResult(null)
-    setPrediction(null)
+    setRun({ importId: snapshot.importId, input: snapshot.input, claims: {} })
     setMessage(null)
-    const storeResult = (value: HfDryRunResult | HfPredictionResult) => {
-      if (operation === 'dry-run') setResult({ importId: snapshot.importId, input: snapshot.input, value: value as HfDryRunResult })
-      else setPrediction({ importId: snapshot.importId, input: snapshot.input, value: value as HfPredictionResult })
-    }
     const stillCurrent = () => !abort.signal.aborted && shouldUseLocalBundle() && LocalBundleService.getActiveImportId() === snapshot.importId
-    const request = async (options: HfRequestOptions, checkAuthorization: () => Promise<void>) => {
-      const validation = await requestHfDryRun(snapshot.input, { ...options })
-      await checkAuthorization()
+    const update = (claim: HfDryRunClaim, patch: HfClaimRun) => setRun(previous => previous && previous.input === snapshot.input && previous.importId === snapshot.importId
+      ? { ...previous, claims: { ...previous.claims, [claim]: { ...previous.claims[claim], ...patch } } }
+      : previous)
+    const runClaim = async (claim: HfDryRunClaim, options: HfRequestOptions, checkAuthorization: () => Promise<void>) => {
+      const input = { ...snapshot.input, claim }
+      try {
+        const validation = await requestHfDryRun(input, { ...options })
+        await checkAuthorization()
+        if (!stillCurrent()) return null
+        update(claim, { check: validation })
+        if (operation === 'dry-run' || validation.verdict !== 'accepted') return null
+        const value = await requestHfPrediction(input, { ...options })
+        await checkAuthorization()
+        if (stillCurrent()) update(claim, { prediction: value })
+        return null
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'gateway-unavailable'
+        // Lost authorization stops every horizon at once, before the other can still score.
+        if (code === 'gateway-unauthorized' && stillCurrent()) {
+          abort.abort()
+          setRun(null)
+          setMessage({ importId: snapshot.importId, code })
+        }
+        return code
+      }
+    }
+    const runAll = async (options: HfRequestOptions, checkAuthorization: () => Promise<void>) => {
+      const errors = await Promise.all(HF_DRY_RUN_CLAIMS.map(claim => runClaim(claim, options, checkAuthorization)))
       if (!stillCurrent()) return
-      setResult({ importId: snapshot.importId, input: snapshot.input, value: validation })
-      if (operation === 'dry-run' || validation.verdict !== 'accepted') return
-      const value = await requestHfPrediction(snapshot.input, { ...options })
-      await checkAuthorization()
-      if (stillCurrent()) storeResult(value)
+      // A failure shared by every horizon is one problem; show it once and keep any completed checks.
+      if (errors.every(code => code && code === errors[0])) {
+        setMessage({ importId: snapshot.importId, code: errors[0]! })
+        return
+      }
+      HF_DRY_RUN_CLAIMS.forEach((claim, index) => { if (errors[index]) update(claim, { error: errors[index]! }) })
     }
     try {
       const authPolicy = hfAuthPolicy(policySetting)
       if (authPolicy === 'intranet') {
-        await request({ origin, authPolicy, signal: abort.signal }, async () => {})
+        await runAll({ origin, authPolicy, signal: abort.signal }, async () => {})
         return
       }
       const auth = await captureHfCallerAuth()
@@ -158,22 +177,29 @@ export function useMedcloudHfDryRun() {
       unsubscribeAuth.current = auth.onIdentityChanged(() => {
         abort.abort()
         setBusyImportId(null)
-        setResult(null)
-        setPrediction(null)
+        setRun(null)
         setMessage({ importId: snapshot.importId, code: 'gateway-unauthorized' })
       })
       const options = { origin, token, signal: abort.signal }
-      await request(options, async () => {
+      await runAll(options, async () => {
         // Check authorization between validation and prediction as well as after prediction.
         const refreshedToken = await auth.getToken()
         if (!refreshedToken) throw new Error('gateway-unauthorized')
         options.token = refreshedToken
       })
     } catch (error) {
-      if (stillCurrent()) setMessage({ importId: snapshot.importId, code: error instanceof Error ? error.message : 'gateway-unavailable' })
+      if (stillCurrent()) {
+        setRun(null)
+        setMessage({ importId: snapshot.importId, code: error instanceof Error ? error.message : 'gateway-unavailable' })
+      }
     } finally {
       if (controller.current === abort) setBusyImportId(null)
     }
   }
-  return { current, configured, intranet: policySetting === 'intranet', busy, result: visibleResult, prediction: visiblePrediction, message: visibleMessage, prepare, select, supplementDiagnosis, validate: () => submit('dry-run'), predict: () => submit('predict') }
+  return {
+    current, configured, intranet: policySetting === 'intranet', busy, runs: visibleRuns, message: visibleMessage,
+    /** Changes whenever the active record or its source mode changes. */
+    recordKey: snapshot,
+    prepare, select, supplementDiagnosis, validate: () => submit('dry-run'), predict: () => submit('predict'),
+  }
 }
