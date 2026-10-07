@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { HF_DRY_RUN_CLAIMS, type HfDryRunClaim } from '@/src/core/hf-risk/contract'
 import type { HfPredictionScore } from '@/src/core/hf-risk/prediction-result'
 import type { HfClaimRun, HfClaimRuns } from '@/src/application/hooks/hf-risk/use-medcloud-hf-dry-run.hook'
@@ -18,20 +19,24 @@ export const scoredRun = (run?: HfClaimRun) => run?.prediction?.verdict === 'sco
 /** Server notes and input-check warnings, merged across horizons and grouped by what they mean for reading the score. */
 export function groupHfNotes(runs: HfClaimRuns, en: boolean) {
   const seen = new Map<string, Set<HfDryRunClaim>>()
+  const checkWarnings = new Set<string>()
   for (const claim of HF_DRY_RUN_CLAIMS) {
     const run = runs[claim]
-    const notes = [...(scoredRun(run)?.notes ?? []), ...(run?.check?.issues.filter(issue => issue.severity === 'warning').map(issue => issue.text) ?? [])]
-    for (const note of notes) seen.set(note, (seen.get(note) ?? new Set()).add(claim))
+    const warnings = run?.check?.issues.filter(issue => issue.severity === 'warning').map(issue => issue.text) ?? []
+    warnings.forEach(warning => checkWarnings.add(warning))
+    for (const note of [...(scoredRun(run)?.notes ?? []), ...warnings]) seen.set(note, (seen.get(note) ?? new Set()).add(claim))
   }
-  const groups: { key: string; title: string; tone: 'warning' | 'neutral'; notes: string[] }[] = [
-    { key: 'under', title: en ? 'May underestimate risk' : '可能低估風險', tone: 'warning', notes: [] },
-    { key: 'range', title: en ? 'Outside the development data range' : '超出模型開發資料範圍', tone: 'neutral', notes: [] },
-    { key: 'other', title: en ? 'Other notes' : '其他提示', tone: 'neutral', notes: [] },
+  // Notes that change how the score is read stay open; general notes start collapsed behind a count.
+  const groups: { key: string; title: string; tone: 'warning' | 'neutral'; collapsed: boolean; notes: string[] }[] = [
+    { key: 'under', title: en ? 'May underestimate risk' : '可能低估風險', tone: 'warning', collapsed: false, notes: [] },
+    { key: 'range', title: en ? 'Outside the development data range' : '超出模型開發資料範圍', tone: 'neutral', collapsed: false, notes: [] },
+    { key: 'check', title: en ? 'Input-check warnings' : '輸入檢查警告', tone: 'neutral', collapsed: false, notes: [] },
+    { key: 'other', title: en ? 'Other notes' : '其他提示', tone: 'neutral', collapsed: true, notes: [] },
   ]
   const scoredClaims = HF_DRY_RUN_CLAIMS.filter(claim => runs[claim])
   for (const [note, claims] of seen) {
     const only = claims.size < scoredClaims.length ? ` (${[...claims].map(claim => hfHorizon(claim, en)).join('、')})` : ''
-    const group = /低估|未測|underestimat/i.test(note) ? groups[0] : /超出開發資料範圍|outside.*range/i.test(note) ? groups[1] : groups[2]
+    const group = /低估|未測|underestimat/i.test(note) ? groups[0] : /超出開發資料範圍|outside.*range/i.test(note) ? groups[1] : checkWarnings.has(note) ? groups[2] : groups[3]
     group.notes.push(note + only)
   }
   return groups.filter(group => group.notes.length)
@@ -88,10 +93,18 @@ export function HfResultsView({ runs, busy, locale, describeError }: { runs: HfC
     {anyScored && <p className="text-xs text-muted-foreground">{en ? 'Research pilot; no medical device license. NHI cloud applicability remains unvalidated. Deaths outside TVGH are not included. A physician must interpret the result; do not use it as the sole basis for treatment.' : '研究試辦版本，尚未取得醫療器材許可證；健保雲端來源適用性尚未驗證。不含院外或他院死亡；須由醫師綜合判讀，不可單獨作為處置依據。'}</p>}
     {(anyScored || groups.length > 0) && <section aria-label={en ? 'Notes to read before interpreting' : '判讀前先看'} className="space-y-2 border-t border-border pt-3">
       <h4 className="text-sm font-semibold">{en ? 'Read before interpreting' : '判讀前先看'}</h4>
-      {groups.length ? groups.map(group => <div key={group.key} className="space-y-1">
-        <h5 className={`text-xs font-semibold ${group.tone === 'warning' ? 'text-amber-900 dark:text-amber-200' : ''}`}>{group.title} · {group.notes.length}</h5>
-        <ul className={`space-y-1 break-words text-xs ${group.tone === 'warning' ? 'rounded-md bg-amber-500/10 px-2 py-1.5 text-amber-900 dark:text-amber-200' : 'text-muted-foreground'}`}>{group.notes.map(note => <li key={note}>{note}</li>)}</ul>
-      </div>) : <p className="text-xs text-muted-foreground">{en ? 'No notes returned; this does not establish data completeness.' : '服務未回傳提示，不代表資料完整。'}</p>}
+      {groups.length ? groups.map(group => {
+        const list = <ul className={`space-y-1 break-words text-xs ${group.tone === 'warning' ? 'rounded-md bg-amber-500/10 px-2 py-1.5 text-amber-900 dark:text-amber-200' : 'text-muted-foreground'}`}>{group.notes.map(note => <li key={note}>{note}</li>)}</ul>
+        return group.collapsed
+          ? <details key={group.key} className="group space-y-1" data-testid={`hf-notes-${group.key}`}>
+            <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold [&::-webkit-details-marker]:hidden"><ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" />{group.title} · {group.notes.length}</summary>
+            {list}
+          </details>
+          : <div key={group.key} className="space-y-1">
+            <h5 className={`text-xs font-semibold ${group.tone === 'warning' ? 'text-amber-900 dark:text-amber-200' : ''}`}>{group.title} · {group.notes.length}</h5>
+            {list}
+          </div>
+      }) : <p className="text-xs text-muted-foreground">{en ? 'No notes returned; this does not establish data completeness.' : '服務未回傳提示，不代表資料完整。'}</p>}
     </section>}
   </div>
 }

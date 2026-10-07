@@ -283,6 +283,11 @@ it('validates before predicting with one button and keeps warnings with the scor
   run()
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   expect(await screen.findByText('12.34%')).toBeVisible()
+  const otherNotes = screen.getByTestId('hf-notes-other') as HTMLDetailsElement
+  expect(otherNotes.open).toBe(false)
+  expect(otherNotes).toHaveTextContent('其他提示 · 1')
+  expect(screen.getByText('Synthetic coverage warning')).not.toBeVisible()
+  fireEvent.click(within(otherNotes).getByText(/其他提示/))
   expect(screen.getByText('Synthetic coverage warning')).toBeVisible()
   expect(screen.getByText(/研究試辦版本，尚未取得醫療器材許可證/)).toBeVisible()
   expect(requestHfDryRun).toHaveBeenCalledTimes(2)
