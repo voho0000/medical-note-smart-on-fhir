@@ -62,9 +62,13 @@ function ClaimColumn({ claim, run, busy, locale, describeError }: { claim: HfDry
         <div className="grid grid-cols-3 gap-0.5 text-xs text-muted-foreground">{TIERS.map(tier => <span key={tier} className={tier === score.tier ? 'font-semibold text-foreground' : ''}>{tierLabel(tier, en)}</span>)}</div>
       </div>
       {score.observedIncidence && <div className="space-y-0.5 border-t border-border pt-2 text-xs">
-        <p><span className="font-semibold">{en ? 'Observed rate in this tier' : '同層實際發生率'}</span>　<span className="tabular-nums">{hfPercentage(score.observedIncidence.rate, locale)}（95% CI {hfPercentage(score.observedIncidence.ciLow, locale)}–{hfPercentage(score.observedIncidence.ciHigh, locale)}）</span></p>
-        <p className="break-words text-muted-foreground">{en ? 'Group rate, not an individual probability' : '群體發生率，非個人機率'} · n={score.observedIncidence.patients}</p>
-        <p className="break-words text-muted-foreground">{en ? 'Cohort' : '依據族群'}：{score.observedIncidence.basis}</p>
+        <p><span className="font-semibold">{en ? 'Observed rate in this tier (group)' : '同層實際發生率（群體）'}</span>　<span className="tabular-nums">{hfPercentage(score.observedIncidence.rate, locale)}（95% CI {hfPercentage(score.observedIncidence.ciLow, locale)}–{hfPercentage(score.observedIncidence.ciHigh, locale)}）</span></p>
+        {/* Cohort details are reference, not something to reread on every run. */}
+        <details className="group/basis" data-testid={`hf-incidence-basis-${claim}`}>
+          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1 text-muted-foreground [&::-webkit-details-marker]:hidden"><ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 transition-transform group-open/basis:rotate-90" />{en ? 'Basis' : '依據'}</summary>
+          <p className="break-words text-muted-foreground">{en ? 'Group rate, not an individual probability' : '群體發生率，非個人機率'} · n={score.observedIncidence.patients}</p>
+          <p className="break-words text-muted-foreground">{en ? 'Cohort' : '依據族群'}：{score.observedIncidence.basis}</p>
+        </details>
       </div>}
     </> : refusal ? <div className="space-y-1">
       <p className="text-sm font-semibold text-destructive">{en ? 'Insufficient or incompatible data; unable to assess' : '資料不足或不相容，無法評估'}</p>

@@ -194,3 +194,13 @@ describe('cloud laboratory results without a source status', () => {
     expect(resources(result.bundle, 'Observation')[0].valueQuantity).toMatchObject({ value: 11.2, code: 'g/dL' })
   })
 })
+
+describe('HF diagnosis presence', () => {
+  it('recognizes ICD-10-CM I50.x and rejects unrelated codes', () => {
+    const { hasHfDiagnosis } = jest.requireActual('@/src/core/hf-risk/input-summary')
+    const withCode = (code: string) => { const bundle = hfMedcloudFixture(); resources(bundle, 'Encounter')[0].reasonCode[0].coding[0].code = code; return build(bundle) }
+    expect(hasHfDiagnosis(withCode('I50.9'))).toBe(true)
+    expect(hasHfDiagnosis(withCode('I50.22'))).toBe(true)
+    expect(hasHfDiagnosis(withCode('I10'))).toBe(false)
+  })
+})
