@@ -5,8 +5,16 @@ describe('source name placeholders in outbound CDSS text', () => {
     const patterns = buildPatientNamePatterns({ name: [{ text: name }] })
     expect(scrubFreeText('王小明', [], patterns)).toBe('[已遮蔽]')
     expect(scrubFreeText(name.replace('*', '𠀋'), [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replace('*', '𠀋\u{E0100}'), [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replace('*', '明\uFE00'), [], patterns)).toBe('[已遮蔽]')
     const separated = name.replace('*', '\n')
     expect(scrubFreeText(separated, [], patterns)).toBe(separated)
+  })
+
+  it('does not match Latin name placeholders inside clinical words', () => {
+    const patterns = buildPatientNamePatterns({ name: [{ text: 'Li*' }] })
+    expect(scrubFreeText('Lin has clinical lipid results', [], patterns))
+      .toBe('[已遮蔽] has clinical lipid results')
   })
 
   it('does not turn identifiers or insufficient names into wildcards', () => {

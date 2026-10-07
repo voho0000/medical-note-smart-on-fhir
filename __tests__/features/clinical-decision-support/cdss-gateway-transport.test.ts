@@ -244,6 +244,18 @@ test.each(['王小*', '王小＊'])('scrubs alternative source glyphs for %s fro
   expect(body.physician_decisions.module.note).toBe('[已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] LDL 92')
 })
 
+test('Latin source placeholders preserve structural keys and clinical words', async () => {
+  recordCdssEvent(input.patient.id, 'lip', { kind: 'interaction', action: 'evidence_toggled', target: 'lip' })
+  await saveCdssSnapshot({ ...input, packId: 'lip', patient: { ...input.patient, name: [{ text: 'Li*' }] },
+    physicianDecisions: { module: { decision: 'reviewed', note: 'Lin clinical lipid' } } })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.pack_id).toBe('lip')
+  expect(body.events[0].pack_id).toBe('lip')
+  expect(body.events[0].target).toBe('lip')
+  expect(body.physician_decisions.module.note).toBe('[已遮蔽] clinical lipid')
+})
+
 test.each(['***', '王**', '王○明'])('still rejects insufficient or explicitly masked name %s', async name => {
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] } }))
     .rejects.toThrow('cdss_identity_unavailable')

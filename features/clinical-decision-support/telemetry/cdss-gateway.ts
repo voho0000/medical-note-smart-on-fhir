@@ -109,7 +109,11 @@ export async function saveCdssSnapshot(input: {
         (holder.resourceType === 'Patient' && (key === 'resourceId' || key === 'id')) ||
         (holder.resource_type === 'Patient' && key === 'resource_id'))) return '[redacted]'
       if (value === `Patient/${patientId}`) return 'Patient/[redacted]'
-      return scrubFreeText(value, piiLiterals, piiNamePatterns)
+      // Name wildcards apply to narrative content, not machine keys/enums.
+      const structural = ['pack_id', 'target', 'field_id', 'target_id', 'kind', 'action',
+        'site', 'app_version', 'build_revision', 'occurred_at', 'measured_on',
+        'resourceType', 'resource_type', 'resourceId', 'resource_id', 'id'].includes(key)
+      return scrubFreeText(value, piiLiterals, structural ? [] : piiNamePatterns)
     }))
     const [auth, identity] = await cancellable(Promise.all([
       captureFhirRequestAuth(input.ownerUid), cdssPatientIdentity(input.patient),

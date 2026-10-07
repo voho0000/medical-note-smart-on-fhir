@@ -118,8 +118,13 @@ export function buildPatientNamePatterns(patient: unknown): RegExp[] {
     ? p.name.map(name => name?.text).filter((name): name is string => typeof name === 'string')
     : typeof p.name === 'string' ? [p.name] : []
   return names.filter(name => /[*＊]/u.test(name) && (name.match(/\p{L}/gu)?.length ?? 0) >= 2)
-    .map(name => new RegExp(Array.from(name.trim()).map(char =>
-      /[*＊]/u.test(char) ? '[^\\s]' : escapeRegExp(char)).join(''), 'giu'))
+    .map(name => {
+      const body = Array.from(name.trim()).map(char => /[*＊]/u.test(char)
+        ? '[^\\s][\\u{FE00}-\\u{FE0F}\\u{E0100}-\\u{E01EF}]?'
+        : escapeRegExp(char)).join('')
+      const latin = /\p{Script=Latin}/u.test(name) && !/\p{Script=Han}/u.test(name)
+      return new RegExp(latin ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body, 'giu')
+    })
 }
 
 /** Mask identifying free text using labels, literals and optional patient-name patterns. */
