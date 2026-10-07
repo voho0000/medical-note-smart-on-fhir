@@ -197,3 +197,10 @@ The existing site/intranet and medical-audience entry gates remain unchanged.
 New source formats can prepare model inputs; missing recognized index diagnoses
 are shown explicitly and prevent uploading invalid inputs. Existing cloud input
 eligibility is preserved. No previously visible clinical surface is removed.
+
+## HF model action flow
+
+| Surface | Behaviour | Routes | Owner decision |
+|---|---|---|---|
+| HF physician diagnosis | Always expanded above the prediction action; physician choices remain explicit. | Every route where the HF research calculator is available, including `?site=vghtpe` and the authorized intranet-discovery path. | Explicit chat request, 2026-10-07 |
+| HF input validation action | Separate validation button removed. A single 「執行 HF 模型預測」 action validates first, automatically predicts only on acceptance, and displays missing-data issues and warnings. | Every route where the HF research calculator is available; existing calculator access rules remain unchanged. | Explicit chat request, 2026-10-07 |

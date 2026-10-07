@@ -10,7 +10,7 @@ import { buildMedcloudHfInput, medcloudHfVisits, type HfVisit } from '@/src/core
 import { type HfInput, type HfSelection, type HfDryRunResult } from '@/src/core/hf-risk/contract'
 import { emptyHfDiagnosisDraft, withPhysicianHfDiagnosis, type HfPhysicianDiagnosisDraft } from '@/src/core/hf-risk/physician-diagnosis'
 import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
-import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction } from '@/src/infrastructure/hf-risk/dry-run-client'
+import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction, type HfRequestOptions } from '@/src/infrastructure/hf-risk/dry-run-client'
 
 function subscribeToRecordChange(onChange: () => void) {
   window.addEventListener(BUNDLE_CHANGED_EVENT, onChange)
@@ -119,7 +119,7 @@ export function useMedcloudHfDryRun() {
     }
   }
   async function submit(operation: 'dry-run' | 'predict') {
-    if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing') || (operation === 'predict' && visibleResult?.verdict !== 'accepted')) return
+    if (!current || !configured || busy || current.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')) return
     const snapshot = current
     const abort = new AbortController()
     controller.current?.abort()
@@ -127,20 +127,28 @@ export function useMedcloudHfDryRun() {
     unsubscribeAuth.current = null
     controller.current = abort
     setBusyImportId(snapshot.importId)
-    if (operation === 'dry-run') setResult(null)
+    setResult(null)
     setPrediction(null)
     setMessage(null)
-    const request = operation === 'dry-run' ? requestHfDryRun : requestHfPrediction
     const storeResult = (value: HfDryRunResult | HfPredictionResult) => {
       if (operation === 'dry-run') setResult({ importId: snapshot.importId, input: snapshot.input, value: value as HfDryRunResult })
       else setPrediction({ importId: snapshot.importId, input: snapshot.input, value: value as HfPredictionResult })
     }
     const stillCurrent = () => !abort.signal.aborted && shouldUseLocalBundle() && LocalBundleService.getActiveImportId() === snapshot.importId
+    const request = async (options: HfRequestOptions, checkAuthorization: () => Promise<void>) => {
+      const validation = await requestHfDryRun(snapshot.input, options)
+      await checkAuthorization()
+      if (!stillCurrent()) return
+      setResult({ importId: snapshot.importId, input: snapshot.input, value: validation })
+      if (operation === 'dry-run' || validation.verdict !== 'accepted') return
+      const value = await requestHfPrediction(snapshot.input, options)
+      await checkAuthorization()
+      if (stillCurrent()) storeResult(value)
+    }
     try {
       const authPolicy = hfAuthPolicy(policySetting)
       if (authPolicy === 'intranet') {
-        const value = await request(snapshot.input, { origin, authPolicy, signal: abort.signal })
-        if (stillCurrent()) storeResult(value)
+        await request({ origin, authPolicy, signal: abort.signal }, async () => {})
         return
       }
       const auth = await captureHfCallerAuth()
@@ -154,11 +162,10 @@ export function useMedcloudHfDryRun() {
         setPrediction(null)
         setMessage({ importId: snapshot.importId, code: 'gateway-unauthorized' })
       })
-      const value = await request(snapshot.input, { origin, token, signal: abort.signal })
-      // Discard answers after patient/import change or sign-out.
-      const remainsAuthorized = await auth.getToken()
-      if (!remainsAuthorized) throw new Error('gateway-unauthorized')
-      if (stillCurrent()) storeResult(value)
+      await request({ origin, token, signal: abort.signal }, async () => {
+        // Check authorization between validation and prediction as well as after prediction.
+        if (!await auth.getToken()) throw new Error('gateway-unauthorized')
+      })
     } catch (error) {
       if (stillCurrent()) setMessage({ importId: snapshot.importId, code: error instanceof Error ? error.message : 'gateway-unavailable' })
     } finally {

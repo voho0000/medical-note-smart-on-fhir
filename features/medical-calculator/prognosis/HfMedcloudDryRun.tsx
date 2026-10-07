@@ -62,7 +62,7 @@ export function HfMedcloudDryRun({ locale }: { locale: string }) {
 
 export function HfMedcloudDetail({ locale, state }: { locale: string; state: ReturnType<typeof useMedcloudHfDryRun> }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, result: visibleResult, prediction, message: visibleMessage, prepare, select, supplementDiagnosis, validate, predict } = state
+  const { current, configured, intranet, busy, result: visibleResult, prediction, message: visibleMessage, prepare, select, supplementDiagnosis, predict } = state
   const summary = current ? summarizeHfInput(current.input) : null
   const missingIndexDiagnosis = current?.input.gaps.some(gap => gap.code === 'index-diagnosis-missing')
   const diagnosisVisits = current ? hfDiagnosisVisits(current.baseInput) : []
@@ -87,7 +87,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
     <details className="text-xs text-muted-foreground">
       <summary className="cursor-pointer py-1">{en ? 'About the model and access' : '模型與使用說明'}</summary>
       <div className="space-y-1 pb-1">
-        <p>{en ? 'Outpatient 1- and 3-month models. Check inputs first, then explicitly run prediction.' : '門診 1、3 個月模型。先檢查輸入，再手動執行預測。'}</p>
+        <p>{en ? 'Outpatient 1- and 3-month models. Running prediction checks inputs first, then predicts if accepted; missing or incompatible data is reported.' : '門診 1、3 個月模型。點擊執行預測後會先檢查資料，通過後自動進行預測；缺漏或不符合條件會顯示提醒。'}</p>
         <p>{en ? 'Supports imported cloud, health-bank and TVGH EHR bridge records. Available inputs depend on the source data.' : '支援雲端、健康與北榮懷爾抓抓匯入的病歷；可用欄位依來源資料而定。'}</p>
         {intranet && <p>{en ? 'Hospital network authorization; no Firebase sign-in required. The service verifies access.' : '院內網路授權模式，不需 Firebase 登入；是否可用由院內服務驗證。'}</p>}
       </div>
@@ -108,21 +108,9 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
           </select>
         </label>
       </div>
-      <p className="text-xs text-muted-foreground">{en ? 'Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded.' : '執行檢查會將整理後的生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。'}</p>
-      <div className="sticky top-0 z-10 space-y-1 border-y border-border bg-background py-2" data-testid="hf-model-actions">
-      <div className="grid grid-cols-2 gap-2">
-      <button type="button" className={button + ' min-w-0 px-2'} disabled={busy || !configured || missingIndexDiagnosis} onClick={validate}>
-        {busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Run intranet input validation' : '執行院內輸入檢查')}
-      </button>
-      <button type="button" className={button + ' min-w-0 px-2 bg-primary text-primary-foreground'} disabled={busy || !configured || visibleResult?.verdict !== 'accepted'} onClick={predict}>
-        {busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
-      </button>
-      </div>
-      {missingIndexDiagnosis && <p className="text-xs font-medium" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in diagnosis settings, or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在診斷設定補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
-      </div>
-      {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Prediction becomes available after input checks pass. Warnings remain relevant even when accepted.' : '請先完成輸入檢查；即使通過，仍需核對資料警告。'}</p>}
-      <details className="border-t border-border pt-2">
-        <summary className="cursor-pointer py-2 text-sm font-medium">{en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'}{current.input.physicianDiagnosis ? (en ? ' · Confirmed' : ' · 已確認') : ''}</summary>
+      <section aria-label={en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'} className="space-y-2 border-t border-border pt-2" data-testid="hf-physician-diagnosis">
+        <h4 className="text-sm font-semibold">{en ? 'Physician-supplied HF diagnosis' : '醫師補充心衰診斷'}{current.input.physicianDiagnosis ? (en ? ' · Confirmed' : ' · 已確認') : ''}</h4>
+        <p className="text-xs text-muted-foreground">{en ? 'Cloud records may omit HF diagnoses. Confirm the HF history before running input validation; select the applicable visits below.' : '雲端病歷可能未完整提供心衰診斷。執行輸入檢查前，請由醫師確認心衰病史並選擇適用的就診紀錄。'}</p>
         <div className="space-y-2 pb-2">
           <fieldset disabled={busy} className="grid grid-cols-1 gap-x-2 gap-y-1 @xs:grid-cols-2">
             <legend className="mb-1 text-sm font-medium">{en ? 'Confirm HF history' : '確認心衰病史'}</legend>
@@ -170,8 +158,16 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
             </div>
           </details>
         </div>
-      </details>
+      </section>
       {current.input.physicianDiagnosis && <p className="text-sm" role="note">{en ? 'Physician confirmation (user attestation)' : '醫師確認（使用者聲明）'}：I50.9 · {current.input.physicianDiagnosis.visits.map(visit => `${visit.date} (${en ? 'rank' : '順位'} ${visit.rank})`).join('、')}<span className="block text-xs text-muted-foreground">{en ? 'Confirmed at' : '確認時間'}：{current.input.physicianDiagnosis.confirmedAt} · {en ? 'This request only' : '僅本次請求'}</span></p>}
+      <p className="text-xs text-muted-foreground">{en ? 'Submitting sends the prepared birth date, sex and selected-hospital clinical inputs to the intranet service. Names and identity numbers are excluded.' : '執行檢查會將整理後的生日、性別與所選院所臨床資料送至院內服務；不含姓名、身分證或無關內容。'}</p>
+      <div className="sticky top-0 z-10 space-y-1 border-y border-border bg-background py-2" data-testid="hf-model-actions">
+      <button type="button" className={button + ' w-full min-w-0 px-2 bg-primary text-primary-foreground'} disabled={busy || !configured || missingIndexDiagnosis} onClick={predict}>
+        {busy ? (en ? 'Checking inputs and predicting…' : '檢查資料與預測中…') : (en ? 'Run HF model prediction' : '執行 HF 模型預測')}
+      </button>
+      {missingIndexDiagnosis && <p className="text-xs font-medium" role="note">{en ? 'The index visit has no usable diagnosis. Supply HF for this exact outpatient visit in diagnosis settings, or choose another index visit with a verified diagnosis. Admission confirmation alone does not supply a diagnosis for the index outpatient visit.' : '基準門診缺少可用診斷。請在診斷設定補充這次門診的心衰診斷，或改選已有診斷的基準門診；只確認住院診斷不會補上基準門診診斷。'}</p>}
+      </div>
+      {visibleResult?.verdict !== 'accepted' && <p className="text-xs text-muted-foreground">{en ? 'Inputs are checked before prediction. Missing or incompatible data will be reported.' : '執行時會先檢查資料；若有缺漏或不符合條件，會顯示提醒。'}</p>}
       <details className="border-t border-border pt-2">
         <summary className="cursor-pointer py-2 text-sm font-medium">{en ? 'Input summary and source gaps' : '本次輸入摘要與來源缺漏'}</summary>
         <div className="space-y-3 pb-2">
@@ -200,7 +196,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
         <h4 className="pt-3 text-sm font-semibold">{en ? 'Input-check result' : '輸入檢查結果'}</h4>
         <p className="text-xs text-muted-foreground">{en ? 'This input-check result confirms only format and eligibility; it is not a risk estimate. Model prediction is displayed separately below.' : '下列輸入檢查結果僅確認格式與評分條件，不是風險估計；模型預測另列於下方。'}</p>
         <p className="font-medium">{visibleResult.verdict === 'accepted'
-          ? (hasWarnings ? (en ? 'Input check passed with warnings; no risk calculated.' : '輸入檢查通過，但有資料警告；未計算風險。') : (en ? 'Input check passed; source applicability still requires validation.' : '輸入檢查通過；資料來源適用性仍待驗證。'))
+          ? (hasWarnings ? (en ? 'Input check passed with warnings; review the gaps below.' : '輸入檢查通過，但有資料警告；請核對下列缺漏。') : (en ? 'Input check passed; source applicability still requires validation.' : '輸入檢查通過；資料來源適用性仍待驗證。'))
           : (en ? 'Input check refused; review missing or incompatible data.' : '輸入檢查未通過；請核對缺漏或不相容資料。')}</p>
         <p className="text-xs text-muted-foreground">{en ? 'Index date' : '基準日'}：{current?.input.indexDate} · {current?.input.claim === 'P1_CD_mortality_1m' ? (en ? '1 month' : '1 個月') : (en ? '3 months' : '3 個月')}</p>
         <ul className="space-y-1 text-xs text-muted-foreground">{visibleResult.issues.map((issue, index) => <li key={index}><span className="font-medium">{issue.severity === 'warning' ? (en ? 'Warning: ' : '警告：') : ['error', 'fatal'].includes(issue.severity) ? (en ? 'Error: ' : '錯誤：') : ''}</span>{issue.text}</li>)}</ul>
