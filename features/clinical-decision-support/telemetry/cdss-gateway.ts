@@ -95,14 +95,27 @@ export async function saveCdssSnapshot(input: {
     const piiLiterals = buildPatientTextLiterals(input.patient)
     const piiNamePatterns = buildPatientNamePatterns(input.patient)
     const { id: _patientId, ...profileWithoutPatientId } = input.profile
-    const content = JSON.parse(JSON.stringify({
+    const payload = {
       site: 'vghtpe', patient_session_id: sessionFor(patientId), pack_id: input.packId,
       app_version: process.env.NEXT_PUBLIC_COLLECTOR_APP_VERSION || '0.0.0',
       build_revision: process.env.NEXT_PUBLIC_COLLECTOR_BUILD_REVISION || 'unknown',
       profile: profileWithoutPatientId, result: input.result,
       physician_inputs: input.physicianInputs, physician_decisions: input.physicianDecisions,
       source_records: input.sourceRecords, events,
-    }, function (this: unknown, key, value: unknown) {
+    }
+    // Scope machine fields to their schema objects; a narrative field named
+    // 'action' or 'id' inside physician input must still receive name masking.
+    const machineFields = new WeakMap<object, Set<string>>()
+    machineFields.set(payload, new Set(['site', 'patient_session_id', 'pack_id', 'app_version', 'build_revision']))
+    machineFields.set(input.result, new Set(['packId', 'packVersion']))
+    for (const event of events) {
+      machineFields.set(event, new Set(['kind', 'occurred_at', 'pack_id', 'action', 'target']))
+      if (event.kind === 'assessment') for (const change of event.changes) {
+        machineFields.set(change, new Set(['field_id', 'target_id', 'measured_on']))
+      }
+    }
+    for (const source of input.sourceRecords) machineFields.set(source, new Set(['resource_type', 'resource_id']))
+    const content = JSON.parse(JSON.stringify(payload, function (this: object, key, value: unknown) {
       if (typeof value !== 'string') return value
       const holder = this as { resourceType?: string; resource_type?: string }
       if (value === patientId && (key === 'patientId' || key === 'patient_id' ||
@@ -110,9 +123,9 @@ export async function saveCdssSnapshot(input: {
         (holder.resource_type === 'Patient' && key === 'resource_id'))) return '[redacted]'
       if (value === `Patient/${patientId}`) return 'Patient/[redacted]'
       // Name wildcards apply to narrative content, not machine keys/enums.
-      const structural = ['pack_id', 'target', 'field_id', 'target_id', 'kind', 'action',
-        'site', 'app_version', 'build_revision', 'occurred_at', 'measured_on',
-        'resourceType', 'resource_type', 'resourceId', 'resource_id', 'id'].includes(key)
+      const structural = machineFields.get(this)?.has(key) ||
+        (Boolean(holder.resourceType || holder.resource_type) &&
+          ['resourceType', 'resource_type', 'resourceId', 'resource_id', 'id'].includes(key))
       return scrubFreeText(value, piiLiterals, structural ? [] : piiNamePatterns)
     }))
     const [auth, identity] = await cancellable(Promise.all([

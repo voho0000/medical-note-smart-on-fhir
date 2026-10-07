@@ -256,6 +256,19 @@ test('Latin source placeholders preserve structural keys and clinical words', as
   expect(body.physician_decisions.module.note).toBe('[已遮蔽] clinical lipid')
 })
 
+test('name patterns preserve session UUIDs but scrub narrative keys at any depth', async () => {
+  const uuid = '12345678-abed-4abc-8def-123456789abc'
+  const random = jest.spyOn(crypto, 'randomUUID').mockReturnValue(uuid)
+  try {
+    await saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: 'Abe*' }] },
+      physicianInputs: { action: 'Abel', nested: { id: 'Abel', target: 'Abel' } } })
+    const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+    expect(body.patient_session_id).toBe(uuid)
+    expect(body.physician_inputs).toEqual({ action: '[已遮蔽]', nested: { id: '[已遮蔽]', target: '[已遮蔽]' } })
+    expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  } finally { random.mockRestore() }
+})
+
 test.each(['***', '王**', '王○明'])('still rejects insufficient or explicitly masked name %s', async name => {
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] } }))
     .rejects.toThrow('cdss_identity_unavailable')
