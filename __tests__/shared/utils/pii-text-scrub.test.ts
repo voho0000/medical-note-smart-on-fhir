@@ -4,10 +4,10 @@ describe('source name placeholders in outbound CDSS text', () => {
   it.each(['王小*', '王*明', '*小明'])('matches one Unicode character in %s', name => {
     const patterns = buildPatientNamePatterns({ name: [{ text: name }] })
     expect(scrubFreeText('王小明', [], patterns)).toBe('[已遮蔽]')
-    expect(scrubFreeText(name.replace('*', '𠀋'), [], patterns)).toBe('[已遮蔽]')
-    expect(scrubFreeText(name.replace('*', '𠀋\u{E0100}'), [], patterns)).toBe('[已遮蔽]')
-    expect(scrubFreeText(name.replace('*', '明\uFE00'), [], patterns)).toBe('[已遮蔽]')
-    const separated = name.replace('*', '\n')
+    expect(scrubFreeText(name.replaceAll('*', '𠀋'), [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replaceAll('*', '𠀋\u{E0100}'), [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replaceAll('*', '明\uFE00'), [], patterns)).toBe('[已遮蔽]')
+    const separated = name.replaceAll('*', '\n')
     expect(scrubFreeText(separated, [], patterns)).toBe(separated)
   })
 
