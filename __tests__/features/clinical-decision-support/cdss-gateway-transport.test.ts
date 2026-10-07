@@ -237,6 +237,13 @@ test.each(['王\uE000', '王\uFFFD', '王?'])('preserves the existing identity h
   expect(body.patient_key_sha256).toBe(createHash('sha256').update(tuple).digest('hex'))
 })
 
+test.each(['王小*', '王小＊'])('scrubs alternative source glyphs for %s from outbound free text', async name => {
+  await saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] },
+    physicianDecisions: { module: { decision: 'reviewed', note: '王小明 王小𠀋 王小? 王小□ 王小* 王小＊ LDL 92' } } })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(body.physician_decisions.module.note).toBe('[已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] [已遮蔽] LDL 92')
+})
+
 test.each(['***', '王**', '王○明'])('still rejects insufficient or explicitly masked name %s', async name => {
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, name: [{ text: name }] } }))
     .rejects.toThrow('cdss_identity_unavailable')

@@ -5,7 +5,7 @@ import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { cdssAssessmentSchema, cdssGatewaySaveSchema, cdssInteractionSchema, type CdssAssessmentChange, type CdssGatewayEvent, type CdssSource } from '@/src/shared/contracts/cdss-gateway-event'
 import { isCollectorSite } from '@/src/application/telemetry/collector'
 import { captureFhirRequestAuth } from './fhir-auth'
-import { buildPatientTextLiterals, scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+import { buildPatientNamePatterns, buildPatientTextLiterals, scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { cdssPatientIdentity } from './patient-identity'
 
 type EventBody =
@@ -93,6 +93,7 @@ export async function saveCdssSnapshot(input: {
     // Freeze the click-time snapshot BEFORE asynchronous identity preparation.
     const events = [...(pending.get(patientId) ?? [])]
     const piiLiterals = buildPatientTextLiterals(input.patient)
+    const piiNamePatterns = buildPatientNamePatterns(input.patient)
     const { id: _patientId, ...profileWithoutPatientId } = input.profile
     const content = JSON.parse(JSON.stringify({
       site: 'vghtpe', patient_session_id: sessionFor(patientId), pack_id: input.packId,
@@ -108,7 +109,7 @@ export async function saveCdssSnapshot(input: {
         (holder.resourceType === 'Patient' && (key === 'resourceId' || key === 'id')) ||
         (holder.resource_type === 'Patient' && key === 'resource_id'))) return '[redacted]'
       if (value === `Patient/${patientId}`) return 'Patient/[redacted]'
-      return scrubFreeText(value, piiLiterals)
+      return scrubFreeText(value, piiLiterals, piiNamePatterns)
     }))
     const [auth, identity] = await cancellable(Promise.all([
       captureFhirRequestAuth(input.ownerUid), cdssPatientIdentity(input.patient),
