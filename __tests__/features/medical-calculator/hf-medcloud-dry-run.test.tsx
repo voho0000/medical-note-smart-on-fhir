@@ -682,7 +682,12 @@ it('shows the cohort behind the observed incidence', async () => {
   await prepared()
   run()
   const column = await screen.findByTestId('hf-result-P1_CD_mortality_1m')
-  expect(await within(column).findByText('依據族群：Synthetic cohort 2020–2025; frozen calibration')).toBeVisible()
+  expect(await within(column).findByText(/同層實際發生率（群體）/)).toBeVisible()
+  const cohort = within(column).getByText('依據族群：Synthetic cohort 2020–2025; frozen calibration')
+  expect(cohort).not.toBeVisible()
+  fireEvent.click(within(within(column).getByTestId('hf-incidence-basis-P1_CD_mortality_1m')).getByText('依據'))
+  expect(cohort).toBeVisible()
+  expect(within(column).getByText(/群體發生率，非個人機率 · n=5848/)).toBeVisible()
 })
 it('keeps completed checks when both predictions fail the same way', async () => {
   jest.mocked(requestHfPrediction).mockRejectedValue(new Error('gateway-unavailable'))
