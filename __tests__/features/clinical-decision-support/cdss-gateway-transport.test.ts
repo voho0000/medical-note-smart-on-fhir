@@ -208,20 +208,33 @@ test('does not transmit when complete identity inputs are missing', async () => 
   expect(fetch).not.toHaveBeenCalled()
 })
 
-test.each(['王小*', '王小＊'])('saves an unrecognized source name %s without sending its raw text', async name => {
+test.each([
+  ['王小*', '王○*'], ['王小＊', '王○*'],
+  ['王*明', '王○明'], ['*小明', '*○明'],
+])('saves an unrecognized source name %s without sending its raw text', async (name, masked) => {
   const patient = { ...input.patient, name: [{ text: name }] }
   await saveCdssSnapshot({ ...input, patient,
     physicianDecisions: { module: { decision: 'reviewed', note: `source ${name}` } } })
   const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
   expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
-  expect(body.patient_identity.name_masked).toBe('王○*')
+  expect(body.patient_identity.name_masked).toBe(masked)
   expect(body.physician_decisions.module.note).toBe('source [已遮蔽]')
   expect(JSON.stringify(body)).not.toContain(name)
   expect(body.patient_key_sha256).toBe((await cdssPatientIdentity(patient)).patient_key_sha256)
-  const tuple = JSON.stringify([1, 'vghtpe', '王小*', '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
+  const tuple = JSON.stringify([1, 'vghtpe', name.normalize('NFKC'), '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
   expect(body.patient_key_sha256).toBe(createHash('sha256').update(tuple).digest('hex'))
   expect(body.patient_key_sha256).not.toBe((await cdssPatientIdentity({ ...patient, name: [{ text: '王小明' }] })).patient_key_sha256)
   expect(body.patient_key_sha256).not.toBe((await cdssPatientIdentity({ ...patient, name: [{ text: '王小' }] })).patient_key_sha256)
+})
+
+test.each(['王\uE000', '王\uFFFD', '王?'])('preserves the existing identity hash for a source name %s without asterisks', async name => {
+  const patient = { ...input.patient, name: [{ text: name }] }
+  await saveCdssSnapshot({ ...input, patient })
+  const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.patient_identity.name_masked).toBe('王○')
+  const tuple = JSON.stringify([1, 'vghtpe', name, '1968-05-09', 'https://example.org/national-id', 'A123XXXXXX'])
+  expect(body.patient_key_sha256).toBe(createHash('sha256').update(tuple).digest('hex'))
 })
 
 test.each(['***', '王**', '王○明'])('still rejects insufficient or explicitly masked name %s', async name => {

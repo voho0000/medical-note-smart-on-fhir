@@ -13,7 +13,8 @@ function normalizedName(patient: PatientEntity): string {
   // A source may substitute an unrecognized character with '*'. Keep it in
   // the lookup key; removing or guessing it could mix different patients.
   const knownLetters = names[0]?.match(/\p{L}/gu)?.length ?? 0
-  if (names.length !== 1 || knownLetters < 2 || NAME_MASK.test(names[0])) {
+  if (names.length !== 1 || Array.from(names[0]).length < 2 || NAME_MASK.test(names[0])
+    || (names[0].includes('*') && knownLetters < 2)) {
     throw new Error('cdss_identity_unavailable')
   }
   return names[0]
