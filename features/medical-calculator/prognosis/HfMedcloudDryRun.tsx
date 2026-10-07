@@ -140,7 +140,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
         <h3 className="text-base font-semibold">{en ? 'TVGH HF research trial' : '北榮 HF 研究試用'}</h3>
         <span className="rounded-full border border-amber-600/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-900 dark:text-amber-200">{en ? 'Research pilot' : '研究試辦'}</span>
       </div>
-      <p className="text-sm text-muted-foreground">{en ? 'Estimates TVGH in-hospital death within 1 and 3 months of an outpatient visit.' : '估計門診後 1 個月與 3 個月內，在北榮院內死亡的機率。'}</p>
+      <p className="text-sm text-muted-foreground">{en ? 'Estimates the risk of death within 1 and 3 months after an outpatient visit.' : '估計門診後 1 個月與 3 個月內的死亡風險。'}</p>
     </div>
 
     <details className="group rounded-lg border border-border bg-background" open={guideOpen} onToggle={event => setGuideOpen(event.currentTarget.open)}>
@@ -246,7 +246,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       {visibleMessage && visibleMessage !== 'physician-diagnosis-rank-conflict' && <p className="font-medium">{describeError(visibleMessage)}</p>}
       {runs && current && (busy || Object.values(runs).some(run => run?.check || run?.prediction || run?.error)) && <section aria-label={en ? 'HF model prediction' : 'HF 模型預測結果'} className="space-y-3 rounded-lg border border-border bg-background p-3">
         <div className="space-y-0.5">
-          <h4 className="text-base font-semibold">{en ? 'TVGH in-hospital death risk' : '北榮院內死亡風險'}</h4>
+          <h4 className="text-base font-semibold">{en ? 'Risk of death within 1 and 3 months' : '就診後 1／3 個月內死亡風險'}</h4>
           <p className="text-xs text-muted-foreground tabular-nums">{en ? 'Index visit' : '基準門診'} {current.input.indexDate} · {hospital}</p>
         </div>
         <HfResultsView runs={runs} busy={busy} locale={locale} describeError={describeError} />
@@ -300,7 +300,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
             const [code, moduleName] = gap.code.split(':')
             return <li key={gap.code}>{text(GAP[code] ?? [code, code])}{moduleName ? ' (' + text(MODULE[moduleName] ?? [moduleName, moduleName]) + ')' : ''}{gap.count > 1 ? ' · ' + gap.count : ''}</li>
           })}</ul>
-          <p className="text-xs text-muted-foreground">{en ? 'Outcome: death during hospitalization at TVGH; deaths outside TVGH are not included.' : '結局定義為北榮院內死亡，不包含院外或他院死亡；這份病歷來源適用性尚待驗證。'}</p>
+          <p className="text-xs text-muted-foreground">{en ? 'Outcome: death within 1 or 3 months after the index visit. '+'Deaths are ascertained from TVGH records; deaths outside TVGH may be missed.' : '結局為基準門診後 1 或 3 個月內死亡；死亡事件依北榮資料認定，院外或他院死亡可能未納入；這份病歷來源適用性尚待驗證。'}</p>
         </div>
       </div>
     </details>}

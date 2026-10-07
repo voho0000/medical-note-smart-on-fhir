@@ -154,9 +154,10 @@ it('copies both horizons with the caveat for the note', async () => {
   fireEvent.click(await screen.findByRole('button', { name: '複製結果到病歷' }))
   await screen.findByRole('button', { name: '已複製' })
   const copied = writeText.mock.calls[0][0] as string
-  expect(copied).toContain('就診後 1 個月內北榮院內死亡：12.34%（中風險層）')
-  expect(copied).toContain('就診後 3 個月內北榮院內死亡：23.45%（高風險層）')
-  expect(copied).toContain('不含院外或他院死亡')
+  expect(copied).toContain('就診後 1 個月內死亡：12.34%（中風險層）')
+  expect(copied).toContain('就診後 3 個月內死亡：23.45%（高風險層）')
+  expect(copied).toContain('死亡事件依北榮資料認定，院外或他院死亡可能未納入')
+  expect(copied).not.toContain('院內死亡')
 })
 it('remembers a dismissed usage guide', async () => {
   const first = render(<HfMedcloudDryRun locale="zh-TW" />)
@@ -283,6 +284,11 @@ it('validates before predicting with one button and keeps warnings with the scor
   run()
   await screen.findByText('輸入檢查通過；資料來源適用性仍待驗證。')
   expect(await screen.findByText('12.34%')).toBeVisible()
+  const otherNotes = screen.getByTestId('hf-notes-other') as HTMLDetailsElement
+  expect(otherNotes.open).toBe(false)
+  expect(otherNotes).toHaveTextContent('其他提示 · 1')
+  expect(screen.getByText('Synthetic coverage warning')).not.toBeVisible()
+  fireEvent.click(within(otherNotes).getByText(/其他提示/))
   expect(screen.getByText('Synthetic coverage warning')).toBeVisible()
   expect(screen.getByText(/研究試辦版本，尚未取得醫療器材許可證/)).toBeVisible()
   expect(requestHfDryRun).toHaveBeenCalledTimes(2)

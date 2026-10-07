@@ -62,7 +62,7 @@ export function HfSamdCard({ locale, state, onOpen }: { locale: string; state: H
               <span className="text-xs text-muted-foreground">{en ? 'Research pilot' : '研究試辦'}</span>
             </span>
             <span className="block text-sm font-semibold">{title}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{en ? 'TVGH in-hospital death within 1 and 3 months of visit, calculated together. Inputs are checked automatically and gaps reported.' : '就診後 1 個月與 3 個月內北榮院內死亡，一次算出；執行時自動檢查資料，缺漏會顯示提醒。'}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">{en ? 'Risk of death within 1 and 3 months of the visit, calculated together. Inputs are checked automatically and gaps reported.' : '就診後 1 個月與 3 個月內死亡風險，一次算出；執行時自動檢查資料，缺漏會顯示提醒。'}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
             <span aria-live="polite" aria-atomic="true" className="text-right text-xs text-muted-foreground">{scores.length ? scores.map(({ claim, score }) => <span key={claim} className="block tabular-nums">{hfHorizon(claim, en)} <span className="font-semibold text-foreground">{hfPercentage(score!.probability, locale)}</span></span>) : state.busy ? (en ? 'Processing…' : '處理中…') : (en ? 'Not calculated' : '尚未計算')}</span>
