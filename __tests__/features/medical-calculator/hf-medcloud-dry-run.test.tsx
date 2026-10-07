@@ -652,3 +652,38 @@ it('keeps the newer record when an older preparation finishes late', async () =>
   expect(screen.getByRole('combobox', { name: '門診基準日／院所' })).toBeVisible()
   expect(screen.queryByText('資料已切換，請重新整理輸入')).toBeNull()
 })
+it('stops every horizon as soon as one loses authorization', async () => {
+  process.env.NEXT_PUBLIC_HF_AUTH_POLICY = 'intranet'
+  let finishThreeMonths!: (value: HfDryRunResult) => void
+  jest.mocked(requestHfDryRun).mockImplementation(input => input.claim === 'P1_CD_mortality_3m'
+    ? new Promise(resolve => { finishThreeMonths = resolve })
+    : Promise.reject(new Error('gateway-unauthorized')))
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  run()
+  expect(await screen.findByText('院內服務拒絕存取；請確認核准網段與入口設定。')).toBeVisible()
+  const threeMonthSignal = jest.mocked(requestHfDryRun).mock.calls.find(call => call[0].claim === 'P1_CD_mortality_3m')![1].signal
+  expect(threeMonthSignal.aborted).toBe(true)
+  await act(async () => finishThreeMonths(accepted))
+  expect(requestHfPrediction).not.toHaveBeenCalled()
+  expect(screen.queryByTestId('hf-result-P1_CD_mortality_3m')).toBeNull()
+})
+it('shows the cohort behind the observed incidence', async () => {
+  jest.mocked(requestHfPrediction).mockImplementation(async input => ({ ...scoreFor(input) as typeof predicted,
+    observedIncidence: { rate: 0.0268, ciLow: 0.023, ciHigh: 0.0313, tierShare: 0.46, patients: 5848, basis: 'Synthetic cohort 2020–2025; frozen calibration' } }))
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  run()
+  const column = await screen.findByTestId('hf-result-P1_CD_mortality_1m')
+  expect(await within(column).findByText('依據族群：Synthetic cohort 2020–2025; frozen calibration')).toBeVisible()
+})
+it('keeps completed checks when both predictions fail the same way', async () => {
+  jest.mocked(requestHfPrediction).mockRejectedValue(new Error('gateway-unavailable'))
+  jest.mocked(requestHfDryRun).mockResolvedValue({ verdict: 'accepted', issues: [{ severity: 'warning', code: 'business-rule', text: 'Synthetic check warning' }] })
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  run()
+  expect(await screen.findAllByText('無法完成檢查，請確認院內連線後重試')).toHaveLength(1)
+  expect(screen.getByText('輸入檢查通過，但有資料警告；請核對下列缺漏。')).toBeVisible()
+  expect(screen.getByText('Synthetic check warning')).toBeVisible()
+})

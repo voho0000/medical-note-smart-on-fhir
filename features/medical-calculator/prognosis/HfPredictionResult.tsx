@@ -59,6 +59,7 @@ function ClaimColumn({ claim, run, busy, locale, describeError }: { claim: HfDry
       {score.observedIncidence && <div className="space-y-0.5 border-t border-border pt-2 text-xs">
         <p><span className="font-semibold">{en ? 'Observed rate in this tier' : '同層實際發生率'}</span>　<span className="tabular-nums">{hfPercentage(score.observedIncidence.rate, locale)}（95% CI {hfPercentage(score.observedIncidence.ciLow, locale)}–{hfPercentage(score.observedIncidence.ciHigh, locale)}）</span></p>
         <p className="break-words text-muted-foreground">{en ? 'Group rate, not an individual probability' : '群體發生率，非個人機率'} · n={score.observedIncidence.patients}</p>
+        <p className="break-words text-muted-foreground">{en ? 'Cohort' : '依據族群'}：{score.observedIncidence.basis}</p>
       </div>}
     </> : refusal ? <div className="space-y-1">
       <p className="text-sm font-semibold text-destructive">{en ? 'Insufficient or incompatible data; unable to assess' : '資料不足或不相容，無法評估'}</p>

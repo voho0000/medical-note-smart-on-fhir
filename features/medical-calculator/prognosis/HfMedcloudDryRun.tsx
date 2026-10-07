@@ -237,7 +237,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
 
     <div role="status" aria-live="polite" className="space-y-2 text-sm">
       {visibleMessage && visibleMessage !== 'physician-diagnosis-rank-conflict' && <p className="font-medium">{describeError(visibleMessage)}</p>}
-      {runs && current && <section aria-label={en ? 'HF model prediction' : 'HF 模型預測結果'} className="space-y-3 rounded-lg border border-border bg-background p-3">
+      {runs && current && (busy || Object.values(runs).some(run => run?.check || run?.prediction || run?.error)) && <section aria-label={en ? 'HF model prediction' : 'HF 模型預測結果'} className="space-y-3 rounded-lg border border-border bg-background p-3">
         <div className="space-y-0.5">
           <h4 className="text-base font-semibold">{en ? 'TVGH in-hospital death risk' : '北榮院內死亡風險'}</h4>
           <p className="text-xs text-muted-foreground tabular-nums">{en ? 'Index visit' : '基準門診'} {current.input.indexDate} · {hospital}</p>

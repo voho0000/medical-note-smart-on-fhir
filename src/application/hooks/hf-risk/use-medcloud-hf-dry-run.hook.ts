@@ -144,15 +144,24 @@ export function useMedcloudHfDryRun() {
         if (stillCurrent()) update(claim, { prediction: value })
         return null
       } catch (error) {
-        return error instanceof Error ? error.message : 'gateway-unavailable'
+        const code = error instanceof Error ? error.message : 'gateway-unavailable'
+        // Lost authorization stops every horizon at once, before the other can still score.
+        if (code === 'gateway-unauthorized' && stillCurrent()) {
+          abort.abort()
+          setRun(null)
+          setMessage({ importId: snapshot.importId, code })
+        }
+        return code
       }
     }
     const runAll = async (options: HfRequestOptions, checkAuthorization: () => Promise<void>) => {
       const errors = await Promise.all(HF_DRY_RUN_CLAIMS.map(claim => runClaim(claim, options, checkAuthorization)))
       if (!stillCurrent()) return
-      if (errors.includes('gateway-unauthorized')) throw new Error('gateway-unauthorized')
-      // A failure shared by every horizon is one problem; show it once.
-      if (errors.every(code => code && code === errors[0])) throw new Error(errors[0]!)
+      // A failure shared by every horizon is one problem; show it once and keep any completed checks.
+      if (errors.every(code => code && code === errors[0])) {
+        setMessage({ importId: snapshot.importId, code: errors[0]! })
+        return
+      }
       HF_DRY_RUN_CLAIMS.forEach((claim, index) => { if (errors[index]) update(claim, { error: errors[index]! }) })
     }
     try {
