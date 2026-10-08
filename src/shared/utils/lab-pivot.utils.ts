@@ -703,8 +703,8 @@ export function getLabPivotTestIdentity(
   //      label so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
-  // A 免疫 order display names the whole multi-analyte order (「特異過敏原免疫
-  // 檢驗」 for every allergen), never the analyte in this column.
+  // A 免疫 order display names the whole multi-analyte order (「可抽出的核抗體
+  // 測定— Ro/La 抗體」 for SS-A, SS-B and Ro52), never the analyte in this column.
   const candidateDisplay = (categoryId !== 'immuno' && nhiDisplay) || rawDisplay
   const isCanonical = CANONICAL_KEYS.has(testKey) || !!APP_CANONICAL_DISPLAY[testKey]
   const canonicalDisplay = APP_CANONICAL_DISPLAY[testKey] || CANONICAL_DISPLAY[testKey] || testKey
@@ -764,9 +764,6 @@ export function buildLabPivots(
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
     const trendAvailability = new Map<string, TrendAvailabilityStats>()
-    // NHI order codes seen per row, for subgroups that also claim rows by
-    // order (LabSubgroup.nhiOrderCodes).
-    const rowNhiCodes = new Map<string, Set<string>>()
 
     for (const obs of obsList) {
       // Cumulative display preference only. Preserve every original resource;
@@ -800,12 +797,6 @@ export function buildLabPivots(
         }
       }
       const row = testMap.get(mapKey)!
-      const rowNhiCode = nhiOrderCode(obs)
-      if (rowNhiCode) {
-        const codes = rowNhiCodes.get(mapKey) ?? new Set<string>()
-        codes.add(rowNhiCode)
-        rowNhiCodes.set(mapKey, codes)
-      }
 
       // Cumulative-report-only unit normalisation: some analytes come through with
       // the same unit at different scales across hospitals (WBC "5 K/µL" vs raw
@@ -1000,7 +991,6 @@ export function buildLabPivots(
       }
       for (const row of testMap.values()) {
         row.subgroupId = memberToGroup.get(row.testKey)
-          ?? cat.subgroups.find((sg) => sg.nhiOrderCodes?.some((code) => rowNhiCodes.get(row.mapKey)?.has(code)))?.id
       }
     }
 

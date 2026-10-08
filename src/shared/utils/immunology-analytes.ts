@@ -1,5 +1,6 @@
 // 免疫 (immunology) analytes for the cumulative report: immunoglobulins and
-// complement, autoantibodies, and specific-allergen IgE.
+// complement, and autoantibodies. Specific-allergen IgE (30022C) is kept OUT
+// of the cumulative report altogether for now (owner decision 2026-10-08).
 //
 // Field report LDR-20261008-28256AA6 (臺北榮總 via 雲端病歷): IgG, IgA, IgM,
 // C3, C4 and RF had no panel and fell to 「其他」; line-blot autoantibodies
@@ -8,16 +9,14 @@
 // culture.
 //
 // Several NHI orders bill MORE THAN ONE analyte (12064B = SS-A + SS-B + Ro52,
-// 12173B = Sm + RNP, 12137B = a myositis line blot, 30022C = one row per
-// allergen). The order code therefore decides only the CATEGORY; the column
-// always comes from the analyte — its LOINC, or its own item name.
+// 12173B = Sm + RNP, 12137B = a myositis line blot). The order code therefore
+// decides only the CATEGORY; the column always comes from the analyte — its
+// LOINC, or its own item name. A name alone is enough when it is unambiguous
+// ("IgG1", "SS-A/Ro Ab"), whatever order code the hospital billed it under.
 //
 // Every LOINC below was looked up on 2026-10-08 in the NLM Clinical Table
 // Search LOINC index (clinicaltables.nlm.nih.gov/api/loinc_items, LOINC_NUM
-// and LONG_COMMON_NAME quoted in the comment). Allergen LOINCs are listed for
-// categorisation only: an allergen keeps the hospital's own name as its
-// column, because the Taiwan 30022C mixes (混合花粉, 混合黴菌, 混合動物皮毛)
-// have no single LOINC equivalent.
+// and LONG_COMMON_NAME quoted in the comment).
 
 /** Canonical column key → column header (same text in zh-TW and en). */
 export const IMMUNOLOGY_DISPLAY: Readonly<Record<string, string>> = {
@@ -66,14 +65,15 @@ export const AUTOANTIBODY_KEYS = [
   'ANTI-KU', 'ANTI-KI', 'ANTI-PM-SCL100', 'ANTI-PM-SCL75', 'AMA',
 ]
 
-/** 30022C allergen item names as hospitals print them. The column is the
- *  name itself; this list only places it in 免疫 and in the 過敏原 subgroup
- *  when the row carries no NHI code. 「屋塵璊」 is the source's own spelling. */
+/** 30022C allergen item names as hospitals print them, used only to keep an
+ *  allergen row that arrives WITHOUT its 30022C code out of the cumulative
+ *  report (and out of 微生物: 混合黴菌 is not a fungal culture). 「屋塵璊」 is
+ *  the source's own spelling. */
 export const ALLERGEN_NAMES = [
   '混合花粉', '屋塵璊', '屋塵蟎', '塵蟎', '德國蟑螂', '美國蟑螂', '蟑螂', '混合動物皮毛',
   '貓毛', '貓皮屑', '狗毛', '狗皮屑', '混合黴菌',
   // Deliberately NOT here: food allergens such as 蛋白 (egg white), whose
-  // bare name is also 「protein」. Those rows reach 免疫 by their 30022C code.
+  // bare name is also 「protein」. Those rows are recognised by their 30022C code.
 ]
 
 /** Analyte LOINC → canonical key. IgG 2465-3, IgA 2458-8, IgM 2472-9 and ANA
@@ -139,12 +139,9 @@ export const IMMUNOLOGY_LOINC_TO_KEY: Readonly<Record<string, string>> = {
   '107562-1': 'ANTI-TIF1G', // TIF1-gamma Ab [Presence] in Serum or Plasma
 }
 
-/** Allergen-specific IgE LOINCs — category only, the column stays the name. */
-export const ALLERGEN_LOINCS = [
-  '6833-8', // Cat dander IgE Ab [Units/volume] in Serum
-  '6098-8', // Dog dander IgE Ab [Units/volume] in Serum
-  '6078-0', // Cockroach IgE Ab [Units/volume] in Serum (mapper 0.1.6: 德國蟑螂)
-]
+/** 特異過敏原免疫檢驗 — specific allergen IgE, one row per allergen. Kept out
+ *  of the cumulative report (see ALLERGEN_NAMES). */
+export const SPECIFIC_ALLERGEN_NHI_ORDER_CODES = ['30022C']
 
 /** LOINCs that clinical-lab-normalization already maps (IGG/IGA/IGM/ANA). */
 export const PACKAGE_IMMUNOLOGY_LOINCS = [
@@ -180,8 +177,38 @@ export const IMMUNOLOGY_NHI_ORDER_CODES = [
   '12154B', // ENA Jo-1
   '12155B', // ENA Ki/Ku
   '12173B', // ENA Sm/RNP
-  '30022C', // 特異過敏原免疫檢驗 (specific allergen IgE)
 ]
+
+/**
+ * Orders under which an immunology-looking NAME is NOT the immunology
+ * analyte, so a name match into 免疫 is refused:
+ * - 12103B 免疫電泳 / immunofixation: an 「IgG」 row there is a monoclonal band
+ * - 12160B 免疫球蛋白κ/λ: free light chains
+ * and whole NHI sections whose rows reuse these names for another test:
+ * 06 尿液, 07 糞便, 08 血液, 11 血庫 (antibody screen / Coombs IgG), 13 微生物,
+ * 14 病毒血清 (CMV / EBV IgG and IgM).
+ */
+export const IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES = ['12103B', '12160B']
+export const IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS = ['06', '07', '08', '11', '13', '14']
+
+/** Words in a row's name or order display that place an immunology-looking
+ *  name in another test: electrophoresis / immunofixation, light chains,
+ *  a non-serum fluid, or an infection serology. */
+export const IMMUNOLOGY_NAME_DENIED_CONTEXT =
+  /IMMUNOFIXATION|\bIFE\b|ELECTROPHORESIS|電泳|免疫固定|LIGHT\s*CHAIN|輕鏈|\bKAPPA\b|\bLAMBDA\b|Κ|Λ|\bFLC\b|\bCSF\b|腦脊髓|URINE|尿|PLEURAL|胸水|ASCITES|腹水|SYNOVIAL|關節液|\bCMV\b|\bEBV\b|\bHSV\b|\bVZV\b|RUBELLA|TOXOPLASM|MYCOPLASMA|黴漿菌|\bHAV\b|\bHBC\b|COOMBS/
+
+/** Bare short names that are immunology only in an immunology context — an
+ *  immunology order, an ENA / blot / autoantibody word nearby, or a
+ *  qualified spelling ("Ku Ab", "anti-Ku", "Rheumatoid factor"). Bare
+ *  "C3" / "C4" are accepted: the names are matched whole, so C3d, C3NeF or
+ *  C4d never reach the C3 / C4 columns. */
+export const AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES = new Set([
+  'RF', 'KU', 'KI', 'EJ', 'OJ', 'SM', 'RNP', 'SRP', 'SRP54', 'SSA', 'SSB',
+])
+
+/** Words that supply that context. */
+export const IMMUNOLOGY_NAME_CONTEXT =
+  /\bENA\b|EXTRACTABLE|可抽出|核抗體|BLOT|MYOSITIS|肌肉炎|肌炎|AUTO-?\s*ANTIBOD|自體抗體|ANTI-?\s*NUCLEAR|RHEUMATOID|類風濕|SJOGREN|乾燥/
 
 /** Item-name spellings → canonical key. Keys are NFKC + upper case with
  *  single spaces. Looked up by the full name, by the name before any
@@ -191,10 +218,9 @@ export const IMMUNOLOGY_TEXT_TO_KEY: Readonly<Record<string, string>> = {
   IGA: 'IGA', 'IMMUNOGLOBULIN A': 'IGA', '免疫球蛋白A': 'IGA',
   IGM: 'IGM', 'IMMUNOGLOBULIN M': 'IGM', '免疫球蛋白M': 'IGM',
   IGE: 'IGE', 'TOTAL IGE': 'IGE', 'IMMUNOGLOBULIN E': 'IGE', '免疫球蛋白E': 'IGE',
-  IGG1: 'IGG1', 'IGG 1': 'IGG1', 'IGG SUBCLASS 1': 'IGG1',
-  IGG2: 'IGG2', 'IGG 2': 'IGG2', 'IGG SUBCLASS 2': 'IGG2',
-  IGG3: 'IGG3', 'IGG 3': 'IGG3', 'IGG SUBCLASS 3': 'IGG3',
-  IGG4: 'IGG4', 'IGG 4': 'IGG4', 'IGG SUBCLASS 4': 'IGG4',
+  // IgG subclasses: also any "IgG 1" / "IgG-1" / "IgG subclass 1" /
+  // 「IgG1亞型」 / 「免疫球蛋白G4」 spelling, by IGG_SUBCLASS_RE below.
+  IGG1: 'IGG1', IGG2: 'IGG2', IGG3: 'IGG3', IGG4: 'IGG4',
   C3: 'C3', 'COMPLEMENT C3': 'C3', '補體3': 'C3', '補體C3': 'C3', '補體 C3': 'C3',
   C4: 'C4', 'COMPLEMENT C4': 'C4', '補體4': 'C4', '補體C4': 'C4', '補體 C4': 'C4',
   RF: 'RF', 'RA FACTOR': 'RF', 'RHEUMATOID FACTOR': 'RF', '類風濕性關節炎因子': 'RF', '類風濕因子': 'RF',
@@ -248,14 +274,29 @@ function nameVariants(name: string): string[] {
   return [...new Set(variants.filter(Boolean))]
 }
 
-/** Canonical immunology key for one source name, or null. */
-export function immunologyKeyFromName(name: string | undefined | null): string | null {
+// IgG subclass n in any of the spellings hospitals print: IgG1, IgG 1,
+// IgG-1, IgG subclass 1, IgG1 subclass, IgG1亞型, IgG 1 次分類, 免疫球蛋白G1,
+// 免疫球蛋白 G4 量. Anchored so 「IgG/Alb」, 「IgG index」 or 「IgG4-RD」 do not match.
+const IGG_SUBCLASS_RE =
+  /^(?:IGG|免疫球蛋白\s*G)\s*(?:SUBCLASS\s*|-\s*)?([1-4])(?:\s*(?:SUBCLASS|亞型|亞類|次分類|量))?$/
+
+/** Canonical immunology key for one source name, with whether the spelling
+ *  that matched is a bare ambiguous short name (see
+ *  AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES). Null when nothing matches. */
+export function immunologyNameMatch(name: string | undefined | null): { key: string; ambiguous: boolean } | null {
   if (!name) return null
   for (const variant of nameVariants(name)) {
     const key = IMMUNOLOGY_TEXT_TO_KEY[variant]
-    if (key) return key
+    if (key) return { key, ambiguous: AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES.has(variant) }
+    const subclass = variant.match(IGG_SUBCLASS_RE)
+    if (subclass) return { key: `IGG${subclass[1]}`, ambiguous: false }
   }
   return null
+}
+
+/** Canonical immunology key for one source name, or null. */
+export function immunologyKeyFromName(name: string | undefined | null): string | null {
+  return immunologyNameMatch(name)?.key ?? null
 }
 
 const ALLERGEN_NAME_SET = new Set(ALLERGEN_NAMES.map(normalizeImmunologyName))

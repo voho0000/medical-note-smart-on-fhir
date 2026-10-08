@@ -16,15 +16,19 @@ import { FHIR_SYSTEM_FRAGMENTS } from '@/src/shared/constants/fhir-systems.const
 import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 import {
-  ALLERGEN_LOINCS,
-  ALLERGEN_NAMES,
   AUTOANTIBODY_KEYS,
   IMMUNOGLOBULIN_KEYS,
   IMMUNOLOGY_LOINC_TO_KEY,
   IMMUNOLOGY_NHI_ORDER_CODES,
   IMMUNOLOGY_TEXT_TO_KEY,
+  IMMUNOLOGY_NAME_CONTEXT,
+  IMMUNOLOGY_NAME_DENIED_CONTEXT,
+  IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES,
+  IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS,
   immunologyKeyFromName,
+  immunologyNameMatch,
   isAllergenName,
+  SPECIFIC_ALLERGEN_NHI_ORDER_CODES,
   PACKAGE_IMMUNOLOGY_LOINCS,
 } from '@/src/shared/utils/immunology-analytes'
 
@@ -34,10 +38,6 @@ export interface LabSubgroup {
   /** Canonical row keys (uppercase) that belong to this subgroup.
    *  Match against pickKey() result in useLabPivot. */
   members: string[]
-  /** A row that is not a member of any subgroup joins this one when one of
-   *  its observations carries one of these NHI 醫令 codes (e.g. a 30022C
-   *  allergen whose hospital name is not in `members`). */
-  nhiOrderCodes?: string[]
 }
 
 export interface LabCategory {
@@ -320,40 +320,37 @@ export const LAB_CATEGORIES: LabCategory[] = [
     pinnedColumns: ['AFP', 'CEA', 'CA-199', 'CA-125', 'CA-153', 'PSA', 'FERRITIN'],
   },
   {
-    // 免疫 — immunoglobulins and complement, autoantibodies, and specific
-    // allergen IgE (field report LDR-20261008-28256AA6). Analyte data live in
-    // immunology-analytes.ts.
+    // 免疫 — immunoglobulins and complement, and autoantibodies (field report
+    // LDR-20261008-28256AA6). Analyte data live in immunology-analytes.ts.
+    // Specific-allergen IgE (30022C) is deliberately NOT here: it is kept out
+    // of the cumulative report altogether (see isExcludedFromCumulativeReport).
     //
     // A secondary sub-tab, like 血氣 and 病毒抗原: these are rheumatology /
     // allergy work-ups ordered for a minority of patients, so on a narrow
     // routine-outpatient tab strip they wait behind 「查看更多」 instead of
     // pushing a routine panel out of view. The tab still appears directly
     // whenever the strip has room, and 直式 always shows it as a section.
-    // Nothing is pinned: an empty IgG/C3 stub beside an allergy-only work-up
+    // Nothing is pinned: an empty IgG/C3 stub beside an ANA-only work-up
     // would be noise.
     //
     // CRP stays in 生化 › 發炎/感染 (an acute-phase reactant read with PCT /
     // ESR, not an immune-status test), although NHI bills it as 12015C.
     id: 'immuno',
     hiddenByDefault: true,
-    preferredOrder: [...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS, ...ALLERGEN_NAMES],
-    codes: [...Object.keys(IMMUNOLOGY_TEXT_TO_KEY), ...ALLERGEN_NAMES],
+    preferredOrder: [...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS],
+    codes: Object.keys(IMMUNOLOGY_TEXT_TO_KEY),
     loincCodes: [
       ...PACKAGE_IMMUNOLOGY_LOINCS,
       ...Object.keys(IMMUNOLOGY_LOINC_TO_KEY),
-      ...ALLERGEN_LOINCS,
     ],
     nhiOrderCodes: IMMUNOLOGY_NHI_ORDER_CODES,
     subgroups: [
       { id: 'immunoglobulin', members: IMMUNOGLOBULIN_KEYS },
       { id: 'autoantibody', members: AUTOANTIBODY_KEYS },
-      // Allergens keep the hospital's own name as their column; a 30022C row
-      // whose name is not listed still joins this subgroup by its order code.
-      { id: 'allergen', members: ALLERGEN_NAMES, nhiOrderCodes: ['30022C'] },
     ],
-    // 直式: the immunoglobulin/complement table, then autoantibodies with the
-    // allergens below them, so neither needs a horizontal scroll.
-    stackedPanels: [['immunoglobulin'], ['autoantibody', 'allergen']],
+    // 直式: the immunoglobulin/complement table, then the autoantibodies, so
+    // neither needs a horizontal scroll.
+    stackedPanels: [['immunoglobulin'], ['autoantibody']],
   },
   {
     id: 'urine',
@@ -692,6 +689,9 @@ const CATEGORY_NHI_SECTIONS: Record<string, string[]> = {
 const NHI_ORDER_SYSTEM_FRAGMENTS = [
   FHIR_SYSTEM_FRAGMENTS.NHI_MEDICAL_ORDER_CODE,
   'medical-service-payment-tw',
+  // Older cached bundles; the pivot (getNhiLabCode) already reads both.
+  'nhi-lab-code',
+  'nhi.lab.code',
 ]
 
 /** The observation's NHI 醫令 code (upper case), whichever bridge wrote it. */
@@ -724,6 +724,67 @@ function hasUrineNameOutsideSection06(obs: any): boolean {
 }
 
 const IMMUNOLOGY_ORDER_SET = new Set(IMMUNOLOGY_NHI_ORDER_CODES)
+const IMMUNOLOGY_NAME_DENIED_ORDER_SET = new Set(IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES)
+const SPECIFIC_ALLERGEN_ORDER_SET = new Set(SPECIFIC_ALLERGEN_NHI_ORDER_CODES)
+
+/** The row's own names: code.text and every non-NHI coding's code and
+ *  display (the NHI display names the whole order, not this analyte). */
+function ownNames(obs: any): string[] {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  return [
+    obs?.code?.text,
+    ...codings
+      .filter((c: any) => !NHI_ORDER_SYSTEM_FRAGMENTS.some((f) => String(c?.system ?? '').includes(f)))
+      .flatMap((c: any) => [c?.code, c?.display]),
+  ].filter((name): name is string => typeof name === 'string' && !!name.trim())
+}
+
+/**
+ * Specific-allergen IgE (NHI 30022C 特異過敏原免疫檢驗, or a row named like
+ * one of its allergens) is kept OUT of the cumulative report for now — not
+ * 免疫, not 其他, not 微生物 (owner decision 2026-10-08). It uses the same
+ * mechanism as every other row the report leaves out: no category. Such a
+ * row stays in the per-report 檢驗 list, is not sent in a lab-data problem
+ * report (which carries only categorised rows), and is skipped wherever a
+ * consumer requires a category (cumulative pivot, IPS export, AI category
+ * queries). See categorizeObservationWithReason's 'excluded'.
+ */
+export function isExcludedFromCumulativeReport(obs: any): boolean {
+  const nhi = nhiOrderCode(obs)
+  if (nhi && SPECIFIC_ALLERGEN_ORDER_SET.has(nhi)) return true
+  return ownNames(obs).some((name) => isAllergenName(name))
+}
+
+/**
+ * May an immunology-looking NAME place this row in 免疫? A denylist, not an
+ * allowlist of orders: an unambiguous name ("IgG1", "SS-A/Ro Ab", "IgG
+ * subclass 1") counts under any order code, an unknown one or none, unless
+ * - the order is one whose rows reuse these names for another test
+ *   (immunofixation 12103B, light chains 12160B) or sits in a section that
+ *   does (06 尿液, 07 糞便, 08 血液, 11 血庫, 13 微生物, 14 病毒血清);
+ * - the names say electrophoresis / light chain / a non-serum fluid / an
+ *   infection serology ("CSF IgG", "CMV IgG");
+ * - the only match is a bare short name (RF, Ku, Ki, EJ, OJ, Sm, RNP, SRP,
+ *   SSA, SSB) with no immunology context: an immunology order, an ENA / blot
+ *   / autoantibody word in the names or order display, or a qualified
+ *   spelling ("Ku Ab", "anti-Ku", "Rheumatoid factor").
+ * Rows under an immunology order never get here — Pass 2.5 places them.
+ */
+function immunologyNameAllowed(obs: any): boolean {
+  const nhi = nhiOrderCode(obs)
+  if (nhi && (IMMUNOLOGY_NAME_DENIED_ORDER_SET.has(nhi)
+    || IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS.some((section) => nhi.startsWith(section)))) return false
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const context = [obs?.code?.text, ...codings.map((c: any) => c?.display)]
+    .filter((text): text is string => typeof text === 'string')
+    .map(normalize)
+    .join(' ')
+  if (IMMUNOLOGY_NAME_DENIED_CONTEXT.test(context)) return false
+  const matches = ownNames(obs).map((name) => immunologyNameMatch(name))
+  if (matches.some((match) => match && !match.ambiguous)) return true
+  if (!matches.some((match) => match)) return false
+  return (!!nhi && IMMUNOLOGY_ORDER_SET.has(nhi)) || IMMUNOLOGY_NAME_CONTEXT.test(context)
+}
 
 // A NAME-based category match is rejected when the obs carries an NHI code from
 // a section incompatible with that category — so a 13xxx microbiology row can't
@@ -739,12 +800,9 @@ function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
   if (cat.id === 'glucose' && isQualitativeResult(obs)) return false
 
   const nhi = nhiOrderCode(obs)
-  // 免疫 names are short and generic ("IgG", "C3", "Sm", "Ku"). An NHI-coded
-  // row may take one only under an immunology order — those are already
-  // placed by Pass 2.5, so in practice a name places only uncoded rows. This
-  // keeps e.g. an immunofixation 「IgG」 band (12103B) or a CMV 「IgG」 out of
-  // the quantitative IgG column.
-  if (cat.id === 'immuno') return !nhi || IMMUNOLOGY_ORDER_SET.has(nhi)
+  // 免疫 names are short and generic ("IgG", "C3", "Sm", "Ku"): see
+  // immunologyNameAllowed for the contexts that refuse them.
+  if (cat.id === 'immuno') return immunologyNameAllowed(obs)
 
   const sections = CATEGORY_NHI_SECTIONS[cat.id]
   if (!sections) return true
@@ -762,7 +820,6 @@ export type LabCategoryDecision =
   | 'specimen-urine'      // Pass 1, specimen says urine
   | 'specimen-non-blood'  // Pass 1, non-blood specimen → 其他 catch-all (or none)
   | 'loinc'               // Pass 2
-  | 'nhi-order'           // Pass 2.5, the NHI 醫令 order code alone (免疫)
   | 'code'                // Pass 3
   | 'display'             // Pass 4
   | 'canonical'           // Pass 4.5
@@ -770,6 +827,7 @@ export type LabCategoryDecision =
   | 'qualitative'         // Pass 6
   | 'fallback'            // no pass matched → 其他 catch-all (or none)
   | 'none'                // no observation
+  | 'excluded'            // deliberately left out of the report (30022C allergens); never sent
 
 export interface LabCategoryResult {
   category: LabCategory | null
@@ -806,7 +864,9 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // Pass ordering — refactored 2026-05-29 (v0.13.0 audit):
   //   1. Specimen-based routing      (authoritative boundary between blood/urine/other)
   //   2. LOINC against cat.loincCodes (authoritative analyte identifier)
-  //   2.5 NHI order code against cat.nhiOrderCodes (2026-10-08, 免疫)
+  //   2.5 NHI order code against cat.nhiOrderCodes (2026-10-08, 免疫;
+  //       reported as 'code' — the lab-data report Function's decision enum
+  //       is fixed, see firebase-smart-on-fhir lab-data-report/schema.ts)
   //   3. Exact short-code match against cat.codes (VGH/local short codes)
   //   4. Stripped-display match  (handles "Serum TSH(ECLIA)" → "TSH")
   //   5. Text-based urine fallback (only when 1–4 missed)
@@ -823,6 +883,11 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // and the text 'HbA1c' / 'HB-A1C' / 'GLYCATED' all match glucose.codes
   // entries via Pass 3/4 below.
 
+  // ── Excluded rows: specific-allergen IgE (see isExcludedFromCumulativeReport)
+  // Before microbiology, so 混合黴菌 (mixed moulds IgE) can never be filed
+  // as a fungal culture.
+  if (isExcludedFromCumulativeReport(obs)) return { category: null, decidedBy: 'excluded' }
+
   // ── Pass 0: microbiology, by TEST rather than specimen ─────────────────
   // Runs first on purpose. A culture is microbiology whatever it was grown
   // from, so specimen routing below must not claim a urine culture for 尿液 or
@@ -836,11 +901,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // Penicillium specific-IgE belongs outside the microbiology report.
   const nhiCode = nhiOrderCode(obs)
   const isMicrobiologyNhiOrder = !!nhiCode && MICROBIOLOGY_NHI_ORDER_CODES.has(nhiCode)
-  // A specific-allergen name (混合黴菌 = mixed moulds IgE) is not a fungal
-  // culture even when the row arrives with no NHI code to say so.
-  const allowsMicrobiologyNameMatch = (!nhiCode || nhiCode.startsWith('13'))
-    && ![obs.code?.text, ...codings.map((c: any) => c?.display), ...codings.map((c: any) => c?.code)]
-      .some((name) => isAllergenName(name))
+  const allowsMicrobiologyNameMatch = !nhiCode || nhiCode.startsWith('13')
   const isMicrobiologyName = allowsMicrobiologyNameMatch &&
     MICROBIOLOGY_NAME_PATTERNS.some((pattern) => pattern.test(fullText) || pattern.test(textNorm))
   if (
@@ -885,7 +946,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // analyte's own name, because one order bills several analytes.
   if (nhiCode) {
     for (const { category: cat, nhiOrderCodes } of CATEGORY_MATCHERS) {
-      if (nhiOrderCodes.has(nhiCode)) return { category: cat, decidedBy: 'nhi-order' }
+      if (nhiOrderCodes.has(nhiCode)) return { category: cat, decidedBy: 'code' }
     }
   }
 

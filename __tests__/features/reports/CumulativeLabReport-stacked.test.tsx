@@ -75,7 +75,7 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
     expect(within(section('serology')!).getByRole('heading', { name: /病毒抗原/ })).toBeInTheDocument()
   })
 
-  it('renders 免疫 as two tables: immunoglobulins, then autoantibodies above allergens', () => {
+  it('renders 免疫 as two tables, immunoglobulins then autoantibodies, and no allergen anywhere', () => {
     const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw'
     const row = (id: string, nhi: string, text: string, value: string | number) => ({
       id,
@@ -102,11 +102,10 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
     expect(tables[1]).toHaveTextContent('自體抗體')
     expect(tables[1]).toHaveTextContent('SS-A/Ro')
     expect(tables[1]).toHaveTextContent('Ro52')
-    expect(tables[1]).toHaveTextContent('過敏原')
-    expect(tables[1]).toHaveTextContent('混合黴菌')
-    // Neither the line-blot Negative nor the mould allergen leaks elsewhere.
+    // The line-blot Negative does not leak into 尿液, and the 30022C mould
+    // allergen is in no section at all.
     expect(section('urine')!.querySelector('table')).toBeNull()
-    expect(section('microbio')!).not.toHaveTextContent('混合黴菌')
+    expect(document.body).not.toHaveTextContent('混合黴菌')
   })
 
   it('renders a compact expected-columns line for a category with no data', () => {
