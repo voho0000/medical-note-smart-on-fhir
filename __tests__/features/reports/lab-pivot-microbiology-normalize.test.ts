@@ -368,9 +368,11 @@ describe('buildLabPivots — microbiology name normalization', () => {
     const pivots = buildLabPivots(observations)
 
     expect(pivots.microbio.rows.filter((row) => row.values.size > 0)).toEqual([])
-    expect(pivots.other.rows.map((row) => row.displayName)).toEqual([
-      'Alternaria tenuis 交錯黴菌',
-      'Penicillium 青黴菌',
+    // Specific-allergen IgE (30022C) now has its own home: 免疫 › 過敏原,
+    // one column per allergen, joined to the subgroup by its order code.
+    expect(pivots.immuno.rows.map((row) => [row.displayName, row.subgroupId])).toEqual([
+      ['Alternaria tenuis 交錯黴菌', 'allergen'],
+      ['Penicillium 青黴菌', 'allergen'],
     ])
   })
 })

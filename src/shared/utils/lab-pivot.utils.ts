@@ -4,7 +4,12 @@
 // re-exports everything for existing feature/test imports.
 // Groups observations by lab category, then pivots into test (row) × date (column).
 // Groups observations by lab category, then pivots into test (row) × date (column).
-import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, nhiOrderCode, type LabCategory } from '@/src/shared/utils/lab-categories'
+import {
+  IMMUNOLOGY_DISPLAY,
+  IMMUNOLOGY_LOINC_TO_KEY,
+  immunologyKeyFromName,
+} from '@/src/shared/utils/immunology-analytes'
 import {
   CANONICAL_KEYS,
   CANONICAL_DISPLAY,
@@ -375,6 +380,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '2514-8': 'KETONE', // Ketones [Presence] in Urine by Test strip
   '19161-9': 'UROBI', // Urobilinogen [Units/volume] in Urine by Test strip
   '24124-0': 'CASTS', // Casts [Presence] in Urine sediment by Light microscopy
+  '2890-2': 'PROT/CR RATIO', // Protein/Creatinine [Mass Ratio] in Urine
   // Its own column — not folded into RISKF, whose exact ratio definition at
   // the source hospital is unverified.
   '9830-1': 'TC/HDL RATIO', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
@@ -447,6 +453,33 @@ const URINE_SPELLINGS: Readonly<Record<string, string>> = {
   '微白蛋白/肌酐酸比值(半定量)': 'ACR',
 }
 
+/**
+ * The 免疫 column of one observation. Several analytes share one NHI order
+ * (12064B = SS-A + SS-B + Ro52; 30022C = one row per allergen), so the order
+ * code and its panel-name display are never consulted: the analyte LOINC
+ * first, then the row's own item name. Null when neither is recognised — the
+ * row then keeps its source name as its column (every allergen does).
+ */
+function immunologyAnalyteKey(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    if (coding?.system === FHIR_SYSTEMS.LOINC && IMMUNOLOGY_LOINC_TO_KEY[coding?.code]) {
+      return IMMUNOLOGY_LOINC_TO_KEY[coding.code]
+    }
+  }
+  const ownNames = [
+    obs?.code?.text,
+    ...codings
+      .filter((coding) => !nhiOrderCode({ code: { coding: [coding] } }))
+      .flatMap((coding) => [coding?.display, coding?.code]),
+  ]
+  for (const name of ownNames) {
+    const key = typeof name === 'string' ? immunologyKeyFromName(name) : null
+    if (key) return key
+  }
+  return null
+}
+
 /** A key as it lands in one panel — urine spellings folded there only. */
 export function labKeyInCategory(testKey: string, categoryId?: string): string {
   return categoryId === 'urine' ? URINE_SPELLINGS[testKey] ?? testKey : testKey
@@ -478,6 +511,8 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   CASTS: 'Casts',
   'PROT/CR RATIO': 'UPCR',
   'TC/HDL RATIO': 'TC/HDL',
+  // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
+  ...IMMUNOLOGY_DISPLAY,
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -601,6 +636,10 @@ export function getLabPivotTestIdentity(
   let testKey = labKeyInCategory(canonicalTestKey(obs), categoryId)
   let displayOverride: string | undefined
 
+  if (categoryId === 'immuno') {
+    testKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs) ?? testKey
+  }
+
   const microbiologyComponent = categoryId === 'microbio'
     ? microbiologyLocalIdentity(obs)
     : null
@@ -664,7 +703,9 @@ export function getLabPivotTestIdentity(
   //      label so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
-  const candidateDisplay = nhiDisplay || rawDisplay
+  // A 免疫 order display names the whole multi-analyte order (「特異過敏原免疫
+  // 檢驗」 for every allergen), never the analyte in this column.
+  const candidateDisplay = (categoryId !== 'immuno' && nhiDisplay) || rawDisplay
   const isCanonical = CANONICAL_KEYS.has(testKey) || !!APP_CANONICAL_DISPLAY[testKey]
   const canonicalDisplay = APP_CANONICAL_DISPLAY[testKey] || CANONICAL_DISPLAY[testKey] || testKey
   const displayName = nameMode === 'original'
@@ -723,6 +764,9 @@ export function buildLabPivots(
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
     const trendAvailability = new Map<string, TrendAvailabilityStats>()
+    // NHI order codes seen per row, for subgroups that also claim rows by
+    // order (LabSubgroup.nhiOrderCodes).
+    const rowNhiCodes = new Map<string, Set<string>>()
 
     for (const obs of obsList) {
       // Cumulative display preference only. Preserve every original resource;
@@ -756,6 +800,12 @@ export function buildLabPivots(
         }
       }
       const row = testMap.get(mapKey)!
+      const rowNhiCode = nhiOrderCode(obs)
+      if (rowNhiCode) {
+        const codes = rowNhiCodes.get(mapKey) ?? new Set<string>()
+        codes.add(rowNhiCode)
+        rowNhiCodes.set(mapKey, codes)
+      }
 
       // Cumulative-report-only unit normalisation: some analytes come through with
       // the same unit at different scales across hospitals (WBC "5 K/µL" vs raw
@@ -950,6 +1000,7 @@ export function buildLabPivots(
       }
       for (const row of testMap.values()) {
         row.subgroupId = memberToGroup.get(row.testKey)
+          ?? cat.subgroups.find((sg) => sg.nhiOrderCodes?.some((code) => rowNhiCodes.get(row.mapKey)?.has(code)))?.id
       }
     }
 
