@@ -11,7 +11,7 @@
 //  No denylist / exclusion regex needed — unrecognised tests simply fall
 //  through to `return null`.
 
-import { FHIR_SYSTEM_FRAGMENTS } from '@/src/shared/constants/fhir-systems.constants'
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 
 import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
@@ -680,32 +680,13 @@ const CATEGORY_NHI_SECTIONS: Record<string, string[]> = {
   urine: ['06'],
 }
 
-// NHI 醫令 codes arrive under more than one system URI. NHI-FHIR-Bridge (健保
-// 存摺) writes `…/CodeSystem/nhi-medical-order-code`; the 雲端病歷 (MediCloud)
-// bridge rewrites the same code to TW Core's `…/medical-service-payment-tw`.
-// Only the first was recognised, so every MediCloud lab row looked uncoded:
-// a 30022C allergen named 混合黴菌 rode the fungal-culture name rule into 微生物,
-// and a 12064B Ro52 "Negative" was read as a urine dipstick (Pass 6).
-const NHI_ORDER_SYSTEM_FRAGMENTS = [
-  FHIR_SYSTEM_FRAGMENTS.NHI_MEDICAL_ORDER_CODE,
-  'medical-service-payment-tw',
-  // Older cached bundles; the pivot (getNhiLabCode) already reads both.
-  'nhi-lab-code',
-  'nhi.lab.code',
-]
-
-/** The observation's NHI 醫令 code (upper case), whichever bridge wrote it. */
-export function nhiOrderCode(obs: any): string | null {
-  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  for (const c of codings) {
-    const system = typeof c?.system === 'string' ? c.system : ''
-    if (NHI_ORDER_SYSTEM_FRAGMENTS.some((fragment) => system.includes(fragment))) {
-      const code = typeof c?.code === 'string' ? c.code.trim().toUpperCase() : ''
-      if (code) return code
-    }
-  }
-  return null
-}
+// NHI 醫令 codes arrive under more than one system URI (健保存摺 writes
+// `…/nhi-medical-order-code`, 雲端病歷 MediCloud TW Core's
+// `…/medical-service-payment-tw`); the shared helper recognises all of them.
+// Only the first was recognised here once, so every MediCloud lab row looked
+// uncoded: a 30022C allergen named 混合黴菌 rode the fungal-culture name rule
+// into 微生物, and a 12064B Ro52 "Negative" was read as a urine dipstick.
+export { nhiOrderCode }
 
 // Spot-urine quantities and ratios are billed outside the 06 urinalysis
 // section — urine protein / creatinine under 09xxx (09040C 全蛋白 covers serum,
@@ -734,7 +715,7 @@ function ownNames(obs: any): string[] {
   return [
     obs?.code?.text,
     ...codings
-      .filter((c: any) => !NHI_ORDER_SYSTEM_FRAGMENTS.some((f) => String(c?.system ?? '').includes(f)))
+      .filter((c: any) => !isNhiOrderCodeSystem(c?.system))
       .flatMap((c: any) => [c?.code, c?.display]),
   ].filter((name): name is string => typeof name === 'string' && !!name.trim())
 }

@@ -4,7 +4,8 @@
 // re-exports everything for existing feature/test imports.
 // Groups observations by lab category, then pivots into test (row) × date (column).
 // Groups observations by lab category, then pivots into test (row) × date (column).
-import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, nhiOrderCode, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import {
   IMMUNOLOGY_DISPLAY,
   IMMUNOLOGY_LOINC_TO_KEY,
@@ -255,32 +256,19 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   }
 }
 
-// NHI system URI used by the 健康存摺 bridge
-const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
+const LEGACY_NHI_LAB_OID_SYSTEM = 'urn:oid:nhi.lab.code'
 
-// The current bridges emit the TW Core URI while older cached bundles use the
-// OID above. Match both without treating unrelated local codes as NHI orders.
-function getNhiLabCode(obs: any): string | null {
-  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  for (const coding of codings) {
-    const system = typeof coding?.system === 'string' ? coding.system.toLowerCase() : ''
-    if (system !== NHI_LAB_SYSTEM && !system.includes('nhi-medical-order-code') && !system.includes('nhi-lab-code')) {
-      continue
-    }
-    const code = typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : ''
-    if (code) return code
-  }
-  return null
-}
-
+// NHI 醫令 codes come from the shared helper (nhiOrderCode), which accepts
+// 健保存摺's `…/nhi-medical-order-code`, MediCloud's `…/medical-service-payment-tw`
+// and the legacy `urn:oid:nhi.lab.code` / `nhi-lab-code` systems alike.
 function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: string } | null {
-  const nhiCode = getNhiLabCode(obs)
+  const nhiCode = nhiOrderCode(obs)
   if (!nhiCode) return null
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const labels = [
     obs?.code?.text,
     ...codings
-      .filter((coding) => !getNhiLabCode({ code: { coding: [coding] } }))
+      .filter((coding) => !isNhiOrderCodeSystem(coding?.system))
       .flatMap((coding) => [coding?.display, coding?.code]),
   ]
     .filter((label): label is string => typeof label === 'string' && !!label.trim())
@@ -324,7 +312,7 @@ function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: st
 const MYCOBACTERIAL_CULTURE_NHI_CODES = new Set(['13012C', '13026C'])
 
 function hasNhiMycobacterialCultureEvidence(obs: any): boolean {
-  const nhiCode = getNhiLabCode(obs)
+  const nhiCode = nhiOrderCode(obs)
   if (!nhiCode || !MYCOBACTERIAL_CULTURE_NHI_CODES.has(nhiCode)) return false
 
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
@@ -470,7 +458,7 @@ function immunologyAnalyteKey(obs: any): string | null {
   const ownNames = [
     obs?.code?.text,
     ...codings
-      .filter((coding) => !nhiOrderCode({ code: { coding: [coding] } }))
+      .filter((coding) => !isNhiOrderCodeSystem(coding?.system))
       .flatMap((coding) => [coding?.display, coding?.code]),
   ]
   for (const name of ownNames) {
@@ -679,8 +667,12 @@ export function getLabPivotTestIdentity(
     displayOverride = label.display
   }
 
-  const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
-  const nhiCode = nhiCoding?.code as string | undefined
+  const nhiCode = nhiOrderCode(obs) ?? undefined
+  // The NHI display is a header fallback only for the legacy OID system. The
+  // current 健保存摺 and MediCloud systems both fall through to the row's own
+  // label: their NHI display is usually the panel name (「細菌培養鑑定檢查」
+  // for "Anaerobic #2"), which would make a misleading column header.
+  const nhiCoding = obs.code?.coding?.find((c: any) => c?.system === LEGACY_NHI_LAB_OID_SYSTEM)
   const canonicalMapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
   // The audit view must not collapse different source labels merely because
