@@ -6,6 +6,7 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import {
   IMMUNOLOGY_DISPLAY,
   IMMUNOLOGY_LOINC_TO_KEY,
@@ -448,6 +449,18 @@ const URINE_SPELLINGS: Readonly<Record<string, string>> = {
  * first, then the row's own item name. Null when neither is recognised — the
  * row then keeps its source name as its column (every allergen does).
  */
+/** The 內分泌 column of a thyroid antibody / thyroglobulin row, by its LOINC
+ *  (see thyroid-analytes.ts). Null when the row carries none of them. */
+function thyroidAnalyteKey(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    if (coding?.system === FHIR_SYSTEMS.LOINC && THYROID_LOINC_TO_KEY[coding?.code]) {
+      return THYROID_LOINC_TO_KEY[coding.code]
+    }
+  }
+  return null
+}
+
 function immunologyAnalyteKey(obs: any): string | null {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   for (const coding of codings) {
@@ -626,6 +639,14 @@ export function getLabPivotTestIdentity(
 
   if (categoryId === 'immuno') {
     testKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs) ?? testKey
+  }
+
+  if (categoryId === 'endocrine') {
+    const thyroidKey = thyroidAnalyteKey(obs)
+    if (thyroidKey) {
+      testKey = thyroidKey
+      displayOverride = THYROID_DISPLAY[thyroidKey]
+    }
   }
 
   const microbiologyComponent = categoryId === 'microbio'

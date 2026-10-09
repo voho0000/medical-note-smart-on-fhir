@@ -137,6 +137,20 @@ export const IMMUNOLOGY_LOINC_TO_KEY: Readonly<Record<string, string>> = {
   '33921-8': 'ANTI-SRP',   // Signal Recognition Particle (SRP) Ab [Presence] in Serum or Plasma
   '107563-9': 'ANTI-MDA5', // MDA5 Ab [Presence] in Serum or Plasma
   '107562-1': 'ANTI-TIF1G', // TIF1-gamma Ab [Presence] in Serum or Plasma
+  // Further codes the mapper emits, verified 2026-10-09 against tx.fhir.org
+  // (LOINC 2.82, ACTIVE) and NLM: the name-routed ANA titer without a stated
+  // IFA method, and the method-neutral quantitative twins of the myositis
+  // line-blot analytes (for numeric U/mL results).
+  '29953-7': 'ANA',         // Nuclear Ab [Titer] in Serum
+  '105551-6': 'ANTI-PL-7',  // PL-7 Ab [Units/volume] in Serum
+  '105552-4': 'ANTI-PL-12', // PL-12 Ab [Units/volume] in Serum
+  '105547-4': 'ANTI-EJ',    // Ej Ab [Units/volume] in Serum
+  '105548-2': 'ANTI-OJ',    // OJ Ab [Units/volume] in Serum
+  '53031-1': 'ANTI-SRP',    // Signal Recognition Particle (SRP) Ab [Units/volume] in Serum or Plasma
+  '105529-2': 'ANTI-MDA5',  // MDA5 Ab [Units/volume] in Serum
+  '105555-7': 'ANTI-TIF1G', // TIF1-gamma Ab [Units/volume] in Serum
+  '105528-4': 'ANTI-NXP2',  // Mj (NXP-2) Ab [Units/volume] in Serum
+  '105554-0': 'ANTI-PM-SCL100', // PM-SCL-100 Ab [Units/volume] in Serum
 }
 
 /** 特異過敏原免疫檢驗 — specific allergen IgE, one row per allergen. Kept out

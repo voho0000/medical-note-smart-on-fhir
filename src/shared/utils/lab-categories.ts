@@ -12,6 +12,7 @@
 //  through to `return null`.
 
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 
 import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
@@ -232,11 +233,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     loincCodes: [
       // Thyroid: TSH, T4, T3, FT4, FT3
       '3016-3', '11580-8', '14999-7', '3024-7', '3026-2', '3051-0', '14920-3', '14998-9',
-      // Anti-TPO, Anti-Tg, Thyroglobulin
+      // Anti-TPO, Anti-Tg, Thyroglobulin — see thyroid-analytes.ts (the
+      // former '8099-6' / '8100-2' are not LOINC codes).
       // (11572-5 used to sit here, but it is Rheumatoid factor [Units/volume]
       // in Serum or Plasma — NLM Clinical Table Search, 2026-10-08 — so an RF
       // row carrying it was filed under 內分泌. It now lives in 免疫.)
-      '8099-6', '8100-2',
+      ...Object.keys(THYROID_LOINC_TO_KEY),
       // PTH (intact), Calcium-regulating
       '2731-8', '14866-8',
       // Vitamin D
