@@ -157,10 +157,33 @@ describe('differential identity — unit family when no LOINC decides', () => {
     expect(keyOf(obs({ text: 'ANC', value: 3141, unit: '/uL' }))).toBe('ANC')
   })
 
-  it('leaves the key alone when the unit says neither (missing, /100 WBC, /HPF, mixed)', () => {
+  it('the UCUM code decides when present, as the AI value family reads it', () => {
+    // unit text that is not '%' but code '%' → percentage
+    for (const unit of ['pct', 'percent', 'per cent', '百分比', 'PCT', 'whatever']) {
+      expect(keyOf(obs({ text: 'Neutrophil', value: 61, unit, ucum: '%' }))).toBe('NEU')
+    }
+    // a count code wins over a % unit text
+    expect(keyOf(obs({ text: 'Neutrophil', value: 3.1, unit: '%', ucum: '10*3/uL' }))).toBe('ANC')
+    expect(keyOf(obs({ text: 'Neutrophil', value: 3.1, unit: 'pct', ucum: '10*3/uL' }))).toBe('ANC')
+    expect(keyOf(obs({ text: 'Lymphocyte', value: 1900, unit: 'cells', ucum: '/uL' }))).toBe('ALC')
+    // without a code the unit text decides, in the AI's spellings
+    for (const unit of ['pct', 'per cent', '百分比', 'Percent']) {
+      expect(keyOf(obs({ text: 'Neutrophil', value: 61, unit }))).toBe('NEU')
+      expect(keyOf(obs({ text: 'ANC', value: 61, unit }))).toBe('NEU')
+    }
+    // a non-UCUM code system does not decide
+    const local = obs({ text: 'Neutrophil', value: 3.1, unit: '10^3/uL' })
+    local.valueQuantity = { value: 3.1, unit: '10^3/uL', code: '%', system: 'http://example.org/local-units' }
+    expect(keyOf(local)).toBe('ANC')
+    // text values take the same spellings after the number
+    const text = (value: string) => ({ ...obs({ text: 'ANC', value: 0 }), valueQuantity: undefined, valueString: value })
+    expect(keyOf(text('61 pct'))).toBe('NEU')
+    expect(keyOf(text('61 per cent'))).toBe('NEU')
+  })
+
+  it('leaves the key alone when the unit says neither (missing, /100 WBC, /HPF)', () => {
     expect(keyOf(obs({ text: 'Neutrophil', value: 55 }))).toBe('NEU')
     expect(keyOf(obs({ text: 'NRBC', value: 2, unit: '/100 WBC' }))).toBe('NORMOBLAST')
-    expect(keyOf(obs({ text: 'Neutrophil', value: 55, unit: '%', ucum: '10*3/uL' }))).toBe('NEU')
     expect(keyOf(obs({ text: 'WBC', value: 5600, unit: '/uL' }))).toBe('WBC')
   })
 

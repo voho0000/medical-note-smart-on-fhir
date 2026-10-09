@@ -530,9 +530,14 @@ function isCountPerVolumeUnit(unit: string): boolean {
   return prefix === '' || /^(?:k|thou|1000)$/.test(prefix) || (!!power && Number(power[1]) <= 6)
 }
 
+// The ways a percent unit is printed — the same spellings the AI lab value
+// family accepts (fhir-tools labValueFamily): "%", full-width 「％」 (NFKC),
+// "percent", "per cent", "pct", 「百分比」, in any case, as a whole word.
+const PERCENT_UNIT_TEXT_RE = /^(?:%|percent|per\s*cent|pct|百分比)$/i
+
 function unitFamily(unit: unknown): 'count' | 'fraction' | null {
   if (typeof unit !== 'string' || !unit.trim()) return null
-  if (unit.normalize('NFKC').trim() === '%') return 'fraction'
+  if (PERCENT_UNIT_TEXT_RE.test(unit.normalize('NFKC').trim())) return 'fraction'
   return isCountPerVolumeUnit(unit) ? 'count' : null
 }
 
@@ -545,20 +550,23 @@ const NUMBER_WITH_UNIT_TEXT_RE =
 function stringUnitFamily(value: unknown): 'count' | 'fraction' | null {
   if (typeof value !== 'string') return null
   const unit = value.normalize('NFKC').match(NUMBER_WITH_UNIT_TEXT_RE)?.[1]
-  if (!unit) return null
-  if (/^(?:%|percent)$/i.test(unit)) return 'fraction'
-  return unitFamily(unit)
+  return unit ? unitFamily(unit) : null
 }
 
-/** What the Quantity's units say, when the display unit and the UCUM code
- *  agree (or only one is present). Disagreement decides nothing. */
+/** What a Quantity's units say. Its UCUM code decides when it has one
+ *  (system UCUM or absent) — code '%' is a fraction whatever the unit text
+ *  says, a count code ('10*3/uL') is a count — as in the AI value family.
+ *  Without a code, or with a code that is neither, the unit text. */
 function quantityUnitFamily(obs: any): 'count' | 'fraction' | null {
   const quantity = obs?.valueQuantity
   if (!quantity) return stringUnitFamily(obs?.valueString)
-  const families = new Set(
-    [quantity.unit, quantity.code].map(unitFamily).filter((family) => family !== null),
-  )
-  return families.size === 1 ? families.values().next().value ?? null : null
+  const code = typeof quantity.code === 'string' ? quantity.code.trim() : ''
+  const system = typeof quantity.system === 'string' ? quantity.system : ''
+  if (code && (!system || /unitsofmeasure\.org/i.test(system))) {
+    if (code === '%') return 'fraction'
+    if (isCountPerVolumeUnit(code)) return 'count'
+  }
+  return unitFamily(quantity.unit)
 }
 
 /**
