@@ -77,7 +77,10 @@ import {
   LAB_CATEGORIES,
   categorizeObservation,
   compareTestsByPreferred,
+  isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
+import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
   getAnalyteLabel,
@@ -1697,20 +1700,28 @@ export function createFhirTools(getData: () => AgentDataSource) {
             && (!abnormalOnly || isAbnormalObservation(observation))
           )
 
-        const byAnalyte = new Map<string, any[]>()
+        // Same analyte identity as the cumulative report: one NHI order can
+        // bill several analytes under one panel name (12064B = SS-A + SS-B +
+        // Ro52), so grouping by name alone would silently drop results.
+        const byAnalyte = new Map<string, { label: string; observations: any[] }>()
         for (const observation of expanded) {
-          const key = labAnalyteKey(observation)
-          const series = byAnalyte.get(key)
-          if (series) series.push(observation)
-          else byAnalyte.set(key, [observation])
+          const identity = getLabPivotTestIdentity(observation, category)
+          const group = byAnalyte.get(identity.mapKey)
+          if (group) group.observations.push(observation)
+          else {
+            byAnalyte.set(identity.mapKey, {
+              label: getLabRowDisplayParts(identity, 'medical', 'en').name,
+              observations: [observation],
+            })
+          }
         }
 
-        const groups = [...byAnalyte.entries()].map(([canonicalKey, observations]) => {
+        const groups = [...byAnalyte.entries()].map(([canonicalKey, { label, observations }]) => {
           const series = [...observations].sort((a, b) =>
             (observationDate(b) || '').localeCompare(observationDate(a) || '')
           )
           return {
-            analyte: getAnalyteLabel(series[0]),
+            analyte: label,
             canonicalKey,
             category,
             observationCount: series.length,
@@ -1735,6 +1746,18 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ...page,
           incomplete: false,
           canConcludeAbsence: true,
+          ...(category === 'immuno' ? {
+            // Specific-allergen IgE (30022C) is kept out of every lab category,
+            // so this answer says nothing about allergen tests.
+            excludedFromCategory: {
+              specificAllergenIgE: collection!.observations.filter((observation: any) =>
+                String(observation?.status ?? '').toLowerCase() !== 'entered-in-error'
+                && isExcludedFromCumulativeReport(observation)
+                && isWithinDateRange(observationDate(observation), dateFrom, dateTo)
+              ).length,
+              instruction: 'Specific-allergen IgE results are not part of any lab category; canConcludeAbsence does not apply to them. Use searchObservationByName (e.g. the allergen name) or queryObservations to find allergen tests.',
+            },
+          } : {}),
           dateRange: { from: dateFrom, to: dateTo },
           availableAnalytes: groups.map(group => group.analyte),
           groundingRules: {

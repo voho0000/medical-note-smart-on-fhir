@@ -2536,7 +2536,7 @@ export const zhTW = {
         queryConditions: '查詢經臨床確認的診斷（跨就診）。請用這個而非就診層級的 reasonCode 來判斷實際診斷',
         queryObservations: '查詢觀察值 / 檢驗 / 生命徵象。支援時間範圍、精確 code、模糊 `codeQuery`、`abnormalOnly`。檢驗 panel 請優先用 queryDiagnosticReports；要看單項趨勢請用 searchObservationByName',
         queryDiagnosticReports: '**查詢檢驗 panel／報告的主力工具**。搜尋不區分大小寫、空格與連字號（例如 CA199、CA-199、CA–199、CA 19-9 視為相同）。同時確認多項檢驗時必須用 `queries` 陣列逐項傳入，例如 `["CA125", "CA199"]`，並檢查 matchedQueryTerms／unmatchedQueryTerms。影像／病理問題請改用 queryImagingRecords',
-        queryLabResultsByCategory: '**語意是整類檢驗時的主力工具。** 問「所有腫瘤標記／癌症指數」時使用 `category="tumor"`，一次取得病人實際擁有的 AFP、CEA、CA-125、CA-199、PSA 等全部項目；不要只逐字搜尋使用者提到的名稱。同樣支援血球、凝血、生化、內分泌、血脂、血糖、肝炎、尿液、血氣、血清／病毒及免疫（免疫球蛋白、補體、自體抗體、過敏原）分類，且與畫面累積報告共用分類規則',
+        queryLabResultsByCategory: '**語意是整類檢驗時的主力工具。** 問「所有腫瘤標記／癌症指數」時使用 `category="tumor"`，一次取得病人實際擁有的 AFP、CEA、CA-125、CA-199、PSA 等全部項目；不要只逐字搜尋使用者提到的名稱。同樣支援血球、凝血、生化、內分泌、血脂、血糖、肝炎、尿液、血氣、血清／病毒及免疫（免疫球蛋白、補體、自體抗體）分類，且與畫面累積報告共用分類規則。特異過敏原 IgE（30022C）不屬任何分類：請用 searchObservationByName 或 queryObservations 查詢，不可因分類結果為空就判定病人沒做過',
         queryImagingRecords: '**查詢影像／病理是否存在與內容的主力工具。** 同時涵蓋 DiagnosticReport 與獨立 ImagingStudy，分類方式與畫面影像頁籤一致；可依名稱、modality、部位、狀態與時間搜尋',
         searchObservationByName: '**不知道 LOINC 時，依名稱模糊搜尋檢驗。** 如 query="HbA1c"。設 withTrend=true 取最近 10 筆做趨勢',
         listAvailableObservationCodes: '列出病人擁有的檢驗 / 觀察值名稱與次數。不確定病人有什麼可查時，先打這個',

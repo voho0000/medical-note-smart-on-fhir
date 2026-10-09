@@ -514,6 +514,8 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   'TC/HDL RATIO': 'TC/HDL',
   // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
   ...IMMUNOLOGY_DISPLAY,
+  // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
+  ...THYROID_DISPLAY,
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -642,11 +644,9 @@ export function getLabPivotTestIdentity(
   }
 
   if (categoryId === 'endocrine') {
-    const thyroidKey = thyroidAnalyteKey(obs)
-    if (thyroidKey) {
-      testKey = thyroidKey
-      displayOverride = THYROID_DISPLAY[thyroidKey]
-    }
+    // The header comes from APP_CANONICAL_DISPLAY, the same map every
+    // rendered label (getLabRowDisplayParts) reads.
+    testKey = thyroidAnalyteKey(obs) ?? testKey
   }
 
   const microbiologyComponent = categoryId === 'microbio'

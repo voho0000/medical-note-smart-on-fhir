@@ -5,7 +5,8 @@
 // never reached 內分泌 by LOINC — and a thyroglobulin row named "Tg" was read
 // as triglyceride (血脂).
 import { categorizeObservationWithReason, LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
-import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import { IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
 
 const LOINC = 'http://loinc.org'
@@ -84,5 +85,21 @@ describe('免疫 LOINCs the nhi-clinical-mapper emits (verified LOINC 2.82)', ()
     expect(decision.category?.id).toBe('immuno')
     expect(decision.decidedBy).toBe('loinc')
     expect(getLabPivotTestIdentity(obs, 'immuno').testKey).toBe(key)
+  })
+})
+
+describe('thyroid column headers through the shared display resolver', () => {
+  it.each([
+    ['3013-0', 'Tg', 'Thyroglobulin'],
+    ['8098-6', 'Tg Ab', 'Anti-Tg'],
+    ['8099-4', 'TPO Ab', 'Anti-TPO'],
+  ])('%s "%s" renders as %s in every audience and language', (code, text, header) => {
+    const row = buildLabPivots([loincObs(code, text)]).endocrine.rows.find((r) => r.values.size > 0)!
+    expect(row).toBeDefined()
+    for (const audience of ['medical', 'patient'] as const) {
+      for (const language of ['zh-TW', 'en'] as const) {
+        expect(getLabRowDisplayParts(row, audience, language).name).toBe(header)
+      }
+    }
   })
 })
