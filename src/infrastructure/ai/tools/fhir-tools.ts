@@ -511,12 +511,11 @@ const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
 export function labValueFamily(observation: any): LabValueFamily {
   const quantity = observation?.valueQuantity
   if (quantity && typeof quantity.value === 'number') {
-    return isPercentUnit(String(quantity.unit ?? quantity.code ?? '')) ? 'percent' : 'quantity'
+    return isPercentQuantity(quantity) ? 'percent' : 'quantity'
   }
   const range = observation?.valueRange
   if (range && (range.low || range.high)) {
-    const unit = String(range.low?.unit ?? range.high?.unit ?? range.low?.code ?? range.high?.code ?? '')
-    return isPercentUnit(unit) ? 'percent' : 'quantity'
+    return [range.low, range.high].some((bound: any) => bound && isPercentQuantity(bound)) ? 'percent' : 'quantity'
   }
   if (typeof observation?.valueInteger === 'number' || typeof observation?.valueDecimal === 'number') return 'quantity'
   if (observation?.valueRatio) return 'titer'
@@ -531,14 +530,27 @@ export function labValueFamily(observation: any): LabValueFamily {
   // comparator — is a quantity; a percentage when its unit is one ("62%",
   // "62 ％", "62 percent"), like valueQuantity.
   const numeric = text.match(NUMERIC_TEXT_RE)
-  if (numeric) return isPercentUnit(text.slice(numeric[0].length).split(/[\s(（,;]/).filter(Boolean)[0] ?? '') ? 'percent' : 'quantity'
+  if (numeric) return PERCENT_UNIT_PREFIX_RE.test(text.slice(numeric[0].length)) ? 'percent' : 'quantity'
   return 'text'
 }
 
-/** "%", full-width 「％」 or the word "percent", in any case. */
-function isPercentUnit(unit: string): boolean {
-  const normalized = unit.normalize('NFKC').trim().toLowerCase()
-  return normalized === '%' || normalized === 'percent'
+// The ways a percent unit is printed: "%", full-width 「％」 (NFKC folds it),
+// "percent", "per cent", "pct", 「百分比」 — in any case, as a whole word.
+const PERCENT_UNIT_RE = /^(?:%|percent|per\s*cent|pct|百分比)$/i
+const PERCENT_UNIT_PREFIX_RE = /^\s*(?:%|percent|per\s*cent|pct|百分比)(?![a-z])/i
+
+function isPercentUnit(unit: unknown): boolean {
+  return typeof unit === 'string' && PERCENT_UNIT_RE.test(unit.normalize('NFKC').trim())
+}
+
+/** A Quantity (or Range bound) in percent. Its UCUM code decides when it has
+ *  one (system UCUM or absent): code '%' is percent whatever the unit text
+ *  says, and a count code ('10*3/uL') is not. Without a code, the unit text. */
+function isPercentQuantity(quantity: any): boolean {
+  const code = typeof quantity?.code === 'string' ? quantity.code.trim() : ''
+  const system = typeof quantity?.system === 'string' ? quantity.system : ''
+  if (code && (!system || /unitsofmeasure\.org/i.test(system))) return code === '%'
+  return isPercentUnit(quantity?.unit)
 }
 
 /** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;

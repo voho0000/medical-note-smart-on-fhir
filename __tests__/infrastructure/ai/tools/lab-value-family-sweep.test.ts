@@ -179,3 +179,67 @@ describe('group labels hold for every member', () => {
     expect(failures).toEqual([])
   })
 })
+
+describe('percent vs count units, by unit text and UCUM code', () => {
+  const UCUM = 'http://unitsofmeasure.org'
+  const PERCENT_UNITS = ['%', '％', 'percent', 'Percent', 'per cent', 'pct', 'PCT', '百分比', ' % ']
+  const COUNT_CODES = ['/uL', '10*3/uL', '10*9/L', '10*6/uL', '/[HPF]']
+  const COUNT_UNITS = ['/uL', '10^3/uL', 'x10^9/L', 'K/uL', '/HPF', 'cells/uL', '']
+
+  const percentForms: Array<[string, any]> = []
+  for (const unit of PERCENT_UNITS) {
+    for (const coded of [undefined, { system: UCUM, code: '%' }, { code: '%' }]) {
+      const q = { value: 62, unit, ...(coded ?? {}) }
+      percentForms.push([`Quantity unit ${JSON.stringify(unit)} ${coded ? `code % ${coded.system ? 'UCUM' : 'no system'}` : 'no code'}`, { valueQuantity: q }])
+      percentForms.push([`Range unit ${JSON.stringify(unit)} ${coded ? 'code %' : 'no code'}`, { valueRange: { low: { ...q, value: 1 }, high: { ...q, value: 5 } } }])
+    }
+    percentForms.push([`text "62${unit}"`, { valueString: `62${unit}` }])
+    percentForms.push([`text "62 ${unit}"`, { valueString: `62 ${unit}` }])
+  }
+  // A UCUM code '%' decides even when the unit text is something else.
+  for (const unit of ['', 'pct.', 'percentage', 'ratio %']) {
+    percentForms.push([`Quantity unit ${JSON.stringify(unit)} with UCUM code %`, { valueQuantity: { value: 62, unit, system: UCUM, code: '%' } }])
+  }
+
+  it(`reads all ${percentForms.length} percent forms as percent`, () => {
+    const failures = percentForms.filter(([, o]) => labValueFamily(o) !== 'percent').map(([name, o]) => `${name}: ${labValueFamily(o)}`)
+    expect(failures).toEqual([])
+  })
+
+  const countForms: Array<[string, any]> = []
+  for (const code of COUNT_CODES) {
+    for (const unit of COUNT_UNITS) {
+      countForms.push([`Quantity unit ${JSON.stringify(unit)} code ${code}`, { valueQuantity: { value: 4.1, unit, system: UCUM, code } }])
+      countForms.push([`Range unit ${JSON.stringify(unit)} code ${code}`, { valueRange: { low: { value: 1, unit, system: UCUM, code }, high: { value: 5, unit, system: UCUM, code } } }])
+    }
+  }
+  for (const unit of COUNT_UNITS) countForms.push([`text "4.1 ${unit}"`, { valueString: `4.1 ${unit}` }])
+
+  it(`reads all ${countForms.length} count forms as quantity`, () => {
+    const failures = countForms.filter(([, o]) => labValueFamily(o) !== 'quantity').map(([name, o]) => `${name}: ${labValueFamily(o)}`)
+    expect(failures).toEqual([])
+  })
+
+  it('keeps one LOINC-less NEU % history together across unit spellings and codes', async () => {
+    const forms = [
+      { valueQuantity: { value: 62, unit: '%' } },
+      { valueQuantity: { value: 60, unit: 'pct', system: UCUM, code: '%' } },
+      { valueQuantity: { value: 58, unit: 'percent' } },
+      { valueQuantity: { value: 57, unit: '百分比', code: '%' } },
+      { valueString: '55 per cent' },
+      { valueRange: { low: { value: 50, unit: 'pct', code: '%' }, high: { value: 54, unit: 'pct', code: '%' } } },
+      { valueQuantity: { value: 4.1, unit: '10^3/uL', system: UCUM, code: '10*3/uL' } },
+    ]
+    const observations = forms.map((value, i) => ({
+      resourceType: 'Observation', id: `neu-${i}`, status: 'final',
+      category: [{ coding: [{ code: 'laboratory' }] }],
+      code: { text: 'Neutrophil' },
+      effectiveDateTime: `2026-0${i + 1}-01T08:00:00+08:00`,
+      ...value,
+    }))
+    const tools = createFhirTools(() => ({ patient: samplePatient, collection: { ...sampleCollection, observations, vitalSigns: [] } }))
+    const result = await (tools.queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
+    expect(result.analyteCount).toBe(2)
+    expect(result.data.map((g: any) => g.observationCount).sort()).toEqual([1, 6])
+  })
+})
