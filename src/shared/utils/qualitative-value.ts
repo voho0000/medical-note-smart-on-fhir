@@ -15,10 +15,12 @@ export const ORDINAL_VALUE_SPELLINGS: Readonly<Record<string, readonly string[]>
   TRACE: ['TRACE', 'TR', '微量'],
   DETECTED: ['DETECTED', 'DETECTABLE', 'PRESENT', '檢出', '有檢出'],
   NOT_DETECTED: ['NOTDETECTED', 'NOT-DETECTED', 'UNDETECTED', 'NONDETECTED', 'UNDETECTABLE', 'ND', 'N.D.', 'ABSENT', '未檢出', '未檢測到'],
-  GRADE_1: ['1+', '+1'],
-  GRADE_2: ['2+', '+2', '++'],
-  GRADE_3: ['3+', '+3', '+++'],
-  GRADE_4: ['4+', '+4', '++++'],
+  // Grades are written postfix ("3+") or as repeated signs ("+++"); a leading
+  // sign before a digit ("+3", "+3.2") is a signed number, not a grade.
+  GRADE_1: ['1+'],
+  GRADE_2: ['2+', '++'],
+  GRADE_3: ['3+', '+++'],
+  GRADE_4: ['4+', '++++'],
 }
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
