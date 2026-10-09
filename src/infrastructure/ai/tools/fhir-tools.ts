@@ -78,6 +78,7 @@ import {
   categorizeObservation,
   compareTestsByPreferred,
 } from '@/src/shared/utils/lab-categories'
+import { DIFFERENTIAL_COUNT_KEYS, getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 import {
   getAnalyteCanonicalKey,
   getAnalyteLabel,
@@ -475,7 +476,16 @@ function selectDiagnosticReportPage(
   return selected.slice(0, cap)
 }
 
+/** A lab result's analyte identity: the cumulative report's own column key,
+ *  so the AI groups exactly as the table does (a neutrophil count under ANC,
+ *  its percentage under NEU — never one series). Vital signs and other
+ *  uncategorised records keep the shared canonical / LOINC / label fallback. */
 function labAnalyteKey(observation: any): string {
+  const category = categorizeObservation(observation)
+  if (category) {
+    const { testKey } = getLabPivotTestIdentity(observation, category.id)
+    if (testKey !== 'UNKNOWN') return testKey
+  }
   return getAnalyteCanonicalKey(observation)
     ?? loincOf(observation?.code)
     ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
@@ -1710,7 +1720,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
             (observationDate(b) || '').localeCompare(observationDate(a) || '')
           )
           return {
-            analyte: getAnalyteLabel(series[0]),
+            // A count shares its source label with the percentage
+            // (「嗜中性白血球 / Neutrophil」); name it by its column instead.
+            analyte: DIFFERENTIAL_COUNT_KEYS.has(canonicalKey)
+              ? getLabPivotTestIdentity(series[0], category).displayName
+              : getAnalyteLabel(series[0]),
             canonicalKey,
             category,
             observationCount: series.length,
