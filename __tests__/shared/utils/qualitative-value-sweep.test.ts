@@ -70,3 +70,13 @@ describe('one HBsAg history whatever the spelling', () => {
     expect(result.data[0].observationCount).toBe(values.length)
   })
 })
+
+describe('ordinal phrases with trailing words', () => {
+  it.each([
+    ['Negative for HBsAg', 'NEGATIVE'], ['Not detected by PCR', 'NOT_DETECTED'], ['Positive (1:80)', 'POSITIVE'],
+    ['Weakly positive for IgM', 'WEAKLY_POSITIVE'], ['Non reactive', 'NONREACTIVE'], ['Non-reactive (0.12)', 'NONREACTIVE'],
+    ['NEG for MRSA', 'NEGATIVE'], ['Reactive, confirm', 'REACTIVE'], ['Trace amount', 'TRACE'], ['Not  detected', 'NOT_DETECTED'],
+  ])('%s → %s', (value, canonical) => {
+    expect(ordinalValue(value)).toBe(canonical)
+  })
+})

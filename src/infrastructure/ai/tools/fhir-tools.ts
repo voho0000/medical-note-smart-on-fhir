@@ -490,6 +490,7 @@ function labAnalyteKey(observation: any): string {
 export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
 
 // "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
+const NUMERIC_TEXT_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?\d+(?:\.\d+)?(?:\s*[-–~]\s*\d+(?:\.\d+)?)?(?![\d.:：])/
 const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
 /** Value family of one lab row: a count / concentration, a percentage, a
  *  titer, an ordinal (presence / grade) or free text. Rows of different
@@ -500,12 +501,17 @@ export function labValueFamily(observation: any): LabValueFamily {
     const unit = String(quantity.unit ?? quantity.code ?? '').trim()
     return unit === '%' ? 'percent' : 'quantity'
   }
+  if (observation?.valueRange || typeof observation?.valueInteger === 'number'
+    || typeof observation?.valueDecimal === 'number') return 'quantity'
   if (observation?.valueRatio) return 'titer'
   if (observation?.valueCodeableConcept || typeof observation?.valueBoolean === 'boolean') return 'ordinal'
   const text = typeof observation?.valueString === 'string' ? observation.valueString.normalize('NFKC') : ''
   if (TITER_VALUE_RE.test(text)) return 'titer'
-  // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)" are one family.
+  // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)", "2+" are one
+  // family — checked before numbers so a grade "2+" is not read as 2.
   if (isOrdinalValue(text)) return 'ordinal'
+  // "2 /HPF", "0–5 /HPF", "< 0.5": a number written as text.
+  if (NUMERIC_TEXT_RE.test(text)) return 'quantity'
   return 'text'
 }
 
@@ -535,9 +541,13 @@ export function declaredLoincAnalyteKey(loinc: string): string | null {
  * - neither carries a LOINC and the cumulative report's identity names the
  *   same recognised analyte (one NHI order split into SS-A / SS-B / Ro52);
  *   unrecognised LOINC-less rows keep the name-based key;
- * and, in every case, they are of one value family (labValueFamily) and, for
- * declared LOINCs, one LOINC scale (declaredLoincScale): a titer, a presence
- * and a quantitative result of the same antibody stay apart.
+ * Rows of ONE LOINC are always one group, however the value is written
+ * (Quantity, Range, Integer, string, coded, "Negative for HBsAg"): the LOINC
+ * already fixes what was measured and on what scale. Different LOINCs share
+ * a group only when declared equivalent AND on one known LOINC scale
+ * (declaredLoincScale) — a titer, a presence and a quantitative result of one
+ * antibody stay apart. Only LOINC-less rows are also split by value family
+ * (labValueFamily), the one signal left to tell a count from a percentage.
  */
 export function labCategoryAnalyte(observation: any, category: string): {
   key: string
@@ -555,9 +565,13 @@ export function labCategoryAnalyte(observation: any, category: string): {
     : getAnalyteLabel(observation)
   if (loinc) {
     const declared = declaredLoincAnalyteKey(loinc)
-    const canonicalKey = declared ?? loinc
-    const scale = declared ? (declaredLoincScale(loinc) ?? '-') : ''
-    return { key: `${declared ? 'key' : 'loinc'}:${canonicalKey}|${scale}|${family}`, label, canonicalKey, loinc, family }
+    const scale = declaredLoincScale(loinc)
+    // Merge across LOINCs only on a declared key with a known scale;
+    // otherwise the LOINC alone is the group.
+    if (declared && scale) {
+      return { key: `key:${declared}|${scale}`, label, canonicalKey: declared, loinc, family }
+    }
+    return { key: `loinc:${loinc}`, label, canonicalKey: declared ?? loinc, loinc, family }
   }
   const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
   return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }

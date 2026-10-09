@@ -14,6 +14,7 @@ import { join } from 'path'
 import {
   createFhirTools,
   declaredLoincAnalyteKey,
+  declaredLoincScale,
   labCategoryAnalyteKey,
   labValueFamily,
 } from '@/src/infrastructure/ai/tools/fhir-tools'
@@ -122,6 +123,67 @@ const SYNTHETIC: any[] = [
   lab('SS-A', '33569-5', 'Negative'), lab('SS-A', '33569-5', 'see report'),
 ]
 
+/** One LOINC reported every way FHIR allows. */
+function representations(text: string, loinc: string, quantityUnit: string): any[] {
+  const base = (i: number, value: Record<string, any>) => ({
+    resourceType: 'Observation', id: `rep-${loinc}-${i}`, status: 'final',
+    category: [{ coding: [{ code: 'laboratory' }] }],
+    code: { text, coding: [{ system: LOINC_SYSTEM, code: loinc }] },
+    effectiveDateTime: `2026-0${(i % 9) + 1}-${String(10 + i).padStart(2, '0')}T08:00:00+08:00`,
+    ...value,
+  })
+  return [
+    { valueQuantity: { value: 2, unit: quantityUnit } },
+    { valueQuantity: { value: 2, unit: '%' } },
+    { valueRange: { low: { value: 0, unit: quantityUnit }, high: { value: 5, unit: quantityUnit } } },
+    { valueInteger: 3 },
+    { valueDecimal: 0.4 },
+    { valueString: '2 /HPF' }, { valueString: '0–5 /HPF' }, { valueString: '< 0.5' },
+    { valueString: 'Negative' }, { valueString: 'NEG' }, { valueString: 'Negative for HBsAg' },
+    { valueString: 'Not detected by PCR' }, { valueString: 'Positive (1:80)' }, { valueString: '1:160' },
+    { valueString: 'see report' }, { valueString: '陰性(-)' },
+    { valueCodeableConcept: { coding: [{ system: 'http://snomed.info/sct', code: '260385009', display: 'Negative' }], text: 'Negative' } },
+    { valueBoolean: false },
+    { valueRatio: { numerator: { value: 1 }, denominator: { value: 80 } } },
+  ].map((value, i) => base(i, value))
+}
+
+const SAME_LOINC: any[] = [
+  ...representations('HBsAg', '5195-3', 'S/CO'),
+  ...representations('RBC (urine)', '5808-1', '/HPF'),
+  ...representations('Glucose', '2345-7', 'mg/dL'),
+  ...representations('Neutrophil %', '770-8', '%'),
+  ...representations('SS-A', '33569-5', 'U/mL'),
+  ...representations('Anti-TPO', '32786-6', 'IU/mL'),
+  ...representations('ANA', '8061-4', ''),
+  ...representations('AFP', '1834-1', 'ng/mL'),
+  ...representations('Unknown assay', '99999-9', 'U/L'),
+]
+
+describe('same-LOINC rows are never split, whatever the value representation', () => {
+  it.each(LAB_CATEGORIES.map((c) => c.id))('%s', async (category) => {
+    const rows = SAME_LOINC.filter((o) => categorizeObservation(o)?.id === category)
+    const byLoinc = new Map<string, Set<string>>()
+    for (const o of rows) {
+      byLoinc.set(loincOf(o)!, (byLoinc.get(loincOf(o)!) ?? new Set()).add(labCategoryAnalyteKey(o, category)))
+    }
+    for (const [loinc, keys] of byLoinc) expect({ loinc, keys: [...keys] }).toEqual({ loinc, keys: [[...keys][0]] })
+    const result = await (toolsFor(rows).queryLabResultsByCategory as any).execute({ category, limit: 1000 })
+    expect(result.analyteCount).toBe(byLoinc.size)
+  })
+
+  it('still keeps the differently-coded count and percent, titer and presence apart', async () => {
+    const result = await (toolsFor([
+      lab('Neutrophil', '751-8', 4.1, '10^3/uL'), lab('Neutrophil', '770-8', 62, '%'),
+    ]).queryLabResultsByCategory as any).execute({ category: 'cbc' })
+    expect(result.analyteCount).toBe(2)
+    const tpo = await (toolsFor([
+      lab('Anti-TPO', '32786-6', '1:100'), lab('Anti-TPO', '32042-4', 'Positive'),
+    ]).queryLabResultsByCategory as any).execute({ category: 'endocrine' })
+    expect(tpo.analyteCount).toBe(2)
+  })
+})
+
 function bundleObservations(path: string): any[] {
   const bundle = JSON.parse(readFileSync(path, 'utf8'))
   return (bundle.entry ?? []).map((e: any) => e.resource).filter((r: any) => r?.resourceType === 'Observation')
@@ -130,6 +192,7 @@ function bundleObservations(path: string): any[] {
 const ROOT = process.cwd()
 const CORPORA: Array<[string, () => any[]]> = [
   ['synthetic shared-name LOINC pairs', () => SYNTHETIC],
+  ['synthetic same-LOINC value representations', () => SAME_LOINC],
   ...[
     'public/demo/demo-bundle.json',
     ...readdirSync(join(ROOT, 'public/demo/hfrEF')).filter((f) => f.endsWith('.json') && f !== 'manifest.json')
@@ -144,13 +207,13 @@ const CORPORA: Array<[string, () => any[]]> = [
  *  every merge the AI grouping makes is reviewed here. */
 const DECLARED_MERGES: Record<string, string[]> = {
   // 33569-5 SS-A [Units/volume] by IA and 17792-3 SS-A [Units/volume].
-  'immuno:ANTI-SSA:quantity': ['17792-3', '33569-5'],
+  'immuno:ANTI-SSA:Qn': ['17792-3', '33569-5'],
   // 8099-4 Thyroperoxidase Ab [Units/volume] and 56477-3 the same by IA.
-  'endocrine:ANTI-TPO:quantity': ['56477-3', '8099-4'],
+  'endocrine:ANTI-TPO:Qn': ['56477-3', '8099-4'],
   // 5048-4 Nuclear Ab [Titer] by IF and 29953-7 Nuclear Ab [Titer]: both titers.
-  'immuno:ANA:titer': ['29953-7', '5048-4'],
+  'immuno:ANA:Titr': ['29953-7', '5048-4'],
   // 8061-4 Nuclear Ab [Presence] and 42254-3 Nuclear Ab [Presence] by IF.
-  'immuno:ANA:ordinal': ['42254-3', '8061-4'],
+  'immuno:ANA:Ord': ['42254-3', '8061-4'],
 }
 
 describe('AI category grouping differential (never fewer groups than LOINC-keyed)', () => {
@@ -168,17 +231,30 @@ describe('AI category grouping differential (never fewer groups than LOINC-keyed
         const key = labCategoryAnalyteKey(o, category)
         groups.set(key, [...(groups.get(key) ?? []), o])
       }
+      // One LOINC is one measurement: never split across groups, whatever
+      // its value representation.
+      const groupsOfLoinc = new Map<string, Set<string>>()
+      for (const [key, members] of groups) {
+        for (const loinc of members.map(loincOf).filter(Boolean) as string[]) {
+          groupsOfLoinc.set(loinc, (groupsOfLoinc.get(loinc) ?? new Set()).add(key))
+        }
+      }
+      for (const [loinc, keys] of groupsOfLoinc) expect({ loinc, groups: keys.size }).toEqual({ loinc, groups: 1 })
       for (const members of groups.values()) {
         const loincs = [...new Set(members.map(loincOf).filter(Boolean))].sort() as string[]
         // Never a LOINC row together with a LOINC-less one.
         expect(new Set(members.map((o) => !!loincOf(o))).size).toBe(1)
-        // Never two value families (count / percent / coded text).
-        expect(new Set(members.map(labValueFamily)).size).toBe(1)
+        // LOINC-less rows: one value family (count / percent / titer / ordinal / text).
+        if (loincs.length === 0) expect(new Set(members.map(labValueFamily)).size).toBe(1)
+        // Different LOINCs: only declared-equivalent ones on one known scale.
         if (loincs.length > 1) {
           const declared = new Set(loincs.map(declaredLoincAnalyteKey))
+          const scales = new Set(loincs.map(declaredLoincScale))
           expect(declared.size).toBe(1)
           expect([...declared][0]).toBeTruthy()
-          declaredSeen[`${category}:${[...declared][0]}:${labValueFamily(members[0])}`] = loincs
+          expect(scales.size).toBe(1)
+          expect([...scales][0]).toBeTruthy()
+          declaredSeen[`${category}:${[...declared][0]}:${[...scales][0]}`] = loincs
         }
       }
       // Baseline: LOINC-keyed grouping (LOINC, else the name-based key).
