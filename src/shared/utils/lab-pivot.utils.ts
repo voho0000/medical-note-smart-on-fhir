@@ -382,6 +382,8 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   '總蛋白': 'TP',
   '血清總蛋白': 'TP',
   '總蛋白質': 'TP',
+  // 09040C 全蛋白 — the NHI order's own name.
+  '全蛋白': 'TP',
   'PTH-I': 'IPTH',
   IPTH: 'IPTH',
   'I-PTH': 'IPTH',

@@ -72,9 +72,29 @@ describe('related verified orders', () => {
 
   it('decides 09040C 全蛋白 by name or specimen, never by the code alone', () => {
     expect(categorizeObservation(obs('Total protein', '09040C', 7.1))?.id).toBe('chem')
-    // 全蛋白 alone files under 其他 today (no chem alias), but never 尿液.
-    expect(categorizeObservation(obs('全蛋白', '09040C', 7.1))?.id).not.toBe('urine')
+    expect(categorizeObservation(obs('全蛋白', '09040C', 7.1))?.id).toBe('chem')
+    expect(categorizeObservation(obs('全蛋白', '09040C', 15, { specimen: { display: 'Urine' } }))?.id).toBe('urine')
     expect(categorizeObservation(obs('Total protein', '09040C', 15, { specimen: { display: 'Urine' } }))?.id).toBe('urine')
     expect(categorizeObservation(obs('PROT(SPOT)', '09040C', 15))?.id).toBe('urine')
+  })
+})
+
+// 12111C 微量白蛋白 sits in section 12, not 06, yet a spot-urine name already
+// says urine. The exception must accept the names' resolved aliases (MALB,
+// ACR), not only the literal spellings — whichever bridge wrote the code.
+describe('12111C microalbumin names reach 尿液 under either NHI system', () => {
+  const HEALTHBANK = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code'
+  it.each([
+    'Microalbumin', 'Microalbumin/Creatinine ratio', '微白蛋白', 'Microalbumin (urine)', 'MALB', 'UACR', 'ACR',
+    'Alb/Cr ratio', '微白蛋白/肌酸酐比值', 'CALB(SPOT)',
+  ])('%s', (item) => {
+    const medcloud = obs(item, '12111C', 20)
+    const healthbank = { ...medcloud, code: { ...medcloud.code, coding: [{ system: HEALTHBANK, code: '12111C' }] } }
+    expect(categorizeObservation(medcloud)?.id).toBe('urine')
+    expect(categorizeObservation(healthbank)?.id).toBe('urine')
+  })
+
+  it('does not let a serum albumin under a 09 order into 尿液', () => {
+    expect(categorizeObservation(obs('Albumin', '09038C', 4))?.id).toBe('chem')
   })
 })

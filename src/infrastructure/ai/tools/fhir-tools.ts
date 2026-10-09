@@ -82,6 +82,7 @@ import {
 import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
 import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
 import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -490,10 +491,6 @@ export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'tex
 
 // "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
 const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
-// Negative / Positive / Borderline / ± / +n / (-) / 陰性 / 弱陽性 / Non-reactive …
-const ORDINAL_VALUE_RE =
-  /^\s*(?:\(\s*[-+±]\s*\)|[-+]{1,4}(?=\s|$)|±|[1-4]\s*\+|(?:weakly\s+|weak\s+|strongly\s+)?(?:positive|negative|reactive|non-?\s*reactive|detected|not\s+detected|borderline|equivocal|indeterminate|trace)\b|(?:弱|強)?(?:陽性|陰性)|可疑|微量)/i
-
 /** Value family of one lab row: a count / concentration, a percentage, a
  *  titer, an ordinal (presence / grade) or free text. Rows of different
  *  families never share a group. */
@@ -507,7 +504,8 @@ export function labValueFamily(observation: any): LabValueFamily {
   if (observation?.valueCodeableConcept || typeof observation?.valueBoolean === 'boolean') return 'ordinal'
   const text = typeof observation?.valueString === 'string' ? observation.valueString.normalize('NFKC') : ''
   if (TITER_VALUE_RE.test(text)) return 'titer'
-  if (ORDINAL_VALUE_RE.test(text)) return 'ordinal'
+  // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)" are one family.
+  if (isOrdinalValue(text)) return 'ordinal'
   return 'text'
 }
 
