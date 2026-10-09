@@ -5,6 +5,15 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import {
+  AUTOANTIBODY_KEYS,
+  IMMUNOGLOBULIN_KEYS,
+  IMMUNOLOGY_DISPLAY,
+  IMMUNOLOGY_LOINC_TO_KEY,
+  immunologyKeyFromName,
+} from '@/src/shared/utils/immunology-analytes'
 import {
   CANONICAL_KEYS,
   CANONICAL_DISPLAY,
@@ -250,32 +259,19 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   }
 }
 
-// NHI system URI used by the 健康存摺 bridge
-const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
+const LEGACY_NHI_LAB_OID_SYSTEM = 'urn:oid:nhi.lab.code'
 
-// The current bridges emit the TW Core URI while older cached bundles use the
-// OID above. Match both without treating unrelated local codes as NHI orders.
-function getNhiLabCode(obs: any): string | null {
-  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  for (const coding of codings) {
-    const system = typeof coding?.system === 'string' ? coding.system.toLowerCase() : ''
-    if (system !== NHI_LAB_SYSTEM && !system.includes('nhi-medical-order-code') && !system.includes('nhi-lab-code')) {
-      continue
-    }
-    const code = typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : ''
-    if (code) return code
-  }
-  return null
-}
-
+// NHI 醫令 codes come from the shared helper (nhiOrderCode), which accepts
+// 健保存摺's `…/nhi-medical-order-code`, MediCloud's `…/medical-service-payment-tw`
+// and the legacy `urn:oid:nhi.lab.code` / `nhi-lab-code` systems alike.
 function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: string } | null {
-  const nhiCode = getNhiLabCode(obs)
+  const nhiCode = nhiOrderCode(obs)
   if (!nhiCode) return null
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const labels = [
     obs?.code?.text,
     ...codings
-      .filter((coding) => !getNhiLabCode({ code: { coding: [coding] } }))
+      .filter((coding) => !isNhiOrderCodeSystem(coding?.system))
       .flatMap((coding) => [coding?.display, coding?.code]),
   ]
     .filter((label): label is string => typeof label === 'string' && !!label.trim())
@@ -319,7 +315,7 @@ function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: st
 const MYCOBACTERIAL_CULTURE_NHI_CODES = new Set(['13012C', '13026C'])
 
 function hasNhiMycobacterialCultureEvidence(obs: any): boolean {
-  const nhiCode = getNhiLabCode(obs)
+  const nhiCode = nhiOrderCode(obs)
   if (!nhiCode || !MYCOBACTERIAL_CULTURE_NHI_CODES.has(nhiCode)) return false
 
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
@@ -375,6 +371,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '2514-8': 'KETONE', // Ketones [Presence] in Urine by Test strip
   '19161-9': 'UROBI', // Urobilinogen [Units/volume] in Urine by Test strip
   '24124-0': 'CASTS', // Casts [Presence] in Urine sediment by Light microscopy
+  '2890-2': 'PROT/CR RATIO', // Protein/Creatinine [Mass Ratio] in Urine
   // Its own column — not folded into RISKF, whose exact ratio definition at
   // the source hospital is unverified.
   '9830-1': 'TC/HDL RATIO', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
@@ -385,6 +382,8 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   '總蛋白': 'TP',
   '血清總蛋白': 'TP',
   '總蛋白質': 'TP',
+  // 09040C 全蛋白 — the NHI order's own name.
+  '全蛋白': 'TP',
   'PTH-I': 'IPTH',
   IPTH: 'IPTH',
   'I-PTH': 'IPTH',
@@ -447,6 +446,47 @@ const URINE_SPELLINGS: Readonly<Record<string, string>> = {
   '微白蛋白/肌酐酸比值(半定量)': 'ACR',
 }
 
+/**
+ * The 免疫 column of one observation. Several analytes share one NHI order
+ * (12064B = SS-A + SS-B + Ro52; 30022C = one row per allergen), so the order
+ * code and its panel-name display are never consulted: the analyte LOINC
+ * first, then the row's own item name. Null when neither is recognised — the
+ * row then keeps its source name as its column (every allergen does).
+ */
+/** The 內分泌 column of a thyroid antibody / thyroglobulin row, by its LOINC
+ *  (see thyroid-analytes.ts). Null when the row carries none of them. */
+function thyroidAnalyteKey(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    if (coding?.system === FHIR_SYSTEMS.LOINC && THYROID_LOINC_TO_KEY[coding?.code]) {
+      return THYROID_LOINC_TO_KEY[coding.code]
+    }
+  }
+  return null
+}
+
+const IMMUNOLOGY_COLUMN_KEYS = new Set([...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS])
+
+function immunologyAnalyteKey(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    if (coding?.system === FHIR_SYSTEMS.LOINC && IMMUNOLOGY_LOINC_TO_KEY[coding?.code]) {
+      return IMMUNOLOGY_LOINC_TO_KEY[coding.code]
+    }
+  }
+  const ownNames = [
+    obs?.code?.text,
+    ...codings
+      .filter((coding) => !isNhiOrderCodeSystem(coding?.system))
+      .flatMap((coding) => [coding?.display, coding?.code]),
+  ]
+  for (const name of ownNames) {
+    const key = typeof name === 'string' ? immunologyKeyFromName(name) : null
+    if (key) return key
+  }
+  return null
+}
+
 /** A key as it lands in one panel — urine spellings folded there only. */
 export function labKeyInCategory(testKey: string, categoryId?: string): string {
   return categoryId === 'urine' ? URINE_SPELLINGS[testKey] ?? testKey : testKey
@@ -478,6 +518,10 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   CASTS: 'Casts',
   'PROT/CR RATIO': 'UPCR',
   'TC/HDL RATIO': 'TC/HDL',
+  // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
+  ...IMMUNOLOGY_DISPLAY,
+  // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
+  ...THYROID_DISPLAY,
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -543,7 +587,8 @@ function canonicalTestKey(obs: any): string {
   return resolved
 }
 
-function isKnownPivotKey(key: string): boolean {
+/** True when `key` is an analyte the pivot recognises (package or app label). */
+export function isKnownPivotKey(key: string): boolean {
   return CANONICAL_KEYS.has(key) || !!APP_CANONICAL_DISPLAY[key]
 }
 
@@ -601,6 +646,21 @@ export function getLabPivotTestIdentity(
   let testKey = labKeyInCategory(canonicalTestKey(obs), categoryId)
   let displayOverride: string | undefined
 
+  if (categoryId === 'immuno') {
+    // Only a LOINC or the immunology name matcher may assign a 免疫 column.
+    // The general name resolver reads "IgG抗體" (anti-IgG) as IgG; when the
+    // matcher refused such a name, the row keeps its own source name.
+    const immunologyKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs)
+    testKey = immunologyKey
+      ?? (IMMUNOLOGY_COLUMN_KEYS.has(testKey) ? raw.normalize('NFKC').trim().toUpperCase() : testKey)
+  }
+
+  if (categoryId === 'endocrine') {
+    // The header comes from APP_CANONICAL_DISPLAY, the same map every
+    // rendered label (getLabRowDisplayParts) reads.
+    testKey = thyroidAnalyteKey(obs) ?? testKey
+  }
+
   const microbiologyComponent = categoryId === 'microbio'
     ? microbiologyLocalIdentity(obs)
     : null
@@ -640,8 +700,12 @@ export function getLabPivotTestIdentity(
     displayOverride = label.display
   }
 
-  const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
-  const nhiCode = nhiCoding?.code as string | undefined
+  const nhiCode = nhiOrderCode(obs) ?? undefined
+  // The NHI display is a header fallback only for the legacy OID system. The
+  // current 健保存摺 and MediCloud systems both fall through to the row's own
+  // label: their NHI display is usually the panel name (「細菌培養鑑定檢查」
+  // for "Anaerobic #2"), which would make a misleading column header.
+  const nhiCoding = obs.code?.coding?.find((c: any) => c?.system === LEGACY_NHI_LAB_OID_SYSTEM)
   const canonicalMapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
   // The audit view must not collapse different source labels merely because
@@ -664,7 +728,9 @@ export function getLabPivotTestIdentity(
   //      label so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
-  const candidateDisplay = nhiDisplay || rawDisplay
+  // A 免疫 order display names the whole multi-analyte order (「可抽出的核抗體
+  // 測定— Ro/La 抗體」 for SS-A, SS-B and Ro52), never the analyte in this column.
+  const candidateDisplay = (categoryId !== 'immuno' && nhiDisplay) || rawDisplay
   const isCanonical = CANONICAL_KEYS.has(testKey) || !!APP_CANONICAL_DISPLAY[testKey]
   const canonicalDisplay = APP_CANONICAL_DISPLAY[testKey] || CANONICAL_DISPLAY[testKey] || testKey
   const displayName = nameMode === 'original'

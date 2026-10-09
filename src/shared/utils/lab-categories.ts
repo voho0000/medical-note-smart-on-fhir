@@ -11,10 +11,27 @@
 //  No denylist / exclusion regex needed — unrecognised tests simply fall
 //  through to `return null`.
 
-import { FHIR_SYSTEM_FRAGMENTS } from '@/src/shared/constants/fhir-systems.constants'
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 
 import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
+import {
+  AUTOANTIBODY_KEYS,
+  IMMUNOGLOBULIN_KEYS,
+  IMMUNOLOGY_LOINC_TO_KEY,
+  IMMUNOLOGY_NHI_ORDER_CODES,
+  IMMUNOLOGY_TEXT_TO_KEY,
+  IMMUNOLOGY_NAME_CONTEXT,
+  IMMUNOLOGY_NAME_DENIED_CONTEXT,
+  IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES,
+  IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS,
+  immunologyKeyFromName,
+  immunologyNameMatch,
+  isAllergenName,
+  SPECIFIC_ALLERGEN_NHI_ORDER_CODES,
+  PACKAGE_IMMUNOLOGY_LOINCS,
+} from '@/src/shared/utils/immunology-analytes'
 
 export interface LabSubgroup {
   /** Stable id — matches a key under t.reports.cumulativeSubgroups for display. */
@@ -43,6 +60,11 @@ export interface LabCategory {
    *  a minority of patients (e.g. arterial blood gas), this avoids crowding a
    *  narrow routine-outpatient view. */
   hiddenByDefault?: boolean
+  /** NHI 醫令 order codes that, by themselves, place an observation in this
+   *  category (Pass 2.5). Only for orders whose every member analyte belongs
+   *  here; a multi-analyte order still takes its COLUMN from the analyte name
+   *  or LOINC, never from the shared order code. */
+  nhiOrderCodes?: string[]
   /** 直式 (stacked) cumulative report only: split this category's single wide
    *  pivot into several side-by-side-free tables, each listing the subgroup
    *  ids it holds, in order. Rows whose subgroup is not listed anywhere join
@@ -118,7 +140,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
@@ -211,8 +233,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     loincCodes: [
       // Thyroid: TSH, T4, T3, FT4, FT3
       '3016-3', '11580-8', '14999-7', '3024-7', '3026-2', '3051-0', '14920-3', '14998-9',
-      // Anti-TPO, Anti-Tg, Thyroglobulin
-      '8099-6', '8100-2', '11572-5',
+      // Anti-TPO, Anti-Tg, Thyroglobulin — see thyroid-analytes.ts (the
+      // former '8099-6' / '8100-2' are not LOINC codes).
+      // (11572-5 used to sit here, but it is Rheumatoid factor [Units/volume]
+      // in Serum or Plasma — NLM Clinical Table Search, 2026-10-08 — so an RF
+      // row carrying it was filed under 內分泌. It now lives in 免疫.)
+      ...Object.keys(THYROID_LOINC_TO_KEY),
       // PTH (intact), Calcium-regulating
       '2731-8', '14866-8',
       // Vitamin D
@@ -296,6 +322,39 @@ export const LAB_CATEGORIES: LabCategory[] = [
     pinnedColumns: ['AFP', 'CEA', 'CA-199', 'CA-125', 'CA-153', 'PSA', 'FERRITIN'],
   },
   {
+    // 免疫 — immunoglobulins and complement, and autoantibodies (field report
+    // LDR-20261008-28256AA6). Analyte data live in immunology-analytes.ts.
+    // Specific-allergen IgE (30022C) is deliberately NOT here: it is kept out
+    // of the cumulative report altogether (see isExcludedFromCumulativeReport).
+    //
+    // A secondary sub-tab, like 血氣 and 病毒抗原: these are rheumatology /
+    // allergy work-ups ordered for a minority of patients, so on a narrow
+    // routine-outpatient tab strip they wait behind 「查看更多」 instead of
+    // pushing a routine panel out of view. The tab still appears directly
+    // whenever the strip has room, and 直式 always shows it as a section.
+    // Nothing is pinned: an empty IgG/C3 stub beside an ANA-only work-up
+    // would be noise.
+    //
+    // CRP stays in 生化 › 發炎/感染 (an acute-phase reactant read with PCT /
+    // ESR, not an immune-status test), although NHI bills it as 12015C.
+    id: 'immuno',
+    hiddenByDefault: true,
+    preferredOrder: [...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS],
+    codes: Object.keys(IMMUNOLOGY_TEXT_TO_KEY),
+    loincCodes: [
+      ...PACKAGE_IMMUNOLOGY_LOINCS,
+      ...Object.keys(IMMUNOLOGY_LOINC_TO_KEY),
+    ],
+    nhiOrderCodes: IMMUNOLOGY_NHI_ORDER_CODES,
+    subgroups: [
+      { id: 'immunoglobulin', members: IMMUNOGLOBULIN_KEYS },
+      { id: 'autoantibody', members: AUTOANTIBODY_KEYS },
+    ],
+    // 直式: the immunoglobulin/complement table, then the autoantibodies, so
+    // neither needs a horizontal scroll.
+    stackedPanels: [['immunoglobulin'], ['autoantibody']],
+  },
+  {
     id: 'urine',
     // Column order — clinical urinalysis report convention, left to right:
     //   1. Physical inspection  (COLOR → APPEARANCE/TURBIDITY → GRAVIT → PH)
@@ -339,7 +398,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // Note: SUGAR is NOT in urine codes — some clinics report blood glucose as
     // "Sugar". Urine dipstick sugar is detected via the qualitative-value
     // heuristic (Negative/+/++/etc.) earlier in categorizeObservation.
-    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'MUCUS', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值', '白蛋白/肌酐酸比值', '白蛋白/肌酸酐比值', 'MALB', 'MALB(U)', 'LE'],
+    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'MUCUS', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'UPCR', 'ALB/CR RATIO', 'ACR', 'UACR', '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值', '白蛋白/肌酐酸比值', '白蛋白/肌酸酐比值', 'MALB', 'MALB(U)', 'LE'],
     // 2026-05-29 additions (verified at loinc.org): 5792-7 Urine glucose,
     // 5818-0 Urobilinogen urine, 5770-3 Bilirubin urine, 14957-5 Microalbumin
     // urine, 14959-1 Microalbumin/Creatinine ratio. These were previously
@@ -357,7 +416,11 @@ export const LAB_CATEGORIES: LabCategory[] = [
       // ketones / urobilinogen, quantitative urine protein and sediment casts
       // — real bundles carry these codes and they must categorise into 尿液
       // by LOINC, not by whichever name the hospital printed.
-      '25428-4', '2514-8', '19161-9', '2888-6', '24124-0'],
+      '25428-4', '2514-8', '19161-9', '2888-6', '24124-0',
+      // 2026-10-08: 2890-2 Protein/Creatinine [Mass Ratio] in Urine (NLM
+      // Clinical Table Search) — the UPCR the 0.1.6 mapper gives a 09040C
+      // 「Prot/Cr ratio」 spot-urine row.
+      '2890-2'],
     subgroups: [
       { id: 'physical',  members: ['COLOR', 'APPEARANCE', 'TURBIDITY', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PH'] },
       { id: 'chemical',  members: ['PROT', 'PROTEIN', 'GLUCOSE', 'SUGAR', 'KETONE', 'KETON', 'BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRITE', 'NITRIT', 'LE', 'OCCULT', 'BLOOD'] },
@@ -564,6 +627,7 @@ const CATEGORY_MATCHERS = LAB_CATEGORIES.map((category) => ({
   loincCodes: new Set((category.loincCodes ?? []).map(normalize)),
   codes: new Set(category.codes.map(normalize)),
   canonicalKeys: new Set([...(category.preferredOrder ?? []), ...category.codes].map(normalize)),
+  nhiOrderCodes: new Set((category.nhiOrderCodes ?? []).map(normalize)),
 }))
 const MICROBIOLOGY_MATCHER = CATEGORY_MATCHERS.find(({ category }) => category.id === 'microbio')
 const NON_MICROBIOLOGY_LOINCS = new Set(CATEGORY_MATCHERS
@@ -618,16 +682,98 @@ const CATEGORY_NHI_SECTIONS: Record<string, string[]> = {
   urine: ['06'],
 }
 
-function nhiOrderCode(obs: any): string | null {
+// NHI 醫令 codes arrive under more than one system URI (健保存摺 writes
+// `…/nhi-medical-order-code`, 雲端病歷 MediCloud TW Core's
+// `…/medical-service-payment-tw`); the shared helper recognises all of them.
+// Only the first was recognised here once, so every MediCloud lab row looked
+// uncoded: a 30022C allergen named 混合黴菌 rode the fungal-culture name rule
+// into 微生物, and a 12064B Ro52 "Negative" was read as a urine dipstick.
+export { nhiOrderCode }
+
+// Spot-urine quantities and ratios are billed outside the 06 urinalysis
+// section — urine protein / creatinine under 09xxx (09040C 全蛋白 covers serum,
+// urine and fluids alike), microalbumin under 12111C — yet the name alone
+// already says urine. These names pass the urine section gate.
+const URINE_NAMES_OUTSIDE_SECTION_06 = new Set([
+  'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR',
+  'UPCR', 'MALB', 'MALB(U)',
+  '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值', '白蛋白/肌酐酸比值', '白蛋白/肌酸酐比值',
+].map(normalize))
+
+function hasUrineNameOutsideSection06(obs: any): boolean {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  for (const c of codings) {
-    const system = typeof c?.system === 'string' ? c.system : ''
-    if (system.includes(FHIR_SYSTEM_FRAGMENTS.NHI_MEDICAL_ORDER_CODE)) {
-      const code = typeof c?.code === 'string' ? c.code.trim().toUpperCase() : ''
-      if (code) return code
-    }
-  }
-  return null
+  const names = [obs?.code?.text, ...codings.flatMap((c: any) => [c?.code, c?.display])]
+  // The literal spelling or the analyte it resolves to: "Microalbumin" and
+  // 「微白蛋白」 resolve to MALB, "Microalbumin/Creatinine ratio" to ACR.
+  return names.some((name) => typeof name === 'string' && (
+    URINE_NAMES_OUTSIDE_SECTION_06.has(normalize(name))
+    || URINE_NAMES_OUTSIDE_SECTION_06.has(normalize(canonicalTestKeyFromString(name)))
+  ))
+}
+
+const IMMUNOLOGY_ORDER_SET = new Set(IMMUNOLOGY_NHI_ORDER_CODES)
+const IMMUNOLOGY_NAME_DENIED_ORDER_SET = new Set(IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES)
+const SPECIFIC_ALLERGEN_ORDER_SET = new Set(SPECIFIC_ALLERGEN_NHI_ORDER_CODES)
+
+/** The row's own names: code.text and every non-NHI coding's code and
+ *  display (the NHI display names the whole order, not this analyte). */
+function ownNames(obs: any): string[] {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  return [
+    obs?.code?.text,
+    ...codings
+      .filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+      .flatMap((c: any) => [c?.code, c?.display]),
+  ].filter((name): name is string => typeof name === 'string' && !!name.trim())
+}
+
+/**
+ * Specific-allergen IgE (NHI 30022C 特異過敏原免疫檢驗, or a row named like
+ * one of its allergens) is kept OUT of the cumulative report for now — not
+ * 免疫, not 其他, not 微生物 (owner decision 2026-10-08). It uses the same
+ * mechanism as every other row the report leaves out: no category. Such a
+ * row stays in the per-report 檢驗 list, is not sent in a lab-data problem
+ * report (which carries only categorised rows), and is skipped wherever a
+ * consumer requires a category (cumulative pivot, IPS export, AI category
+ * queries). See categorizeObservationWithReason's 'excluded'.
+ */
+export function isExcludedFromCumulativeReport(obs: any): boolean {
+  const nhi = nhiOrderCode(obs)
+  if (nhi && SPECIFIC_ALLERGEN_ORDER_SET.has(nhi)) return true
+  return ownNames(obs).some((name) => isAllergenName(name))
+}
+
+/**
+ * May an immunology-looking NAME place this row in 免疫? A denylist, not an
+ * allowlist of orders: an unambiguous name ("IgG1", "SS-A/Ro Ab", "IgG
+ * subclass 1") counts under any order code, an unknown one or none, unless
+ * - the order is one whose rows reuse these names for another test
+ *   (immunofixation 12103B, light chains 12160B) or sits in a section that
+ *   does (06 尿液, 07 糞便, 08 血液, 11 血庫, 13 微生物, 14 病毒血清);
+ * - the names say electrophoresis / light chain / a non-serum fluid / an
+ *   infection serology ("CSF IgG", "CMV IgG");
+ * - the only match is a bare short name (RF, Ku, Ki, EJ, OJ, Sm, RNP, SRP,
+ *   SSA, SSB) with no immunology context: an immunology order, an ENA / blot
+ *   / autoantibody word in the names or order display, or a qualified
+ *   spelling ("Ku Ab", "anti-Ku", "Rheumatoid factor").
+ * Rows under an immunology order never get here — Pass 2.5 places them.
+ */
+function immunologyNameAllowed(obs: any): boolean {
+  const nhi = nhiOrderCode(obs)
+  // An immunology order (08107B, the IgG-subclass panel, sits in section 08)
+  // is never refused by its section.
+  if (nhi && !IMMUNOLOGY_ORDER_SET.has(nhi) && (IMMUNOLOGY_NAME_DENIED_ORDER_SET.has(nhi)
+    || IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS.some((section) => nhi.startsWith(section)))) return false
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const context = [obs?.code?.text, ...codings.map((c: any) => c?.display)]
+    .filter((text): text is string => typeof text === 'string')
+    .map(normalize)
+    .join(' ')
+  if (IMMUNOLOGY_NAME_DENIED_CONTEXT.test(context)) return false
+  const matches = ownNames(obs).map((name) => immunologyNameMatch(name))
+  if (matches.some((match) => match && !match.ambiguous)) return true
+  if (!matches.some((match) => match)) return false
+  return (!!nhi && IMMUNOLOGY_ORDER_SET.has(nhi)) || IMMUNOLOGY_NAME_CONTEXT.test(context)
 }
 
 // A NAME-based category match is rejected when the obs carries an NHI code from
@@ -643,9 +789,14 @@ function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
   // otherwise ride 葡萄糖 / SUGAR into the 血糖 trend.
   if (cat.id === 'glucose' && isQualitativeResult(obs)) return false
 
+  const nhi = nhiOrderCode(obs)
+  // 免疫 names are short and generic ("IgG", "C3", "Sm", "Ku"): see
+  // immunologyNameAllowed for the contexts that refuse them.
+  if (cat.id === 'immuno') return immunologyNameAllowed(obs)
+
   const sections = CATEGORY_NHI_SECTIONS[cat.id]
   if (!sections) return true
-  const nhi = nhiOrderCode(obs)
+  if (cat.id === 'urine' && hasUrineNameOutsideSection06(obs)) return true
   return !nhi || sections.some((p) => nhi.startsWith(p))
 }
 
@@ -666,6 +817,7 @@ export type LabCategoryDecision =
   | 'qualitative'         // Pass 6
   | 'fallback'            // no pass matched → 其他 catch-all (or none)
   | 'none'                // no observation
+  | 'excluded'            // deliberately left out of the report (30022C allergens); never sent
 
 export interface LabCategoryResult {
   category: LabCategory | null
@@ -685,11 +837,22 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
 
   const codings: any[] = Array.isArray(obs.code?.coding) ? obs.code.coding : []
   const codeNorms = codings.map((c: any) => (c?.code ? normalize(c.code) : '')).filter(Boolean)
-  const displayNorms = codings.map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
   const textNorm = obs.code?.text ? normalize(obs.code.text) : ''
+  // An NHI order coding's display names the ORDER (09040C 全蛋白, 12064B
+  // 「可抽出的核抗體測定—Ro/La抗體」), not this row. While the row has a name of
+  // its own (code.text or a non-NHI coding), only that name is matched as the
+  // analyte; the order display stays order-level context (Pass 0's test
+  // family, Pass 5's urine wording).
+  const ownCodings = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+  const ownDisplayNorms = ownCodings.map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
+  const orderDisplayNorms = codings
+    .filter((c: any) => isNhiOrderCodeSystem(c?.system))
+    .map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
+  const hasOwnName = !!textNorm || ownCodings.some((c: any) => c?.display || c?.code)
+  const displayNorms = hasOwnName ? ownDisplayNorms : [...ownDisplayNorms, ...orderDisplayNorms]
 
   const exactCandidates = [...codeNorms, textNorm, ...displayNorms].filter(Boolean)
-  const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
+  const fullText = [textNorm, ...ownDisplayNorms, ...orderDisplayNorms].filter(Boolean).join(' ')
 
   // ── Early special cases ──────────────────────────────────────────────────
   // (Previously: 溶血/脂血/icterus filter removed 2026-05-29.) Bridge still
@@ -702,6 +865,9 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // Pass ordering — refactored 2026-05-29 (v0.13.0 audit):
   //   1. Specimen-based routing      (authoritative boundary between blood/urine/other)
   //   2. LOINC against cat.loincCodes (authoritative analyte identifier)
+  //   2.5 NHI order code against cat.nhiOrderCodes (2026-10-08, 免疫;
+  //       reported as 'code' — the lab-data report Function's decision enum
+  //       is fixed, see firebase-smart-on-fhir lab-data-report/schema.ts)
   //   3. Exact short-code match against cat.codes (VGH/local short codes)
   //   4. Stripped-display match  (handles "Serum TSH(ECLIA)" → "TSH")
   //   5. Text-based urine fallback (only when 1–4 missed)
@@ -717,6 +883,11 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // HbA1c text override: LOINC 4548-4 in glucose.loincCodes catches it,
   // and the text 'HbA1c' / 'HB-A1C' / 'GLYCATED' all match glucose.codes
   // entries via Pass 3/4 below.
+
+  // ── Excluded rows: specific-allergen IgE (see isExcludedFromCumulativeReport)
+  // Before microbiology, so 混合黴菌 (mixed moulds IgE) can never be filed
+  // as a fungal culture.
+  if (isExcludedFromCumulativeReport(obs)) return { category: null, decidedBy: 'excluded' }
 
   // ── Pass 0: microbiology, by TEST rather than specimen ─────────────────
   // Runs first on purpose. A culture is microbiology whatever it was grown
@@ -768,6 +939,18 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
     }
   }
 
+  // ── Pass 2.5: NHI 醫令 order code that belongs wholly to one category ───
+  // After LOINC (a bridge LOINC stays authoritative, and its mistakes stay
+  // visible) but before every name pass and the qualitative-urine guess: a
+  // 12064B Ro52 "Negative" is an autoantibody whatever its value looks like.
+  // Only the category comes from here; the column still comes from the
+  // analyte's own name, because one order bills several analytes.
+  if (nhiCode) {
+    for (const { category: cat, nhiOrderCodes } of CATEGORY_MATCHERS) {
+      if (nhiOrderCodes.has(nhiCode)) return { category: cat, decidedBy: 'code' }
+    }
+  }
+
   // ── Pass 3: exact short-code match against cat.codes ───────────────────
   for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of exactCandidates) {
@@ -807,6 +990,8 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   const canonicalKeys = [
     canonicalKeyFromLoinc(obs),
     ...exactCandidates.map((candidate) => canonicalTestKeyFromString(candidate)),
+    // Bilingual / parenthesised immunology names 「免疫球蛋白E ;(IgE)」.
+    ...exactCandidates.map((candidate) => immunologyKeyFromName(candidate)),
   ].filter((key): key is string => !!key && key !== 'UNKNOWN').map(normalize)
   for (const { category: cat, canonicalKeys: keySet } of CATEGORY_MATCHERS) {
     for (const key of canonicalKeys) {
@@ -830,8 +1015,10 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // microbiology microscopy row like 13006C "Neutrophil 1+(>25/LPF)" — already
   // blocked from CBC by the section gate above — would bounce into 尿液 on the
   // leading "1+". Uncoded sandbox/orphan dipstick rows (no NHI code) still fall
-  // through here as before.
-  if (!specimenSaysBlood && !nhiOrderCode(obs) && isQualitativeResult(obs)) {
+  // through here as before, and so do rows billed under a 06 尿液 order, whose
+  // code says urine outright. An immunology order never reaches here (Pass
+  // 2.5), so a line-blot "Negative" can no longer become a dipstick result.
+  if (!specimenSaysBlood && (!nhiCode || nhiCode.startsWith('06')) && isQualitativeResult(obs)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'qualitative' }
   }
 
@@ -857,10 +1044,17 @@ function fallbackCategory(obs: any): LabCategory | null {
  * Return the display name to show as the test column header.
  */
 export function getTestDisplayName(obs: any): string {
+  // The row's own name first: code.text, then a non-NHI (item) coding. An NHI
+  // order coding names the order — MediCloud writes it as coding[0] — so it
+  // is only the last resort.
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
   return (
     obs?.code?.text ||
-    obs?.code?.coding?.[0]?.display ||
-    obs?.code?.coding?.[0]?.code ||
+    own.find((c: any) => c?.display)?.display ||
+    own.find((c: any) => c?.code)?.code ||
+    codings[0]?.display ||
+    codings[0]?.code ||
     'Unknown'
   )
 }
