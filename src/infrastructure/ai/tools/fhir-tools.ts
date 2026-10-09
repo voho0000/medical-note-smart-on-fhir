@@ -490,7 +490,20 @@ function labAnalyteKey(observation: any): string {
 export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
 
 // "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
-const NUMERIC_TEXT_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?\d+(?:\.\d+)?(?:\s*[-–~]\s*\d+(?:\.\d+)?)?(?![\d.:：])/
+// One number: optional sign, digits with optional thousands separators and
+// decimals, or a bare leading decimal (".5"), optional exponent ("1.2e3").
+const NUMBER_PATTERN = String.raw`[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?`
+// A number or a range ("0-5", "0 ~ 5", "0 to 5"), after an optional
+// comparator (<, >, ≤, ≥, <=, >=), ending where the number ends.
+const NUMERIC_TEXT_RE = new RegExp(
+  String.raw`^\s*(?:<=|>=|[<>≤≥≦≧])?\s*${NUMBER_PATTERN}(?:\s*(?:-|~|\bto\b)\s*${NUMBER_PATTERN})?(?![\d.,:])`,
+  'i',
+)
+/** NFKC folds full-width digits and ＋/－; the other dashes (− U+2212, ‒, –,
+ *  —) are read as the ASCII hyphen-minus before a number, so "−3.2" and
+ *  "0–5" parse while a lone "—" (no value) stays text. */
+const foldNumericText = (text: string) =>
+  text.normalize('NFKC').replace(/[−‒–—](?=\s*[+-]?[\d.])/g, '-')
 const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
 /** Value family of one lab row: a count / concentration, a percentage, a
  *  titer, an ordinal (presence / grade) or free text. Rows of different
@@ -500,17 +513,23 @@ export function labValueFamily(observation: any): LabValueFamily {
   if (quantity && typeof quantity.value === 'number') {
     return isPercentUnit(String(quantity.unit ?? quantity.code ?? '')) ? 'percent' : 'quantity'
   }
-  if (observation?.valueRange || typeof observation?.valueInteger === 'number'
-    || typeof observation?.valueDecimal === 'number') return 'quantity'
+  const range = observation?.valueRange
+  if (range && (range.low || range.high)) {
+    const unit = String(range.low?.unit ?? range.high?.unit ?? range.low?.code ?? range.high?.code ?? '')
+    return isPercentUnit(unit) ? 'percent' : 'quantity'
+  }
+  if (typeof observation?.valueInteger === 'number' || typeof observation?.valueDecimal === 'number') return 'quantity'
   if (observation?.valueRatio) return 'titer'
   if (observation?.valueCodeableConcept || typeof observation?.valueBoolean === 'boolean') return 'ordinal'
-  const text = typeof observation?.valueString === 'string' ? observation.valueString.normalize('NFKC') : ''
+  const text = typeof observation?.valueString === 'string' ? foldNumericText(observation.valueString) : ''
   if (TITER_VALUE_RE.test(text)) return 'titer'
   // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)", "2+" are one
-  // family — checked before numbers so a grade "2+" is not read as 2.
+  // family — checked before numbers so a grade "2+" is not read as 2 (a sign
+  // followed by a digit is never ordinal, so "-3.2" falls through).
   if (isOrdinalValue(text)) return 'ordinal'
-  // "2 /HPF", "0–5 /HPF", "< 0.5": a number written as text — a percentage
-  // when its unit is one ("62%", "62 ％", "62 percent"), like valueQuantity.
+  // A number written as text — signed, grouped, full-width, a range, after a
+  // comparator — is a quantity; a percentage when its unit is one ("62%",
+  // "62 ％", "62 percent"), like valueQuantity.
   const numeric = text.match(NUMERIC_TEXT_RE)
   if (numeric) return isPercentUnit(text.slice(numeric[0].length).split(/[\s(（,;]/).filter(Boolean)[0] ?? '') ? 'percent' : 'quantity'
   return 'text'
@@ -582,6 +601,32 @@ export function labCategoryAnalyte(observation: any, category: string): {
   }
   const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
   return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }
+}
+
+/**
+ * A label for one AI lab group that holds for EVERY member. Members of one
+ * LOINC can carry different own labels — 2345-7 headed "Glu-AC" for an older
+ * "AC Sugar" row and "Glucose" for a newer generic one — and naming the group
+ * after its first member would present a non-fasting latest value as fasting.
+ * When the members agree their label is kept; otherwise the group's generic
+ * name: the display of its declared / recognised analyte key, else the LOINC's
+ * own display, else the LOINC code or name key.
+ */
+export function labGroupLabel(members: readonly any[], category: string): string {
+  const analytes = members.map((observation) => labCategoryAnalyte(observation, category))
+  const labels = new Set(analytes.map((analyte) => analyte.label))
+  if (labels.size === 1) return analytes[0].label
+  const { canonicalKey, loinc } = analytes[0]
+  if (isKnownPivotKey(canonicalKey)) {
+    return getLabRowDisplayParts({ testKey: canonicalKey, displayName: canonicalKey }, 'medical', 'en').name
+  }
+  if (loinc) {
+    const loincDisplay = members
+      .flatMap((observation) => observation?.code?.coding ?? [])
+      .find((coding: any) => /loinc/i.test(coding?.system || '') && coding?.code === loinc && coding?.display)?.display
+    return loincDisplay ?? `LOINC ${loinc}`
+  }
+  return canonicalKey
 }
 
 export function labCategoryAnalyteKey(observation: any, category: string): string {
@@ -1813,6 +1858,8 @@ export function createFhirTools(getData: () => AgentDataSource) {
           if (group) group.observations.push(observation)
           else byAnalyte.set(analyte.key, { ...analyte, observations: [observation] })
         }
+        // A label that holds for every member, not the first member's subtype.
+        for (const group of byAnalyte.values()) group.label = labGroupLabel(group.observations, category)
 
         // Groups that share a label (751-8 and 770-8 both read "NEU") are told
         // apart by their LOINC and value family, so none looks like a duplicate.
