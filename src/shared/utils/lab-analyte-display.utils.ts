@@ -8,6 +8,7 @@ import {
 } from '@voho0000/clinical-lab-normalization/display'
 import { categorizeObservation } from './lab-categories'
 import {
+  DIFFERENTIAL_COUNT_LABELS,
   getLabCompatibilityCanonicalDisplay,
   getLabPivotTestIdentity,
   type LabRow,
@@ -28,7 +29,17 @@ export function getLabRowDisplayParts(
 ): { name: string; abbr: string | null } {
   if (mode === 'original') return { name: row.displayName, abbr: null }
   const compatibilityDisplay = getLabCompatibilityCanonicalDisplay(row.testKey)
-  if (compatibilityDisplay) return { name: compatibilityDisplay, abbr: null }
+  if (compatibilityDisplay) {
+    // Absolute-count columns the app adds (ALC, AMC, …) get the same lay
+    // treatment the package gives ANC: a plain name, the code kept beside it.
+    const lay = audience === 'patient' ? DIFFERENTIAL_COUNT_LABELS[row.testKey] : undefined
+    if (lay) {
+      return language === 'zh-TW'
+        ? { name: lay.zh, abbr: compatibilityDisplay }
+        : { name: lay.en, abbr: null }
+    }
+    return { name: compatibilityDisplay, abbr: null }
+  }
   if (CANONICAL_KEYS.has(row.testKey)) {
     return getAnalyteDisplayParts(row.testKey, audience, language)
   }
