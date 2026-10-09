@@ -581,7 +581,8 @@ function canonicalTestKey(obs: any): string {
   return resolved
 }
 
-function isKnownPivotKey(key: string): boolean {
+/** True when `key` is an analyte the pivot recognises (package or app label). */
+export function isKnownPivotKey(key: string): boolean {
   return CANONICAL_KEYS.has(key) || !!APP_CANONICAL_DISPLAY[key]
 }
 

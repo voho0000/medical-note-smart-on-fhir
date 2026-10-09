@@ -274,19 +274,74 @@ export function normalizeImmunologyName(name: string): string {
   return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toUpperCase()
 }
 
+/** Prefixes and suffixes hospitals add that do not change the analyte: a
+ *  serum specimen word, trailing dots. (STAT) and other parentheticals are
+ *  handled by the before-parenthesis variant. */
+const NEUTRAL_PREFIX_RE = /^(?:SERUM|血清)\s*[-:：]?\s*/
+const TRAILING_DOTS_RE = /[.。…]+$/
+/** Antibody qualifiers: "Ab", "antibody", 「抗體」 after, "anti-" / 「抗」 before.
+ *  A name stripped of one is QUALIFIED — "Ku Ab" or "anti-Ku" is never the
+ *  bare, context-dependent "Ku". */
+const ANTIBODY_SUFFIX_RE = /\s*(?:-\s*)?(?:\bAB\b|\bANTIBOD(?:Y|IES)\b|抗體)$/
+const ANTI_PREFIX_RE = /^(?:ANTI\s*-?\s*|抗\s*)(?=\S)/
+
+/** One spelling to look up, and whether an antibody qualifier was removed. */
+interface NameVariant { text: string; qualified: boolean }
+
 /** Spellings of one source name worth trying, most specific first. */
-function nameVariants(name: string): string[] {
+function nameVariants(name: string): NameVariant[] {
   const full = normalizeImmunologyName(name)
   if (!full) return []
-  const variants = [full]
+  const bases: string[] = [full]
   const beforeParen = full.replace(/\s*[(\[（［].*$/, '').trim()
-  if (beforeParen) variants.push(beforeParen)
+  if (beforeParen) bases.push(beforeParen)
   const bilingual = full.match(/^(.*?)\s*;\s*\((.*)\)\s*$/)
-  if (bilingual) variants.push(bilingual[2].trim(), bilingual[1].trim())
+  if (bilingual) bases.push(bilingual[2].trim(), bilingual[1].trim())
   const inner = full.match(/[(（]([^()（）]+)[)）]\s*$/)
-  if (inner) variants.push(inner[1].trim())
-  return [...new Set(variants.filter(Boolean))]
+  if (inner) bases.push(inner[1].trim())
+
+  const variants: NameVariant[] = []
+  const add = (text: string, qualified: boolean) => {
+    const clean = text.replace(TRAILING_DOTS_RE, '').trim()
+    if (clean) variants.push({ text: clean, qualified })
+  }
+  for (const base of bases) {
+    const neutral = base.replace(TRAILING_DOTS_RE, '').trim().replace(NEUTRAL_PREFIX_RE, '').trim()
+    add(base, false)
+    add(neutral, false)
+    // Antibody qualifiers, in either order and together.
+    const noSuffix = neutral.replace(ANTIBODY_SUFFIX_RE, '').trim()
+    const noPrefix = neutral.replace(ANTI_PREFIX_RE, '').trim()
+    const neither = noSuffix.replace(ANTI_PREFIX_RE, '').trim()
+    if (noSuffix !== neutral) add(noSuffix, true)
+    if (noPrefix !== neutral) add(noPrefix, true)
+    if (neither !== neutral) add(neither, true)
+  }
+  const seen = new Set<string>()
+  return variants.filter((v) => {
+    const id = `${v.text}|${v.qualified}`
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
 }
+
+/** Spacing / hyphen-insensitive form: "SS A", "SSA" and "SS-A" all read SSA. */
+const compact = (text: string) => text.replace(/[\s\-‐-―]+/g, '')
+
+/** Compact spelling → key. A compact form is ambiguous only when every alias
+ *  that folds to it is a bare ambiguous short name. */
+const IMMUNOLOGY_COMPACT_TO_KEY: ReadonlyMap<string, { key: string; ambiguous: boolean }> = (() => {
+  const map = new Map<string, { key: string; ambiguous: boolean }>()
+  for (const [alias, key] of Object.entries(IMMUNOLOGY_TEXT_TO_KEY)) {
+    const form = compact(alias)
+    const ambiguous = AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES.has(alias)
+    const prior = map.get(form)
+    if (prior && prior.key !== key) throw new Error(`immunology alias collision: ${alias}`)
+    map.set(form, { key, ambiguous: prior ? prior.ambiguous && ambiguous : ambiguous })
+  }
+  return map
+})()
 
 // IgG subclass n in any of the spellings hospitals print: IgG1, IgG 1,
 // IgG-1, IgG subclass 1, IgG1 subclass, IgG1亞型, IgG 1 次分類, 免疫球蛋白G1,
@@ -299,11 +354,17 @@ const IGG_SUBCLASS_RE =
  *  AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES). Null when nothing matches. */
 export function immunologyNameMatch(name: string | undefined | null): { key: string; ambiguous: boolean } | null {
   if (!name) return null
-  for (const variant of nameVariants(name)) {
-    const key = IMMUNOLOGY_TEXT_TO_KEY[variant]
-    if (key) return { key, ambiguous: AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES.has(variant) }
-    const subclass = variant.match(IGG_SUBCLASS_RE)
+  const variants = nameVariants(name)
+  // Exact spellings first, so a bare "SSA" stays the ambiguous short name.
+  for (const { text, qualified } of variants) {
+    const key = IMMUNOLOGY_TEXT_TO_KEY[text]
+    if (key) return { key, ambiguous: !qualified && AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES.has(text) }
+    const subclass = text.match(IGG_SUBCLASS_RE)
     if (subclass) return { key: `IGG${subclass[1]}`, ambiguous: false }
+  }
+  for (const { text, qualified } of variants) {
+    const match = IMMUNOLOGY_COMPACT_TO_KEY.get(compact(text))
+    if (match) return { key: match.key, ambiguous: !qualified && match.ambiguous }
   }
   return null
 }
@@ -318,5 +379,5 @@ const ALLERGEN_NAME_SET = new Set(ALLERGEN_NAMES.map(normalizeImmunologyName))
 /** True for a 30022C allergen item name (混合黴菌, 貓毛 …). */
 export function isAllergenName(name: string | undefined | null): boolean {
   if (!name) return false
-  return nameVariants(name).some((variant) => ALLERGEN_NAME_SET.has(variant))
+  return nameVariants(name).some(({ text }) => ALLERGEN_NAME_SET.has(text))
 }

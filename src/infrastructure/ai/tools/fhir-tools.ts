@@ -79,7 +79,7 @@ import {
   compareTestsByPreferred,
   isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
-import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -482,6 +482,25 @@ function labAnalyteKey(observation: any): string {
   return getAnalyteCanonicalKey(observation)
     ?? loincOf(observation?.code)
     ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
+}
+
+/**
+ * Group key and label for one row of queryLabResultsByCategory. The cumulative
+ * report's identity is used only when it names a recognised analyte (it splits
+ * one NHI order into SS-A / SS-B / Ro52, and keys thyroid rows by LOINC).
+ * Otherwise the LOINC-keyed fallback stays: distinct tests sharing a panel
+ * name (CBC differential rows all called 白血球分類計數) must never merge.
+ */
+export function labCategoryAnalyte(observation: any, category: string): { key: string; label: string } {
+  const identity = getLabPivotTestIdentity(observation, category)
+  if (isKnownPivotKey(identity.testKey)) {
+    return { key: identity.mapKey, label: getLabRowDisplayParts(identity, 'medical', 'en').name }
+  }
+  return { key: labAnalyteKey(observation), label: getAnalyteLabel(observation) }
+}
+
+export function labCategoryAnalyteKey(observation: any, category: string): string {
+  return labCategoryAnalyte(observation, category).key
 }
 
 function diagnosticReportOutput(report: any) {
@@ -1700,20 +1719,14 @@ export function createFhirTools(getData: () => AgentDataSource) {
             && (!abnormalOnly || isAbnormalObservation(observation))
           )
 
-        // Same analyte identity as the cumulative report: one NHI order can
-        // bill several analytes under one panel name (12064B = SS-A + SS-B +
-        // Ro52), so grouping by name alone would silently drop results.
+        // See labCategoryAnalyte: report identity for recognised analytes,
+        // LOINC-keyed fallback otherwise.
         const byAnalyte = new Map<string, { label: string; observations: any[] }>()
         for (const observation of expanded) {
-          const identity = getLabPivotTestIdentity(observation, category)
-          const group = byAnalyte.get(identity.mapKey)
+          const { key, label } = labCategoryAnalyte(observation, category)
+          const group = byAnalyte.get(key)
           if (group) group.observations.push(observation)
-          else {
-            byAnalyte.set(identity.mapKey, {
-              label: getLabRowDisplayParts(identity, 'medical', 'en').name,
-              observations: [observation],
-            })
-          }
+          else byAnalyte.set(key, { label, observations: [observation] })
         }
 
         const groups = [...byAnalyte.entries()].map(([canonicalKey, { label, observations }]) => {
