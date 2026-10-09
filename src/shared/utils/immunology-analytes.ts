@@ -169,9 +169,15 @@ export const PACKAGE_IMMUNOLOGY_LOINCS = [
  * NHI 醫令 orders whose every analyte is immunology. Sources: the app's own
  * NHI order-name table (12025B/12027B/12029B/12031C/12053C/12056B), the
  * field-report rows (12011C, 12034B, 12038B, 12060C, 12064B, 12137B, 12154B,
- * 12155B, 12173B, 30022C), and 12149B = IgG subclass (長庚 test catalogue
- * L72-206 「免疫球蛋白 G4 量」). CRP (12015C), CEA, ferritin and the other
- * 12xxx tumour / inflammation markers are NOT here.
+ * 12155B, 12173B, 30022C), and the IgG subclass orders, verified 2026-10-10
+ * against the NHI fee schedule (醫療服務給付項目及支付標準, data.gov.tw 174450)
+ * and TW Core medical-service-payment-tw: 12146B IgG1, 12147B IgG2, 12148B
+ * IgG3, 12149B IgG4 (長庚 L72-206 「免疫球蛋白 G4 量」) — one subclass each —
+ * and 08107B G型免疫球蛋白次群定量 (含 IgG1–IgG4), the four-subclass panel.
+ * 08107B is billed in the 08 血液 section; being listed here exempts it from
+ * that section's name gate. Every column still comes from the row's own
+ * LOINC or item name, never from the order code. CRP (12015C), CEA, ferritin
+ * and the other 12xxx tumour / inflammation markers are NOT here.
  */
 export const IMMUNOLOGY_NHI_ORDER_CODES = [
   '12011C', // 類風濕性關節炎因子 RF
@@ -187,7 +193,11 @@ export const IMMUNOLOGY_NHI_ORDER_CODES = [
   '12060C', // DNA 抗體 (anti-dsDNA)
   '12064B', // ENA Ro/La — SS-A, SS-B, Ro52
   '12137B', // 肌肉炎自體抗體組合 (myositis line blot)
-  '12149B', // IgG subclass
+  '12146B', // 免疫球蛋白 G1 量 (IgG1)
+  '12147B', // 免疫球蛋白 G2 量 (IgG2)
+  '12148B', // 免疫球蛋白 G3 量 (IgG3)
+  '12149B', // 免疫球蛋白 G4 量 (IgG4)
+  '08107B', // G型免疫球蛋白次群定量 — IgG1, IgG2, IgG3 and IgG4
   '12154B', // ENA Jo-1
   '12155B', // ENA Ki/Ku
   '12173B', // ENA Sm/RNP

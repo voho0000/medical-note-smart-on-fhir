@@ -755,7 +755,9 @@ export function isExcludedFromCumulativeReport(obs: any): boolean {
  */
 function immunologyNameAllowed(obs: any): boolean {
   const nhi = nhiOrderCode(obs)
-  if (nhi && (IMMUNOLOGY_NAME_DENIED_ORDER_SET.has(nhi)
+  // An immunology order (08107B, the IgG-subclass panel, sits in section 08)
+  // is never refused by its section.
+  if (nhi && !IMMUNOLOGY_ORDER_SET.has(nhi) && (IMMUNOLOGY_NAME_DENIED_ORDER_SET.has(nhi)
     || IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS.some((section) => nhi.startsWith(section)))) return false
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const context = [obs?.code?.text, ...codings.map((c: any) => c?.display)]
