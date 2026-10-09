@@ -488,6 +488,11 @@ export const DIFFERENTIAL_COUNT_LABELS: Readonly<Record<string, { short: string;
   ARC: { short: 'ARC', zh: '絕對網狀紅血球計數', en: 'Absolute reticulocyte count' },
 }
 
+/** The count / percentage column a differential LOINC declares, if any. */
+export function differentialLoincKey(loinc: string): string | undefined {
+  return DIFFERENTIAL_LOINC_TO_KEY[loinc.trim()]
+}
+
 function differentialKeyFromLoinc(obs: any): string | undefined {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   for (const coding of codings) {
@@ -723,7 +728,8 @@ function sourceAnalyteKey(obs: any): string {
   return resolved
 }
 
-function isKnownPivotKey(key: string): boolean {
+/** True when `key` is an analyte the pivot recognises (package or app label). */
+export function isKnownPivotKey(key: string): boolean {
   return CANONICAL_KEYS.has(key) || !!APP_CANONICAL_DISPLAY[key]
 }
 
