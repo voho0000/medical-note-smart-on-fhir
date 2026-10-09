@@ -297,8 +297,14 @@ function nameVariants(name: string): NameVariant[] {
   if (beforeParen) bases.push(beforeParen)
   const bilingual = full.match(/^(.*?)\s*;\s*\((.*)\)\s*$/)
   if (bilingual) bases.push(bilingual[2].trim(), bilingual[1].trim())
+  // A trailing parenthetical is the analyte only when nothing but decoration
+  // precedes it: "(IgM)", "Serum (IgA)". After another test's name it is a
+  // qualifier — "Anti-cardiolipin (IgG)", "Dengue (IgM)" are not total IgG /
+  // IgM. When it restates the name ("免疫球蛋白E (IgE)") the leading part
+  // already matches as beforeParen.
   const inner = full.match(/[(（]([^()（）]+)[)）]\s*$/)
-  if (inner) bases.push(inner[1].trim())
+  const leading = beforeParen.replace(TRAILING_DOTS_RE, '').replace(NEUTRAL_PREFIX_RE, '').trim()
+  if (inner && !leading) bases.push(inner[1].trim())
 
   const variants: NameVariant[] = []
   const add = (text: string, qualified: boolean) => {

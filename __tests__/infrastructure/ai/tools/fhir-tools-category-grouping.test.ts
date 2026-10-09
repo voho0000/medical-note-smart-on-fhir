@@ -1,49 +1,98 @@
 /**
  * @jest-environment node
  *
- * queryLabResultsByCategory groups by the cumulative report's analyte
- * identity only where that identity is a recognised analyte; otherwise it
- * keeps the LOINC-keyed grouping, so distinct tests that share a panel-level
- * name (CBC differential rows all named 白血球分類計數) are never merged.
- * The sweep runs every category over the repository's demo / e2e bundles and
- * proves the new grouping never yields fewer analytes than the old one,
- * except for listed merges of known-equivalent codes.
+ * queryLabResultsByCategory: two observations share a group only when they
+ * carry the same LOINC, or LOINCs that an explicit LOINC → analyte mapping
+ * declares equivalent, or (with no LOINC at all) the same recognised analyte
+ * name. A shared display name never merges different LOINCs, and a count is
+ * never grouped with a percentage or a coded/text result. The differential
+ * test runs every category over the demo / e2e bundles and a synthetic corpus
+ * of LOINC pairs that share a display name, and lists every declared merge.
  */
 import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { getAnalyteCanonicalKey, getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
-import { createFhirTools, labCategoryAnalyteKey } from '@/src/infrastructure/ai/tools/fhir-tools'
+import {
+  createFhirTools,
+  declaredLoincAnalyteKey,
+  labCategoryAnalyteKey,
+  labValueFamily,
+} from '@/src/infrastructure/ai/tools/fhir-tools'
 import { LAB_CATEGORIES, categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 import { samplePatient, sampleCollection } from './fixtures'
+
+const LOINC_SYSTEM = 'http://loinc.org'
 
 const toolsFor = (observations: any[]) => createFhirTools(() => ({
   patient: samplePatient,
   collection: { ...sampleCollection, observations, vitalSigns: [] },
 }))
 
-describe('queryLabResultsByCategory never merges distinct unrecognised tests', () => {
+let seq = 0
+function lab(text: string, loinc: string | undefined, value: number | string, unit = '', date = '2026-10-09') {
+  seq += 1
+  return {
+    resourceType: 'Observation', id: `syn-${seq}`, status: 'final',
+    category: [{ coding: [{ code: 'laboratory' }] }],
+    code: { text, coding: loinc ? [{ system: LOINC_SYSTEM, code: loinc }] : [] },
+    ...(typeof value === 'number' ? { valueQuantity: { value, unit } } : { valueString: value }),
+    effectiveDateTime: `${date}T08:00:00+08:00`,
+  }
+}
+
+const loincOf = (o: any): string | undefined =>
+  (o?.code?.coding ?? []).find((c: any) => /loinc/i.test(c.system || ''))?.code
+
+describe('queryLabResultsByCategory keeps distinct measurements apart', () => {
   it('keeps 731-0 and 751-8 apart when both are named 白血球分類計數', async () => {
-    const row = (id: string, loinc: string, value: number) => ({
-      resourceType: 'Observation', id, status: 'final',
-      category: [{ coding: [{ code: 'laboratory' }] }],
-      code: { text: '白血球分類計數', coding: [{ system: 'http://loinc.org', code: loinc }] },
-      valueQuantity: { value, unit: '' },
-      effectiveDateTime: '2026-10-09T08:00:00+08:00',
-    })
-    const result = await (toolsFor([row('a', '731-0', 2), row('b', '751-8', 5)]).queryLabResultsByCategory as any)
-      .execute({ category: 'cbc' })
+    const result = await (toolsFor([
+      lab('白血球分類計數', '731-0', 2, '10^3/uL'), lab('白血球分類計數', '751-8', 5, '10^3/uL'),
+    ]).queryLabResultsByCategory as any).execute({ category: 'cbc' })
     expect(result.analyteCount).toBe(2)
     expect(result.data.flatMap((g: any) => g.results.map((r: any) => r.value)).sort()).toEqual([2, 5])
     expect(result.truncated).toBe(false)
   })
+
+  it('keeps absolute neutrophils (751-8) and neutrophil % (770-8) apart, with distinct labels', async () => {
+    const result = await (toolsFor([
+      lab('Neutrophil', '751-8', 4.1, '10^3/uL'), lab('Neutrophil', '770-8', 62, '%'),
+      lab('嗜中性白血球', '751-8', 3.9, '10^3/uL', '2026-10-01'), lab('嗜中性白血球', '770-8', 60, '%', '2026-10-01'),
+    ]).queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
+    expect(result.analyteCount).toBe(2)
+    const values = result.data.map((g: any) => g.results.map((r: any) => r.value).sort())
+    expect(values).toEqual(expect.arrayContaining([[3.9, 4.1], [60, 62]]))
+    expect(new Set(result.availableAnalytes).size).toBe(2)
+  })
 })
 
-// The pre-change key: canonical analyte, else LOINC, else the label.
-function oldKey(observation: any): string {
-  const loinc = (observation?.code?.coding ?? []).find((c: any) => /loinc/i.test(c.system || ''))?.code
-  return getAnalyteCanonicalKey(observation) ?? loinc ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
-}
+/** LOINC pairs that share one display name but are different measurements. */
+const SYNTHETIC: any[] = [
+  // CBC differential: absolute count vs percentage, English and Chinese names.
+  ...([
+    ['Neutrophil', '嗜中性白血球', '751-8', '770-8'],
+    ['Lymphocyte', '淋巴球', '731-0', '736-9'],
+    ['Monocyte', '單核球', '742-7', '5905-5'],
+    ['Eosinophil', '嗜酸性白血球', '711-2', '713-8'],
+    ['Basophil', '嗜鹼性白血球', '704-7', '706-2'],
+  ] as const).flatMap(([en, zh, abs, pct]) => [
+    lab(en, abs, 4, '10^3/uL'), lab(en, pct, 50, '%'), lab(zh, abs, 3, '10^3/uL'), lab(zh, pct, 40, '%'),
+    // A name-only row of each kind.
+    lab(en, undefined, 5, '10^3/uL'), lab(en, undefined, 55, '%'),
+  ]),
+  // eGFR variants under one name.
+  ...['33914-3', '62238-1', '48642-3', '98979-8', '69405-9'].map((code, i) => lab('eGFR', code, 60 + i, 'mL/min/1.73m2')),
+  // Serum vs urine under one name.
+  lab('Creatinine', '2160-0', 1.1, 'mg/dL'), lab('Creatinine', '2161-8', 80, 'mg/dL'),
+  lab('Glucose', '2345-7', 100, 'mg/dL'), lab('Glucose', '2350-7', 'Negative'),
+  lab('Protein', '2885-2', 7, 'g/dL'), lab('Protein', '2888-6', 'Trace'),
+  lab('Albumin', '1751-7', 4, 'g/dL'), lab('Albumin', '14957-5', 20, 'mg/L'),
+  // Quantitative vs qualitative under one name.
+  lab('HBsAg', '5196-1', 0.2, 'IU/mL'), lab('HBsAg', '5195-3', 'Negative'),
+  // Declared-equivalent immunology LOINCs: quantitative vs presence.
+  lab('SS-A', '33569-5', 0.4, 'U/mL'), lab('SS-A', '5352-0', 'Negative'), lab('SS-A', '17792-3', 0.5, 'U/mL'),
+  // Declared-equivalent thyroid LOINCs.
+  lab('TPO Ab', '8099-4', 12, 'IU/mL'), lab('Anti-TPO', '56477-3', 15, 'IU/mL'),
+]
 
 function bundleObservations(path: string): any[] {
   const bundle = JSON.parse(readFileSync(path, 'utf8'))
@@ -51,51 +100,71 @@ function bundleObservations(path: string): any[] {
 }
 
 const ROOT = process.cwd()
-const BUNDLES = [
-  'public/demo/demo-bundle.json',
-  ...readdirSync(join(ROOT, 'public/demo/hfrEF')).filter((f) => f.endsWith('.json') && f !== 'manifest.json')
-    .map((f) => `public/demo/hfrEF/${f}`),
-  'e2e/fixtures/hospital-cdss-bundle.json',
-  'e2e/fixtures/medcloud-hepatitis-bundle.json',
-  'e2e/fixtures/synthetic-bundle.json',
+const CORPORA: Array<[string, () => any[]]> = [
+  ['synthetic shared-name LOINC pairs', () => SYNTHETIC],
+  ...[
+    'public/demo/demo-bundle.json',
+    ...readdirSync(join(ROOT, 'public/demo/hfrEF')).filter((f) => f.endsWith('.json') && f !== 'manifest.json')
+      .map((f) => `public/demo/hfrEF/${f}`),
+    'e2e/fixtures/hospital-cdss-bundle.json',
+    'e2e/fixtures/medcloud-hepatitis-bundle.json',
+    'e2e/fixtures/synthetic-bundle.json',
+  ].map((path) => [path, () => bundleObservations(join(ROOT, path))] as [string, () => any[]]),
 ]
 
-// Merges the pivot makes on purpose: old keys (LOINC / label) that name the
-// same analyte. Key: new group key → the old keys it unites.
-const KNOWN_EQUIVALENT_MERGES: Record<string, string[]> = {}
+/** Groups that unite more than one LOINC, all declared equivalent. Listed so
+ *  every merge the AI grouping makes is reviewed here. */
+const DECLARED_MERGES: Record<string, string[]> = {
+  // 33569-5 SS-A [Units/volume] by IA and 17792-3 SS-A [Units/volume].
+  'immuno:ANTI-SSA:quantity': ['17792-3', '33569-5'],
+  // 8099-4 Thyroperoxidase Ab [Units/volume] and 56477-3 the same by IA.
+  'endocrine:ANTI-TPO:quantity': ['56477-3', '8099-4'],
+}
 
-describe('category grouping sweep over demo / e2e bundles', () => {
-  it.each(BUNDLES)('%s: no category loses distinct analytes', async (path) => {
-    const observations = bundleObservations(join(ROOT, path))
+describe('AI category grouping differential (never fewer groups than LOINC-keyed)', () => {
+  it.each(CORPORA)('%s', async (_name, load) => {
+    const observations = load()
     const tools = toolsFor(observations)
-    const merges: Record<string, string[]> = {}
+    const declaredSeen: Record<string, string[]> = {}
     for (const category of LAB_CATEGORIES.map((c) => c.id)) {
       const rows = observations
         .flatMap((o) => expandObservationValues(o))
         .filter((o: any) => String(o?.status ?? '').toLowerCase() !== 'entered-in-error'
           && categorizeObservation(o)?.id === category)
-      const oldKeys = new Set(rows.map(oldKey))
-      const byNew = new Map<string, Set<string>>()
+      const groups = new Map<string, any[]>()
       for (const o of rows) {
         const key = labCategoryAnalyteKey(o, category)
-        if (!byNew.has(key)) byNew.set(key, new Set())
-        byNew.get(key)!.add(oldKey(o))
+        groups.set(key, [...(groups.get(key) ?? []), o])
       }
-      for (const [key, olds] of byNew) {
-        if (olds.size > 1) merges[`${category}:${key}`] = [...olds].sort()
+      for (const members of groups.values()) {
+        const loincs = [...new Set(members.map(loincOf).filter(Boolean))].sort() as string[]
+        // Never a LOINC row together with a LOINC-less one.
+        expect(new Set(members.map((o) => !!loincOf(o))).size).toBe(1)
+        // Never two value families (count / percent / coded text).
+        expect(new Set(members.map(labValueFamily)).size).toBe(1)
+        if (loincs.length > 1) {
+          const declared = new Set(loincs.map(declaredLoincAnalyteKey))
+          expect(declared.size).toBe(1)
+          expect([...declared][0]).toBeTruthy()
+          declaredSeen[`${category}:${[...declared][0]}:${labValueFamily(members[0])}`] = loincs
+        }
       }
+      // Baseline: LOINC-keyed grouping (LOINC, else the name-based key).
+      const baseline = new Set(rows.map((o) => loincOf(o) ?? `name:${labCategoryAnalyteKey(o, category)}`))
+      const declaredReduction = [...groups.values()]
+        .map((m) => new Set(m.map(loincOf).filter(Boolean)).size)
+        .reduce((n, size) => n + Math.max(0, size - 1), 0)
+      expect(groups.size).toBeGreaterThanOrEqual(baseline.size - declaredReduction)
+
       const result = await (tools.queryLabResultsByCategory as any).execute({ category, limit: 1000 })
-      expect(result.analyteCount).toBe(byNew.size)
+      expect(result.analyteCount).toBe(groups.size)
       expect(result.truncated).toBe(false)
-      // Group counts add up to every row the tool matched (undated rows are
-      // outside its date filter, so compare with its own count).
       expect(result.data.reduce((n: number, g: any) => n + g.observationCount, 0)).toBe(result.observationCount)
-      // Fewer analytes than before only through listed merges.
-      const merged = [...byNew.values()].reduce((n, olds) => n + olds.size - 1, 0)
-      expect(byNew.size).toBeGreaterThanOrEqual(oldKeys.size - merged)
+      // Every group is told apart by its label.
+      expect(new Set(result.availableAnalytes).size).toBe(result.availableAnalytes.length)
     }
-    for (const [key, olds] of Object.entries(merges)) {
-      expect({ key, olds }).toEqual({ key, olds: KNOWN_EQUIVALENT_MERGES[key] })
+    for (const [key, loincs] of Object.entries(declaredSeen)) {
+      expect({ key, loincs }).toEqual({ key, loincs: DECLARED_MERGES[key] })
     }
   })
 })

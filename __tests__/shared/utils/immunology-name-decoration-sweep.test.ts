@@ -76,6 +76,19 @@ describe('every 免疫 alias × neutral decorations lands where the plain name d
   })
 })
 
+describe('a parenthetical alias counts only when it restates the name', () => {
+  it.each([
+    ['免疫球蛋白E (IgE)', 'immuno/IGE'],
+    ['Immunoglobulin G (IgG)', 'immuno/IGG'],
+    ['補體C3 (C3)', 'immuno/C3'],
+    ['(IgM)', 'immuno/IGM'],
+    ['Serum (IgA)', 'immuno/IGA'],
+    ['IgG (Nephelometry)', 'immuno/IGG'],
+  ])('%s → %s', (name, want) => {
+    expect(placement(name)).toBe(want)
+  })
+})
+
 describe('antibody aliases × Ab / 抗體 / anti- land in their 免疫 column', () => {
   const cases = ALIASES
     .filter((alias) => ANTIBODY_KEYS.has(IMMUNOLOGY_TEXT_TO_KEY[alias]))
@@ -94,6 +107,11 @@ describe('denied names stay out of 免疫 under every decoration', () => {
     ['HAV IgM'], ['HBc IgM'], ['CSF IgG'], ['Urine IgG'], ['IgG index'], ['IgG/Alb'], ['C3d'], ['C3NeF'], ['C4d'],
     ['IgG4-RD'], ['Kappa free light chain'], ['Lambda FLC'], ['Immunofixation IgG'], ['IgG electrophoresis'],
     ['Coombs IgG'], ['Pleural IgG'],
+    // A trailing antibody class qualifies ANOTHER test; it is not the analyte.
+    ['Anti-cardiolipin (IgG)'], ['Anti-cardiolipin (IgM)'], ['Dengue (IgM)'], ['Dengue (IgG)'],
+    ['β2-GP1 (IgG)'], ['Beta-2 glycoprotein I (IgM)'], ['Mycoplasma (IgM)'], ['CMV (IgG)'], ['HBc (IgM)'],
+    ['Anti-CCP (IgG)'], ['Chlamydia pneumoniae (IgG)'], ['Aspergillus (IgE)'], ['Gliadin (IgA)'],
+    ['tTG (IgA)'], ['Measles (IgG)'], ['抗心脂抗體 (IgG)'], ['登革熱 (IgM)'],
     // Denied orders / sections with a plain immunology name.
     ['IgG', '12103B'], ['IgM', '12160B'], ['IgG', '14032C'], ['IgM', '14031C'], ['IgG', '11003C'], ['C3', '08011C'],
     ['IgG', '13001C'], ['IgA', '06013C'], ['IgG', '07001C'],

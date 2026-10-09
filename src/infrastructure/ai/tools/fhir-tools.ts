@@ -80,6 +80,8 @@ import {
   isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
+import { IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
+import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -484,19 +486,60 @@ function labAnalyteKey(observation: any): string {
     ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
 }
 
-/**
- * Group key and label for one row of queryLabResultsByCategory. The cumulative
- * report's identity is used only when it names a recognised analyte (it splits
- * one NHI order into SS-A / SS-B / Ro52, and keys thyroid rows by LOINC).
- * Otherwise the LOINC-keyed fallback stays: distinct tests sharing a panel
- * name (CBC differential rows all called 白血球分類計數) must never merge.
- */
-export function labCategoryAnalyte(observation: any, category: string): { key: string; label: string } {
-  const identity = getLabPivotTestIdentity(observation, category)
-  if (isKnownPivotKey(identity.testKey)) {
-    return { key: identity.mapKey, label: getLabRowDisplayParts(identity, 'medical', 'en').name }
+/** Value family of one lab row: a count / concentration, a percentage, or a
+ *  coded / text result. Rows of different families never share a group. */
+export function labValueFamily(observation: any): 'quantity' | 'percent' | 'text' {
+  const quantity = observation?.valueQuantity
+  if (quantity && typeof quantity.value === 'number') {
+    const unit = String(quantity.unit ?? quantity.code ?? '').trim()
+    return unit === '%' ? 'percent' : 'quantity'
   }
-  return { key: labAnalyteKey(observation), label: getAnalyteLabel(observation) }
+  return 'text'
+}
+
+/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the
+ *  normalization package's LOINC map, then the app's immunology and thyroid
+ *  maps). LOINCs mapped to one key are declared equivalent; nothing else is. */
+export function declaredLoincAnalyteKey(loinc: string): string | null {
+  return canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
+    ?? IMMUNOLOGY_LOINC_TO_KEY[loinc]
+    ?? THYROID_LOINC_TO_KEY[loinc]
+    ?? null
+}
+
+/**
+ * Group key and label for one row of queryLabResultsByCategory. Two rows share
+ * a group only when
+ * - they carry the same LOINC, or LOINCs an explicit LOINC → key mapping
+ *   declares equivalent (declaredLoincAnalyteKey) — a shared display name
+ *   never merges different LOINCs (751-8 absolute neutrophils vs 770-8
+ *   neutrophil %, both labelled Neutrophil); or
+ * - neither carries a LOINC and the cumulative report's identity names the
+ *   same recognised analyte (one NHI order split into SS-A / SS-B / Ro52);
+ *   unrecognised LOINC-less rows keep the name-based key;
+ * and, in every case, they are of one value family (labValueFamily).
+ */
+export function labCategoryAnalyte(observation: any, category: string): {
+  key: string
+  label: string
+  canonicalKey: string
+  loinc?: string
+  family: 'quantity' | 'percent' | 'text'
+} {
+  const family = labValueFamily(observation)
+  const loinc = loincOf(observation?.code)
+  const identity = getLabPivotTestIdentity(observation, category)
+  const known = isKnownPivotKey(identity.testKey)
+  const label = known
+    ? getLabRowDisplayParts(identity, 'medical', 'en').name
+    : getAnalyteLabel(observation)
+  if (loinc) {
+    const declared = declaredLoincAnalyteKey(loinc)
+    const canonicalKey = declared ?? loinc
+    return { key: `${declared ? 'key' : 'loinc'}:${canonicalKey}|${family}`, label, canonicalKey, loinc, family }
+  }
+  const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
+  return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }
 }
 
 export function labCategoryAnalyteKey(observation: any, category: string): string {
@@ -1719,23 +1762,37 @@ export function createFhirTools(getData: () => AgentDataSource) {
             && (!abnormalOnly || isAbnormalObservation(observation))
           )
 
-        // See labCategoryAnalyte: report identity for recognised analytes,
-        // LOINC-keyed fallback otherwise.
-        const byAnalyte = new Map<string, { label: string; observations: any[] }>()
+        // See labCategoryAnalyte: same LOINC, declared-equivalent LOINCs, or
+        // (LOINC-less) the same recognised analyte — always one value family.
+        const byAnalyte = new Map<string, ReturnType<typeof labCategoryAnalyte> & { observations: any[] }>()
         for (const observation of expanded) {
-          const { key, label } = labCategoryAnalyte(observation, category)
-          const group = byAnalyte.get(key)
+          const analyte = labCategoryAnalyte(observation, category)
+          const group = byAnalyte.get(analyte.key)
           if (group) group.observations.push(observation)
-          else byAnalyte.set(key, { label, observations: [observation] })
+          else byAnalyte.set(analyte.key, { ...analyte, observations: [observation] })
         }
 
-        const groups = [...byAnalyte.entries()].map(([canonicalKey, { label, observations }]) => {
-          const series = [...observations].sort((a, b) =>
+        // Groups that share a label (751-8 and 770-8 both read "NEU") are told
+        // apart by their LOINC and value family, so none looks like a duplicate.
+        const labelCounts = new Map<string, number>()
+        for (const group of byAnalyte.values()) {
+          labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1)
+        }
+        const familyText = { quantity: null, percent: '%', text: 'qualitative' } as const
+        const distinctLabel = (group: ReturnType<typeof labCategoryAnalyte>) => {
+          if ((labelCounts.get(group.label) ?? 0) < 2) return group.label
+          const qualifiers = [group.loinc ? `LOINC ${group.loinc}` : null, familyText[group.family]].filter(Boolean)
+          return qualifiers.length > 0 ? `${group.label} (${qualifiers.join(', ')})` : `${group.label} (${group.canonicalKey})`
+        }
+
+        const groups = [...byAnalyte.values()].map((group) => {
+          const series = [...group.observations].sort((a, b) =>
             (observationDate(b) || '').localeCompare(observationDate(a) || '')
           )
           return {
-            analyte: label,
-            canonicalKey,
+            analyte: distinctLabel(group),
+            canonicalKey: group.canonicalKey,
+            ...(group.loinc ? { loinc: group.loinc } : {}),
             category,
             observationCount: series.length,
             latestDate: observationDate(series[0]),
