@@ -27,3 +27,13 @@ export const THYROID_DISPLAY: Readonly<Record<string, string>> = {
   'ANTI-TG': 'Anti-Tg',
   THYROGLOBULIN: 'Thyroglobulin',
 }
+
+/** LOINC Scale of each thyroid LOINC above (same sources). */
+export const THYROID_LOINC_SCALE: Readonly<Record<string, 'Qn' | 'Ord' | 'Titr'>> = {
+  '8099-4': 'Qn',
+  '32042-4': 'Ord',
+  '56477-3': 'Qn',
+  '32786-6': 'Titr',
+  '8098-6': 'Qn',
+  '3013-0': 'Qn',
+}

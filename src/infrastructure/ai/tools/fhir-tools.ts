@@ -80,8 +80,8 @@ import {
   isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
-import { IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
-import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
+import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -486,15 +486,35 @@ function labAnalyteKey(observation: any): string {
     ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
 }
 
-/** Value family of one lab row: a count / concentration, a percentage, or a
- *  coded / text result. Rows of different families never share a group. */
-export function labValueFamily(observation: any): 'quantity' | 'percent' | 'text' {
+export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
+
+// "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
+const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
+// Negative / Positive / Borderline / ± / +n / (-) / 陰性 / 弱陽性 / Non-reactive …
+const ORDINAL_VALUE_RE =
+  /^\s*(?:\(\s*[-+±]\s*\)|[-+]{1,4}(?=\s|$)|±|[1-4]\s*\+|(?:weakly\s+|weak\s+|strongly\s+)?(?:positive|negative|reactive|non-?\s*reactive|detected|not\s+detected|borderline|equivocal|indeterminate|trace)\b|(?:弱|強)?(?:陽性|陰性)|可疑|微量)/i
+
+/** Value family of one lab row: a count / concentration, a percentage, a
+ *  titer, an ordinal (presence / grade) or free text. Rows of different
+ *  families never share a group. */
+export function labValueFamily(observation: any): LabValueFamily {
   const quantity = observation?.valueQuantity
   if (quantity && typeof quantity.value === 'number') {
     const unit = String(quantity.unit ?? quantity.code ?? '').trim()
     return unit === '%' ? 'percent' : 'quantity'
   }
+  if (observation?.valueRatio) return 'titer'
+  if (observation?.valueCodeableConcept || typeof observation?.valueBoolean === 'boolean') return 'ordinal'
+  const text = typeof observation?.valueString === 'string' ? observation.valueString.normalize('NFKC') : ''
+  if (TITER_VALUE_RE.test(text)) return 'titer'
+  if (ORDINAL_VALUE_RE.test(text)) return 'ordinal'
   return 'text'
+}
+
+/** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;
+ *  undefined when not declared (the value family still separates rows). */
+export function declaredLoincScale(loinc: string): 'Qn' | 'Ord' | 'Titr' | undefined {
+  return IMMUNOLOGY_LOINC_SCALE[loinc] ?? THYROID_LOINC_SCALE[loinc]
 }
 
 /** The analyte an explicit LOINC → key mapping assigns to `loinc` (the
@@ -517,14 +537,16 @@ export function declaredLoincAnalyteKey(loinc: string): string | null {
  * - neither carries a LOINC and the cumulative report's identity names the
  *   same recognised analyte (one NHI order split into SS-A / SS-B / Ro52);
  *   unrecognised LOINC-less rows keep the name-based key;
- * and, in every case, they are of one value family (labValueFamily).
+ * and, in every case, they are of one value family (labValueFamily) and, for
+ * declared LOINCs, one LOINC scale (declaredLoincScale): a titer, a presence
+ * and a quantitative result of the same antibody stay apart.
  */
 export function labCategoryAnalyte(observation: any, category: string): {
   key: string
   label: string
   canonicalKey: string
   loinc?: string
-  family: 'quantity' | 'percent' | 'text'
+  family: LabValueFamily
 } {
   const family = labValueFamily(observation)
   const loinc = loincOf(observation?.code)
@@ -536,7 +558,8 @@ export function labCategoryAnalyte(observation: any, category: string): {
   if (loinc) {
     const declared = declaredLoincAnalyteKey(loinc)
     const canonicalKey = declared ?? loinc
-    return { key: `${declared ? 'key' : 'loinc'}:${canonicalKey}|${family}`, label, canonicalKey, loinc, family }
+    const scale = declared ? (declaredLoincScale(loinc) ?? '-') : ''
+    return { key: `${declared ? 'key' : 'loinc'}:${canonicalKey}|${scale}|${family}`, label, canonicalKey, loinc, family }
   }
   const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
   return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }
@@ -1778,7 +1801,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         for (const group of byAnalyte.values()) {
           labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1)
         }
-        const familyText = { quantity: null, percent: '%', text: 'qualitative' } as const
+        const familyText = { quantity: null, percent: '%', titer: 'titer', ordinal: 'qualitative', text: 'text' } as const
         const distinctLabel = (group: ReturnType<typeof labCategoryAnalyte>) => {
           if ((labelCounts.get(group.label) ?? 0) < 2) return group.label
           const qualifiers = [group.loinc ? `LOINC ${group.loinc}` : null, familyText[group.family]].filter(Boolean)

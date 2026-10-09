@@ -65,6 +65,26 @@ describe('queryLabResultsByCategory keeps distinct measurements apart', () => {
   })
 })
 
+describe('titer, presence and free text never share a group', () => {
+  it('keeps anti-TPO 32786-6 "1:100" (titer) and 32042-4 "Positive" (presence) apart', async () => {
+    const result = await (toolsFor([
+      lab('Anti-TPO', '32786-6', '1:100'), lab('Anti-TPO', '32042-4', 'Positive'),
+    ]).queryLabResultsByCategory as any).execute({ category: 'endocrine' })
+    expect(result.analyteCount).toBe(2)
+    expect(result.data.map((g: any) => g.results[0].value).sort()).toEqual(['1:100', 'Positive'])
+  })
+
+  it.each([
+    ['1:160', 'titer'], ['< 1:40', 'titer'], ['1：80 speckled', 'titer'],
+    ['Negative', 'ordinal'], ['positive', 'ordinal'], ['Borderline', 'ordinal'], ['±', 'ordinal'], ['2+', 'ordinal'],
+    ['+++', 'ordinal'], ['(-)', 'ordinal'], ['陰性', 'ordinal'], ['弱陽性', 'ordinal'], ['Non-reactive', 'ordinal'],
+    ['Weakly positive', 'ordinal'], ['Equivocal', 'ordinal'], ['Trace', 'ordinal'],
+    ['see report', 'text'], ['Speckled pattern', 'text'],
+  ])('%s → %s', (value, family) => {
+    expect(labValueFamily(lab('X', undefined, value))).toBe(family)
+  })
+})
+
 /** LOINC pairs that share one display name but are different measurements. */
 const SYNTHETIC: any[] = [
   // CBC differential: absolute count vs percentage, English and Chinese names.
@@ -92,6 +112,14 @@ const SYNTHETIC: any[] = [
   lab('SS-A', '33569-5', 0.4, 'U/mL'), lab('SS-A', '5352-0', 'Negative'), lab('SS-A', '17792-3', 0.5, 'U/mL'),
   // Declared-equivalent thyroid LOINCs.
   lab('TPO Ab', '8099-4', 12, 'IU/mL'), lab('Anti-TPO', '56477-3', 15, 'IU/mL'),
+  // Titer vs presence vs quantity, one analyte name each.
+  lab('ANA', '5048-4', '1:160'), lab('ANA', '29953-7', '1:80'), lab('ANA', '8061-4', 'Positive'),
+  lab('ANA', '42254-3', 'Negative'), lab('抗核抗體', undefined, '1:320'), lab('抗核抗體', undefined, 'Positive'),
+  lab('AMA', '20483-4', '1:40'), lab('AMA', '14236-4', 'Negative'), lab('AMA', undefined, 'Weakly positive'),
+  lab('Anti-TPO', '32786-6', '1:100'), lab('Anti-TPO', '32042-4', 'Positive'), lab('Anti-TPO', '32042-4', '±'),
+  lab('Anti-dsDNA', '5130-0', 30, 'IU/mL'), lab('Anti-dsDNA', '31348-6', 'Negative'), lab('Anti-dsDNA', '31348-6', '2+'),
+  // A quantitative LOINC reported as a word, and free text.
+  lab('SS-A', '33569-5', 'Negative'), lab('SS-A', '33569-5', 'see report'),
 ]
 
 function bundleObservations(path: string): any[] {
@@ -119,6 +147,10 @@ const DECLARED_MERGES: Record<string, string[]> = {
   'immuno:ANTI-SSA:quantity': ['17792-3', '33569-5'],
   // 8099-4 Thyroperoxidase Ab [Units/volume] and 56477-3 the same by IA.
   'endocrine:ANTI-TPO:quantity': ['56477-3', '8099-4'],
+  // 5048-4 Nuclear Ab [Titer] by IF and 29953-7 Nuclear Ab [Titer]: both titers.
+  'immuno:ANA:titer': ['29953-7', '5048-4'],
+  // 8061-4 Nuclear Ab [Presence] and 42254-3 Nuclear Ab [Presence] by IF.
+  'immuno:ANA:ordinal': ['42254-3', '8061-4'],
 }
 
 describe('AI category grouping differential (never fewer groups than LOINC-keyed)', () => {

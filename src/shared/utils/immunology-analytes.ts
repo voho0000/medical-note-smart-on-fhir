@@ -288,48 +288,37 @@ const ANTI_PREFIX_RE = /^(?:ANTI\s*-?\s*|抗\s*)(?=\S)/
 /** One spelling to look up, and whether an antibody qualifier was removed. */
 interface NameVariant { text: string; qualified: boolean }
 
-/** Spellings of one source name worth trying, most specific first. */
-function nameVariants(name: string): NameVariant[] {
-  const full = normalizeImmunologyName(name)
-  if (!full) return []
-  const bases: string[] = [full]
-  const beforeParen = full.replace(/\s*[(\[（［].*$/, '').trim()
-  if (beforeParen) bases.push(beforeParen)
-  const bilingual = full.match(/^(.*?)\s*;\s*\((.*)\)\s*$/)
-  if (bilingual) bases.push(bilingual[2].trim(), bilingual[1].trim())
-  // A trailing parenthetical is the analyte only when nothing but decoration
-  // precedes it: "(IgM)", "Serum (IgA)". After another test's name it is a
-  // qualifier — "Anti-cardiolipin (IgG)", "Dengue (IgM)" are not total IgG /
-  // IgM. When it restates the name ("免疫球蛋白E (IgE)") the leading part
-  // already matches as beforeParen.
-  const inner = full.match(/[(（]([^()（）]+)[)）]\s*$/)
-  const leading = beforeParen.replace(TRAILING_DOTS_RE, '').replace(NEUTRAL_PREFIX_RE, '').trim()
-  if (inner && !leading) bases.push(inner[1].trim())
+/** Protein analytes. An antibody affix on one of these names a DIFFERENT
+ *  test — anti-IgG, "C3 Ab", 「抗IgG抗體」 — so it never restates them; it
+ *  only restates an antibody analyte ("Jo-1 Ab", "anti-dsDNA"). */
+const PROTEIN_KEYS = new Set(['IGG', 'IGA', 'IGM', 'IGE', 'IGG1', 'IGG2', 'IGG3', 'IGG4', 'C3', 'C4'])
+/** Antibody classes: after another test's name they qualify it ("Dengue
+ *  (IgM)"), so a parenthetical class is never taken from such a name. */
+const IMMUNOGLOBULIN_CLASS_KEYS = new Set(['IGG', 'IGA', 'IGM', 'IGE', 'IGG1', 'IGG2', 'IGG3', 'IGG4'])
 
+const stripNeutral = (text: string) =>
+  text.replace(TRAILING_DOTS_RE, '').trim().replace(NEUTRAL_PREFIX_RE, '').trim()
+
+/** Spellings of ONE name segment (no parenthetical handling) worth trying. */
+function segmentVariants(segment: string): NameVariant[] {
   const variants: NameVariant[] = []
   const add = (text: string, qualified: boolean) => {
     const clean = text.replace(TRAILING_DOTS_RE, '').trim()
-    if (clean) variants.push({ text: clean, qualified })
+    if (clean && !variants.some((v) => v.text === clean && v.qualified === qualified)) {
+      variants.push({ text: clean, qualified })
+    }
   }
-  for (const base of bases) {
-    const neutral = base.replace(TRAILING_DOTS_RE, '').trim().replace(NEUTRAL_PREFIX_RE, '').trim()
-    add(base, false)
-    add(neutral, false)
-    // Antibody qualifiers, in either order and together.
-    const noSuffix = neutral.replace(ANTIBODY_SUFFIX_RE, '').trim()
-    const noPrefix = neutral.replace(ANTI_PREFIX_RE, '').trim()
-    const neither = noSuffix.replace(ANTI_PREFIX_RE, '').trim()
-    if (noSuffix !== neutral) add(noSuffix, true)
-    if (noPrefix !== neutral) add(noPrefix, true)
-    if (neither !== neutral) add(neither, true)
-  }
-  const seen = new Set<string>()
-  return variants.filter((v) => {
-    const id = `${v.text}|${v.qualified}`
-    if (seen.has(id)) return false
-    seen.add(id)
-    return true
-  })
+  const neutral = stripNeutral(segment)
+  add(segment, false)
+  add(neutral, false)
+  // Antibody qualifiers, in either order and together.
+  const noSuffix = neutral.replace(ANTIBODY_SUFFIX_RE, '').trim()
+  const noPrefix = neutral.replace(ANTI_PREFIX_RE, '').trim()
+  const neither = noSuffix.replace(ANTI_PREFIX_RE, '').trim()
+  if (noSuffix !== neutral) add(noSuffix, true)
+  if (noPrefix !== neutral) add(noPrefix, true)
+  if (neither !== neutral) add(neither, true)
+  return variants
 }
 
 /** Spacing / hyphen-insensitive form: "SS A", "SSA" and "SS-A" all read SSA. */
@@ -355,23 +344,70 @@ const IMMUNOLOGY_COMPACT_TO_KEY: ReadonlyMap<string, { key: string; ambiguous: b
 const IGG_SUBCLASS_RE =
   /^(?:IGG|免疫球蛋白\s*G)\s*(?:SUBCLASS\s*|-\s*)?([1-4])(?:\s*(?:SUBCLASS|亞型|亞類|次分類|量))?$/
 
-/** Canonical immunology key for one source name, with whether the spelling
- *  that matched is a bare ambiguous short name (see
- *  AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES). Null when nothing matches. */
-export function immunologyNameMatch(name: string | undefined | null): { key: string; ambiguous: boolean } | null {
-  if (!name) return null
-  const variants = nameVariants(name)
-  // Exact spellings first, so a bare "SSA" stays the ambiguous short name.
+type ImmunologyMatch = { key: string; ambiguous: boolean }
+
+/** Match one name segment: exact spellings first (so a bare "SSA" stays the
+ *  ambiguous short name), then spacing / hyphen-insensitive ones. A spelling
+ *  reached by removing an antibody affix counts only for antibody analytes. */
+function matchSegment(segment: string): ImmunologyMatch | null {
+  const variants = segmentVariants(segment)
+  const allowed = (key: string, qualified: boolean) => !(qualified && PROTEIN_KEYS.has(key))
   for (const { text, qualified } of variants) {
     const key = IMMUNOLOGY_TEXT_TO_KEY[text]
-    if (key) return { key, ambiguous: !qualified && AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES.has(text) }
+    if (key && allowed(key, qualified)) {
+      return { key, ambiguous: !qualified && AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES.has(text) }
+    }
     const subclass = text.match(IGG_SUBCLASS_RE)
-    if (subclass) return { key: `IGG${subclass[1]}`, ambiguous: false }
+    if (subclass && allowed(`IGG${subclass[1]}`, qualified)) return { key: `IGG${subclass[1]}`, ambiguous: false }
   }
   for (const { text, qualified } of variants) {
     const match = IMMUNOLOGY_COMPACT_TO_KEY.get(compact(text))
-    if (match) return { key: match.key, ambiguous: !qualified && match.ambiguous }
+    if (match && allowed(match.key, qualified)) return { key: match.key, ambiguous: !qualified && match.ambiguous }
   }
+  return null
+}
+
+/** A name's parts: the whole name, the part before any parenthetical, and
+ *  the parenthetical — either a bilingual 「中文 ;(English)」 half or a
+ *  trailing "(…)" — with the text that precedes it. NFKC folds the
+ *  full-width 「；」「（」「）」. */
+function nameParts(name: string): { full: string; leading: string; parenthetical: string | null } {
+  const full = normalizeImmunologyName(name)
+  const bilingual = full.match(/^(.*?)\s*;\s*\((.*)\)\s*$/)
+  if (bilingual) return { full, leading: bilingual[1].trim(), parenthetical: bilingual[2].trim() || null }
+  const inner = full.match(/^(.*?)\s*[(\[]([^()\[\]]+)[)\]]\s*$/)
+  const leading = full.replace(/\s*[(\[].*$/, '').trim()
+  return { full, leading, parenthetical: inner ? inner[2].trim() : null }
+}
+
+const isHanOnly = (text: string) => /^[\p{Script=Han}\d\s]+$/u.test(text)
+
+/** Canonical immunology key for one source name, with whether the spelling
+ *  that matched is a bare ambiguous short name (see
+ *  AMBIGUOUS_SHORT_IMMUNOLOGY_NAMES). Null when nothing matches.
+ *
+ *  A parenthetical names the analyte only when what precedes it is mere
+ *  decoration ("(IgM)", "Serum ;(IgA)") or a Chinese translation of a
+ *  non-immunoglobulin analyte (「某抗體 ;(SS-A)」). After another test's name an
+ *  antibody class qualifies that test — "Dengue (IgM)", "Anti-cardiolipin
+ *  ;(IgG)", 「登革熱；(IgM)」 are not total IgM / IgG. A name that restates its
+ *  parenthetical (「免疫球蛋白E ;(IgE)」) matches by its leading part. */
+export function immunologyNameMatch(name: string | undefined | null): ImmunologyMatch | null {
+  if (!name) return null
+  const { full, leading, parenthetical } = nameParts(name)
+  if (!full) return null
+  const whole = matchSegment(full)
+  if (whole) return whole
+  if (leading && leading !== full) {
+    const lead = matchSegment(leading)
+    if (lead) return lead
+  }
+  if (!parenthetical) return null
+  const inner = matchSegment(parenthetical)
+  if (!inner) return null
+  const before = stripNeutral(leading)
+  if (!before) return inner
+  if (isHanOnly(before) && !IMMUNOGLOBULIN_CLASS_KEYS.has(inner.key)) return inner
   return null
 }
 
@@ -385,5 +421,26 @@ const ALLERGEN_NAME_SET = new Set(ALLERGEN_NAMES.map(normalizeImmunologyName))
 /** True for a 30022C allergen item name (混合黴菌, 貓毛 …). */
 export function isAllergenName(name: string | undefined | null): boolean {
   if (!name) return false
-  return nameVariants(name).some(({ text }) => ALLERGEN_NAME_SET.has(text))
+  const { full, leading, parenthetical } = nameParts(name)
+  return [full, leading, parenthetical]
+    .filter((part): part is string => !!part)
+    .some((part) => ALLERGEN_NAME_SET.has(part) || ALLERGEN_NAME_SET.has(stripNeutral(part)))
 }
+
+/** LOINC Scale of every immunology LOINC the app maps (IMMUNOLOGY_LOINC_TO_KEY
+ *  and PACKAGE_IMMUNOLOGY_LOINCS), read from the names quoted above:
+ *  [Units/volume] / [Mass/volume] are Qn, [Presence] Ord, [Titer] Titr. Two
+ *  LOINCs mapped to one column are interchangeable only on the same scale. */
+export const IMMUNOLOGY_LOINC_SCALE: Readonly<Record<string, 'Qn' | 'Ord' | 'Titr'>> = (() => {
+  const ord = [
+    '8061-4', '5352-0', '5353-8', '53016-2', '82933-3', '5356-1', '5355-3', '8076-2', '18484-6', '82997-8',
+    '82996-0', '33910-1', '31348-6', '42254-3', '14236-4', '8093-7', '8094-5', '31627-3', '8091-1', '54160-7',
+    '33772-5', '33771-7', '45149-2', '45152-6', '33921-8', '107563-9', '107562-1',
+  ]
+  const titr = ['20483-4', '29953-7', '5048-4']
+  const scale: Record<string, 'Qn' | 'Ord' | 'Titr'> = {}
+  for (const loinc of [...Object.keys(IMMUNOLOGY_LOINC_TO_KEY), ...PACKAGE_IMMUNOLOGY_LOINCS]) scale[loinc] = 'Qn'
+  for (const loinc of ord) scale[loinc] = 'Ord'
+  for (const loinc of titr) scale[loinc] = 'Titr'
+  return scale
+})()

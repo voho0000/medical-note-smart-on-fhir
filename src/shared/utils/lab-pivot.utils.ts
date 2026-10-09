@@ -8,6 +8,8 @@ import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import {
+  AUTOANTIBODY_KEYS,
+  IMMUNOGLOBULIN_KEYS,
   IMMUNOLOGY_DISPLAY,
   IMMUNOLOGY_LOINC_TO_KEY,
   immunologyKeyFromName,
@@ -461,6 +463,8 @@ function thyroidAnalyteKey(obs: any): string | null {
   return null
 }
 
+const IMMUNOLOGY_COLUMN_KEYS = new Set([...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS])
+
 function immunologyAnalyteKey(obs: any): string | null {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   for (const coding of codings) {
@@ -641,7 +645,12 @@ export function getLabPivotTestIdentity(
   let displayOverride: string | undefined
 
   if (categoryId === 'immuno') {
-    testKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs) ?? testKey
+    // Only a LOINC or the immunology name matcher may assign a 免疫 column.
+    // The general name resolver reads "IgG抗體" (anti-IgG) as IgG; when the
+    // matcher refused such a name, the row keeps its own source name.
+    const immunologyKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs)
+    testKey = immunologyKey
+      ?? (IMMUNOLOGY_COLUMN_KEYS.has(testKey) ? raw.normalize('NFKC').trim().toUpperCase() : testKey)
   }
 
   if (categoryId === 'endocrine') {
