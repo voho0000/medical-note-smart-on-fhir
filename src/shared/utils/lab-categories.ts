@@ -398,7 +398,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // Note: SUGAR is NOT in urine codes — some clinics report blood glucose as
     // "Sugar". Urine dipstick sugar is detected via the qualitative-value
     // heuristic (Negative/+/++/etc.) earlier in categorizeObservation.
-    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'MUCUS', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值', '白蛋白/肌酐酸比值', '白蛋白/肌酸酐比值', 'MALB', 'MALB(U)', 'LE'],
+    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'MUCUS', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'UPCR', 'ALB/CR RATIO', 'ACR', 'UACR', '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值', '白蛋白/肌酐酸比值', '白蛋白/肌酸酐比值', 'MALB', 'MALB(U)', 'LE'],
     // 2026-05-29 additions (verified at loinc.org): 5792-7 Urine glucose,
     // 5818-0 Urobilinogen urine, 5770-3 Bilirubin urine, 14957-5 Microalbumin
     // urine, 14959-1 Microalbumin/Creatinine ratio. These were previously
@@ -837,11 +837,22 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
 
   const codings: any[] = Array.isArray(obs.code?.coding) ? obs.code.coding : []
   const codeNorms = codings.map((c: any) => (c?.code ? normalize(c.code) : '')).filter(Boolean)
-  const displayNorms = codings.map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
   const textNorm = obs.code?.text ? normalize(obs.code.text) : ''
+  // An NHI order coding's display names the ORDER (09040C 全蛋白, 12064B
+  // 「可抽出的核抗體測定—Ro/La抗體」), not this row. While the row has a name of
+  // its own (code.text or a non-NHI coding), only that name is matched as the
+  // analyte; the order display stays order-level context (Pass 0's test
+  // family, Pass 5's urine wording).
+  const ownCodings = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+  const ownDisplayNorms = ownCodings.map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
+  const orderDisplayNorms = codings
+    .filter((c: any) => isNhiOrderCodeSystem(c?.system))
+    .map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
+  const hasOwnName = !!textNorm || ownCodings.some((c: any) => c?.display || c?.code)
+  const displayNorms = hasOwnName ? ownDisplayNorms : [...ownDisplayNorms, ...orderDisplayNorms]
 
   const exactCandidates = [...codeNorms, textNorm, ...displayNorms].filter(Boolean)
-  const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
+  const fullText = [textNorm, ...ownDisplayNorms, ...orderDisplayNorms].filter(Boolean).join(' ')
 
   // ── Early special cases ──────────────────────────────────────────────────
   // (Previously: 溶血/脂血/icterus filter removed 2026-05-29.) Bridge still
@@ -1033,10 +1044,17 @@ function fallbackCategory(obs: any): LabCategory | null {
  * Return the display name to show as the test column header.
  */
 export function getTestDisplayName(obs: any): string {
+  // The row's own name first: code.text, then a non-NHI (item) coding. An NHI
+  // order coding names the order — MediCloud writes it as coding[0] — so it
+  // is only the last resort.
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
   return (
     obs?.code?.text ||
-    obs?.code?.coding?.[0]?.display ||
-    obs?.code?.coding?.[0]?.code ||
+    own.find((c: any) => c?.display)?.display ||
+    own.find((c: any) => c?.code)?.code ||
+    codings[0]?.display ||
+    codings[0]?.code ||
     'Unknown'
   )
 }

@@ -498,8 +498,7 @@ const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
 export function labValueFamily(observation: any): LabValueFamily {
   const quantity = observation?.valueQuantity
   if (quantity && typeof quantity.value === 'number') {
-    const unit = String(quantity.unit ?? quantity.code ?? '').trim()
-    return unit === '%' ? 'percent' : 'quantity'
+    return isPercentUnit(String(quantity.unit ?? quantity.code ?? '')) ? 'percent' : 'quantity'
   }
   if (observation?.valueRange || typeof observation?.valueInteger === 'number'
     || typeof observation?.valueDecimal === 'number') return 'quantity'
@@ -510,9 +509,17 @@ export function labValueFamily(observation: any): LabValueFamily {
   // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)", "2+" are one
   // family — checked before numbers so a grade "2+" is not read as 2.
   if (isOrdinalValue(text)) return 'ordinal'
-  // "2 /HPF", "0–5 /HPF", "< 0.5": a number written as text.
-  if (NUMERIC_TEXT_RE.test(text)) return 'quantity'
+  // "2 /HPF", "0–5 /HPF", "< 0.5": a number written as text — a percentage
+  // when its unit is one ("62%", "62 ％", "62 percent"), like valueQuantity.
+  const numeric = text.match(NUMERIC_TEXT_RE)
+  if (numeric) return isPercentUnit(text.slice(numeric[0].length).split(/[\s(（,;]/).filter(Boolean)[0] ?? '') ? 'percent' : 'quantity'
   return 'text'
+}
+
+/** "%", full-width 「％」 or the word "percent", in any case. */
+function isPercentUnit(unit: string): boolean {
+  const normalized = unit.normalize('NFKC').trim().toLowerCase()
+  return normalized === '%' || normalized === 'percent'
 }
 
 /** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;

@@ -276,3 +276,27 @@ describe('AI category grouping differential (never fewer groups than LOINC-keyed
     }
   })
 })
+
+describe('percent written as text is a percentage', () => {
+  it.each([
+    ['62%'], ['62 %'], ['62％'], ['62 percent'], ['62.5 Percent'], ['<1%'], ['0–5 %'],
+  ])('valueString %s → percent', (value) => {
+    expect(labValueFamily({ valueString: value })).toBe('percent')
+  })
+
+  it.each([['%'], ['％'], ['percent'], [' % ']])('valueQuantity unit %s → percent', (unit) => {
+    expect(labValueFamily({ valueQuantity: { value: 62, unit } })).toBe('percent')
+  })
+
+  it('keeps LOINC-less NEU % rows (Quantity and text) together, apart from the count', async () => {
+    const result = await (toolsFor([
+      lab('Neutrophil', undefined, 62, '%'),
+      { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '60%' },
+      { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '58 ％' },
+      lab('Neutrophil', undefined, 4.1, '10^3/uL'),
+      { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '3.9' },
+    ]).queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
+    expect(result.analyteCount).toBe(2)
+    expect(result.data.map((g: any) => g.observationCount).sort()).toEqual([2, 3])
+  })
+})
