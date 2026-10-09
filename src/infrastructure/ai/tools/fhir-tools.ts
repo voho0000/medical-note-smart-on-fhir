@@ -495,14 +495,18 @@ export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'tex
 // "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
 const NUMERIC_TEXT_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?\d+(?:\.\d+)?(?:\s*[-–~]\s*\d+(?:\.\d+)?)?(?![\d.:：])/
 const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
+// "62%", "62 ％" (NFKC-folded), "< 1 %", "60-65%", "62 percent": a percentage
+// written as text — checked before the generic number rule.
+const PERCENT_TEXT_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?\d+(?:\.\d+)?(?:\s*[-–~]\s*\d+(?:\.\d+)?)?\s*(?:%|percent\b)/i
+const isPercentUnit = (unit: unknown) =>
+  typeof unit === 'string' && /^(?:%|percent)$/i.test(unit.normalize('NFKC').trim())
 /** Value family of one lab row: a count / concentration, a percentage, a
  *  titer, an ordinal (presence / grade) or free text. Rows of different
  *  families never share a group. */
 export function labValueFamily(observation: any): LabValueFamily {
   const quantity = observation?.valueQuantity
   if (quantity && typeof quantity.value === 'number') {
-    const unit = String(quantity.unit ?? quantity.code ?? '').trim()
-    return unit === '%' ? 'percent' : 'quantity'
+    return isPercentUnit(quantity.unit) || isPercentUnit(quantity.code) ? 'percent' : 'quantity'
   }
   if (observation?.valueRange || typeof observation?.valueInteger === 'number'
     || typeof observation?.valueDecimal === 'number') return 'quantity'
@@ -513,6 +517,7 @@ export function labValueFamily(observation: any): LabValueFamily {
   // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)", "2+" are one
   // family — checked before numbers so a grade "2+" is not read as 2.
   if (isOrdinalValue(text)) return 'ordinal'
+  if (PERCENT_TEXT_RE.test(text)) return 'percent'
   // "2 /HPF", "0–5 /HPF", "< 0.5": a number written as text.
   if (NUMERIC_TEXT_RE.test(text)) return 'quantity'
   return 'text'

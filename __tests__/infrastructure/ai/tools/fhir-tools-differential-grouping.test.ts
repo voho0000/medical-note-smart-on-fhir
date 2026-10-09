@@ -119,6 +119,47 @@ describe('count and percentage under one label', () => {
   })
 })
 
+describe('numbers written as text keep their percent / count family', () => {
+  const asText = (text: string, value: string, nhi?: string) =>
+    ({ ...lab(text, undefined, 0, '', nhi ? { nhi } : {}), valueQuantity: undefined, valueString: value })
+
+  it.each([['62%'], ['62 %'], ['62％'], ['62 percent'], ['< 1 %'], ['60-65%']])('valueString %s is a percentage', (value) => {
+    expect(labValueFamily(asText('Neutrophil', value))).toBe('percent')
+  })
+
+  it.each([['3100 /uL'], ['3.1 x10^9/L'], ['62'], ['2 /HPF']])('valueString %s is a quantity', (value) => {
+    expect(labValueFamily(asText('Neutrophil', value))).toBe('quantity')
+  })
+
+  it('a Quantity unit or UCUM code of % (any width) is a percentage', () => {
+    expect(labValueFamily(lab('Neutrophil', undefined, 62, '％'))).toBe('percent')
+    expect(labValueFamily({ ...lab('Neutrophil', undefined, 62, 'percent'), valueQuantity: { value: 62, unit: 'percent', code: '%' } })).toBe('percent')
+  })
+
+  it('NEU% as "62%" text and as 62 % Quantity are one percent group; a count stays apart', () => {
+    const percentText = asText('嗜中性白血球', '62%', NHI_ORDER)
+    const percentQuantity = lab('嗜中性白血球', undefined, 61, '%', { nhi: NHI_ORDER })
+    const countText = asText('嗜中性白血球', '3100 /uL', NHI_ORDER)
+    const countQuantity = lab('嗜中性白血球', undefined, 2900, '/uL', { nhi: NHI_ORDER })
+    const key = (observation: any) => labCategoryAnalyteKey(observation, 'cbc')
+    expect(key(percentText)).toBe(key(percentQuantity))
+    expect(key(countText)).not.toBe(key(percentText))
+    expect(key(countText)).toBe(key(countQuantity))
+    expect(key(countQuantity)).not.toBe(key(percentQuantity))
+  })
+
+  it('the category tool returns the text and Quantity percentages as one series', async () => {
+    const result = await (toolsFor([
+      { ...asText('嗜中性白血球', '62%', NHI_ORDER), effectiveDateTime: '2026-10-02T08:00:00+08:00' },
+      lab('嗜中性白血球', undefined, 61, '%', { nhi: NHI_ORDER, date: '2026-10-01' }),
+      lab('嗜中性白血球', undefined, 2900, '/uL', { nhi: NHI_ORDER, date: '2026-10-01' }),
+      { ...asText('嗜中性白血球', '3100 /uL', NHI_ORDER), effectiveDateTime: '2026-10-02T08:00:00+08:00' },
+    ]).queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
+    const sizes = result.data.map((group: any) => group.observationCount).sort()
+    expect(sizes).toEqual([2, 2])
+  })
+})
+
 // ── Differential corpus ────────────────────────────────────────────────────
 const SYNTHETIC: any[] = [
   // Same LOINC, different labels.

@@ -142,6 +142,16 @@ describe('differential identity — unit family when no LOINC decides', () => {
     expect(keyOf(obs({ text: 'Neutrophil', value: 61, unit: 'percent', ucum: '%' }))).toBe('NEU')
   })
 
+  it('a number written as text keeps its unit family ("3100 /uL" → ANC, "62%" → NEU)', () => {
+    const text = (value: string) => ({ ...obs({ text: 'Neutrophil', value: 0 }), valueQuantity: undefined, valueString: value })
+    expect(keyOf(text('3100 /uL'))).toBe('ANC')
+    expect(keyOf(text('3.1 x10^9/L'))).toBe('ANC')
+    expect(keyOf(text('62%'))).toBe('NEU')
+    expect(keyOf(text('62 ％'))).toBe('NEU')
+    expect(keyOf(text('62'))).toBe('NEU')
+    expect(keyOf(text('see smear'))).toBe('NEU')
+  })
+
   it('an ANC row reported in % is a percentage, never in the count column', () => {
     expect(keyOf(obs({ text: 'ANC', value: 61, unit: '%' }))).toBe('NEU')
     expect(keyOf(obs({ text: 'ANC', value: 3141, unit: '/uL' }))).toBe('ANC')

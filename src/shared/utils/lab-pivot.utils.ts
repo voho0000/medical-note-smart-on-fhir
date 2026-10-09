@@ -536,11 +536,25 @@ function unitFamily(unit: unknown): 'count' | 'fraction' | null {
   return isCountPerVolumeUnit(unit) ? 'count' : null
 }
 
+// "3100 /uL", "< 1 %", "60-65%", "62 percent": a number written as text with
+// its unit after it.
+const NUMBER_WITH_UNIT_TEXT_RE =
+  /^\s*(?:[<>≤≥≦≧]=?\s*)?\d+(?:\.\d+)?(?:\s*[-–~]\s*\d+(?:\.\d+)?)?\s*(\S.*?)\s*$/
+
+/** The unit family of a value sent as text ("3100 /uL", "62%"), or null. */
+function stringUnitFamily(value: unknown): 'count' | 'fraction' | null {
+  if (typeof value !== 'string') return null
+  const unit = value.normalize('NFKC').match(NUMBER_WITH_UNIT_TEXT_RE)?.[1]
+  if (!unit) return null
+  if (/^(?:%|percent)$/i.test(unit)) return 'fraction'
+  return unitFamily(unit)
+}
+
 /** What the Quantity's units say, when the display unit and the UCUM code
  *  agree (or only one is present). Disagreement decides nothing. */
 function quantityUnitFamily(obs: any): 'count' | 'fraction' | null {
   const quantity = obs?.valueQuantity
-  if (!quantity) return null
+  if (!quantity) return stringUnitFamily(obs?.valueString)
   const families = new Set(
     [quantity.unit, quantity.code].map(unitFamily).filter((family) => family !== null),
   )
