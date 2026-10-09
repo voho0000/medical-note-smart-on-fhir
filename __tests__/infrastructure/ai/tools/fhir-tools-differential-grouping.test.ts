@@ -2,8 +2,8 @@
  * @jest-environment node
  *
  * AI lab grouping (queryLabResultsByCategory, getHealthSummarySnapshot) must
- * (a) never split rows that carry the same LOINC and value family — whatever
- *     their source label ("Lithium" / "Li") — and
+ * (a) never split rows that carry the same LOINC — whatever their source
+ *     label ("Lithium" / "Li") or value representation — and
  * (b) never put an absolute count and a percentage in one group — even when
  *     both carry the same label (「嗜中性白血球 / Neutrophil」 for 751-8 / 770-8)
  *     or no LOINC at all.
@@ -14,6 +14,8 @@ import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 import {
   createFhirTools,
+  declaredLoincAnalyteKey,
+  declaredLoincScale,
   labCategoryAnalyteKey,
   labValueFamily,
 } from '@/src/infrastructure/ai/tools/fhir-tools'
@@ -96,6 +98,15 @@ describe('same LOINC, different source labels', () => {
   })
 })
 
+describe('health summary: one LOINC is one analyte whatever the value representation', () => {
+  it('a Quantity and a numeric string on 14334-7 keep only the latest abnormal row', async () => {
+    const older = lab('Lithium', '14334-7', 1.6, 'mmol/L', { date: '2026-09-01', high: true })
+    const newer = { ...lab('Li', '14334-7', 0, '', { date: '2026-10-01', high: true }), valueQuantity: undefined, valueString: '1.9' }
+    const result = await (toolsFor([older, newer]).getHealthSummarySnapshot as any).execute({})
+    expect(result.counts.abnormalLabs).toBe(1)
+  })
+})
+
 describe('count and percentage under one label', () => {
   it('the health summary reports an abnormal ANC and an abnormal NEU% as two analytes', async () => {
     const result = await (toolsFor([
@@ -157,34 +168,92 @@ function bundleObservations(): Array<{ source: string; observation: any }> {
   return out
 }
 
-describe('differential: demo / e2e bundles + synthetic corpus', () => {
+// One LOINC, many representations: a Quantity with or without a unit, an
+// Integer, a Range, a number written as text. The LOINC already fixes what
+// was measured, so each LOINC is one group — and 751-8 (count) never joins
+// 770-8 (percentage).
+function representations(text: string, loinc: string, quantity: { value: number; unit?: string }) {
+  const base = lab(text, loinc, quantity.value, quantity.unit ?? '')
+  const withoutUnit = { ...lab(text, loinc, quantity.value, ''), valueQuantity: { value: quantity.value } }
+  const asInteger = { ...lab(text, loinc, 0, ''), valueQuantity: undefined, valueInteger: Math.round(quantity.value) }
+  const asRange = { ...lab(text, loinc, 0, ''), valueQuantity: undefined, valueRange: { low: { value: quantity.value }, high: { value: quantity.value + 1 } } }
+  const asText = { ...lab(text, loinc, 0, ''), valueQuantity: undefined, valueString: String(quantity.value) }
+  const asComparatorText = { ...lab(text, loinc, 0, ''), valueQuantity: undefined, valueString: `< ${quantity.value}` }
+  return [base, withoutUnit, asInteger, asRange, asText, asComparatorText]
+}
+
+const SAME_LOINC: any[] = [
+  ...representations('嗜中性白血球 / Neutrophil', '751-8', { value: 3.2, unit: '10^3/uL' }),
+  ...representations('ANC', '751-8', { value: 3100, unit: '/uL' }),
+  ...representations('嗜中性白血球 / Neutrophil', '770-8', { value: 55, unit: '%' }),
+  ...representations('Seg', '770-8', { value: 61, unit: '%' }),
+  ...representations('淋巴球 / Lymphocyte', '731-0', { value: 1.9, unit: 'x10^9/L' }),
+  ...representations('淋巴球 / Lymphocyte', '736-9', { value: 33, unit: '%' }),
+  ...representations('Lithium', '14334-7', { value: 0.6, unit: 'mmol/L' }),
+  ...representations('Li', '14334-7', { value: 0.8, unit: 'mmol/L' }),
+]
+
+describe('differential: demo / e2e bundles + synthetic corpora', () => {
   const corpora: Array<[string, Array<{ source: string; observation: any }>]> = [
     ['committed bundles', bundleObservations()],
     ['synthetic corpus', SYNTHETIC.map((observation) => ({ source: 'synthetic', observation }))],
+    ['same-LOINC corpus', SAME_LOINC.map((observation) => ({ source: 'same-loinc', observation }))],
   ]
 
-  it.each(corpora)('%s: same LOINC + value family never splits; count and %% never merge', (_name, rows) => {
+  it.each(corpora)('%s: one group per LOINC; LOINC-less groups hold one value family; multi-LOINC groups are declared + same scale; count and %% never merge', (_name, rows) => {
     expect(rows.length).toBeGreaterThan(0)
     const groups = new Map<string, any[]>()
-    const keyByLoinc = new Map<string, Set<string>>()
+    const keysByLoinc = new Map<string, Set<string>>()
     for (const { source, observation: raw } of rows) {
       for (const observation of expandObservationValues(raw)) {
         const category = categorizeObservation(observation)?.id
         if (!category) continue
-        const key = `${category}|${labCategoryAnalyteKey(observation, category)}`
+        const key = `${source}|${category}|${labCategoryAnalyteKey(observation, category)}`
         groups.set(key, [...(groups.get(key) ?? []), observation])
         const loinc = loincOf(observation)
         if (loinc) {
-          const scope = `${source}|${category}|${loinc}|${labValueFamily(observation)}`
-          keyByLoinc.set(scope, new Set([...(keyByLoinc.get(scope) ?? []), key]))
+          const scope = `${source}|${category}|${loinc}`
+          keysByLoinc.set(scope, new Set([...(keysByLoinc.get(scope) ?? []), key]))
         }
       }
     }
-    const splits = [...keyByLoinc.entries()].filter(([, keys]) => keys.size > 1)
-    expect(splits).toEqual([])
+
+    // One group per LOINC, whatever the label or value representation.
+    expect([...keysByLoinc.entries()].filter(([, keys]) => keys.size > 1)).toEqual([])
+
+    for (const [key, members] of groups) {
+      const loincs = new Set(members.map(loincOf))
+      if (loincs.has(undefined)) {
+        // A LOINC-less group never mixes in a coded row and holds one value family.
+        expect({ key, loincs: loincs.size }).toEqual({ key, loincs: 1 })
+        expect({ key, families: [...new Set(members.map(labValueFamily))] })
+          .toEqual({ key, families: [labValueFamily(members[0])] })
+      } else if (loincs.size > 1) {
+        // Several LOINCs share a group only on one declared key with one known scale.
+        const declared = new Set([...loincs].map((loinc) => declaredLoincAnalyteKey(loinc!)))
+        const scales = new Set([...loincs].map((loinc) => declaredLoincScale(loinc!)))
+        expect({ key, declared: declared.size, scales: [...scales] }).toEqual({ key, declared: 1, scales: [expect.any(String)] })
+        expect([...declared][0]).not.toBeNull()
+      }
+    }
+
+    // No group holds both a count unit and a percentage.
     const mixed = [...groups.entries()]
       .filter(([, members]) => new Set(members.map(unitKind).filter(Boolean)).size > 1)
       .map(([key, members]) => `${key}: ${members.map((m) => `${m.code.text} ${m.valueQuantity?.unit}`).join(', ')}`)
     expect(mixed).toEqual([])
+  })
+
+  it('the count and percentage LOINCs of one cell line stay in different groups', () => {
+    for (const [count, percent] of [['751-8', '770-8'], ['731-0', '736-9'], ['742-7', '5905-5'], ['711-2', '713-8'], ['704-7', '706-2'], ['26507-4', '764-1'], ['14196-0', '17849-1']]) {
+      const countRow = lab('Same label', count, 3, '10^3/uL')
+      const percentRow = lab('Same label', percent, 30, '%')
+      expect(labCategoryAnalyteKey(countRow, 'cbc')).not.toBe(labCategoryAnalyteKey(percentRow, 'cbc'))
+    }
+  })
+
+  it('count LOINCs of one cell line (automated / manual / unspecified) share one group', () => {
+    const keys = ['751-8', '753-4', '26499-4'].map((loinc) => labCategoryAnalyteKey(lab('Neutrophil', loinc, 3, '10^3/uL'), 'cbc'))
+    expect(new Set(keys).size).toBe(1)
   })
 })

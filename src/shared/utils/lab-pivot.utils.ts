@@ -493,6 +493,13 @@ export function differentialLoincKey(loinc: string): string | undefined {
   return DIFFERENTIAL_LOINC_TO_KEY[loinc.trim()]
 }
 
+/** LOINC Scale of a declared differential LOINC: every one is quantitative
+ *  (Qn). Count (NCnc) and fraction (NFr) codes never share a declared key —
+ *  751-8 → ANC, 770-8 → NEU — so one scale cannot merge a count with a %. */
+export function differentialLoincScale(loinc: string): 'Qn' | undefined {
+  return DIFFERENTIAL_LOINC_TO_KEY[loinc.trim()] ? 'Qn' : undefined
+}
+
 function differentialKeyFromLoinc(obs: any): string | undefined {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   for (const coding of codings) {
